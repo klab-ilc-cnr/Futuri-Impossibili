@@ -9,7 +9,6 @@ L'accesso alle interviste è basato su un dizionario narrativo creato sulla base
 2. Attendi l’apertura automatica del browser su <http://localhost:3000>.
 3. Per arrestare l’applicazione, torna alla finestra Terminale e premi `Ctrl+C`.
 
-Al primo avvio macOS potrebbe chiedere conferma perché il file proviene da uno sviluppatore non identificato. In tal caso fai clic destro sul file, scegli **Apri**, quindi conferma.
 
 ## Avvio dal Terminale
 
