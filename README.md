@@ -1,4 +1,4 @@
-# Web App per ill progetto Futuri (im)possibili
+# Web App per il progetto Futuri (im)possibili
 
 Interfaccia React per caricare, leggere, annotare, consultare e interrogare trascrizioni testuali. delle intervite ai ragazzi di Caivano.
 
