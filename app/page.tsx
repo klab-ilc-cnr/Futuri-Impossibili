@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type SelectionInfo = {
   start: number;
@@ -18,6 +18,7 @@ type Annotation = {
 
 type Interview = {
   id: string;
+  contextIri?: string;
   name: string;
   text: string;
   description?: string;
@@ -27,6 +28,11 @@ type Interview = {
   sentenceCount?: number;
   tokenCount?: number;
   annotationCount?: number;
+};
+
+type LexicalConcept = {
+  defaultLabel: string;
+  lexicalConcept: string;
 };
 
 const menuItems = [
@@ -39,17 +45,140 @@ const menuItems = [
 ];
 
 const textsEndpoint = "/api/lexo/texts";
+const conceptsEndpoint = "/api/lexo/lexical-concepts";
+const updateLexicalLabelEndpoint = "/api/lexo/update-lexical-label";
+const attestationsEndpoint = "/api/lexo/attestations";
 
-const mockLexoItems = [
-  { name: "Collaborazione", detail: "Pratiche di lavoro condiviso" },
-  { name: "Fiducia", detail: "Relazioni e affidamento reciproco" },
-  { name: "Ascolto", detail: "Attenzione e comprensione" },
-  { name: "Cambiamento", detail: "Trasformazioni ed evoluzioni" },
-  { name: "Lavoro a distanza", detail: "Esperienze da remoto" },
-  { name: "Comunicazione", detail: "Scambio e chiarezza" },
-  { name: "Organizzazione", detail: "Processi e strutture" },
-  { name: "Esperienza", detail: "Vissuti e conoscenze" },
-];
+function readResourceIdentifier(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (!value || typeof value !== "object") return "";
+  const resource = value as Record<string, unknown>;
+  return readResourceIdentifier(resource.iri ?? resource["@id"] ?? resource.id ?? resource.value);
+}
+
+function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]): Annotation[] {
+  function findItems(value: unknown): unknown[] {
+    if (Array.isArray(value)) return value;
+    if (!value || typeof value !== "object") return [];
+    const container = value as Record<string, unknown>;
+    for (const key of ["attestations", "items", "results", "data", "list"]) {
+      if (Array.isArray(container[key])) return container[key] as unknown[];
+      if (container[key] && typeof container[key] === "object") {
+        const nested = findItems(container[key]);
+        if (nested.length) return nested;
+      }
+    }
+    return [];
+  }
+
+  function collectLabels(value: unknown): string[] {
+    if (Array.isArray(value)) return value.flatMap(collectLabels);
+    if (typeof value !== "string") return [];
+    const label = value.trim().replace(/^occurrence of\s+/i, "");
+    return label ? [label] : [];
+  }
+
+  const grouped = new Map<string, { start: number; end: number; labels: Set<string> }>();
+  for (const rawAttestation of findItems(payload)) {
+    if (!rawAttestation || typeof rawAttestation !== "object") continue;
+    const attestation = rawAttestation as Record<string, unknown>;
+    const observable = readResourceIdentifier(
+      attestation.observable ?? attestation.lexicalConcept ?? attestation.concept ?? attestation.uri,
+    );
+    const conceptLabel = lexicalConcepts.find((concept) => concept.lexicalConcept === observable)?.defaultLabel;
+    const attestationLabels = [
+      ...collectLabels(attestation.labels),
+      ...collectLabels(attestation.label),
+      ...collectLabels(attestation.defaultLabel),
+      ...collectLabels(conceptLabel),
+    ];
+    const occurrences = Array.isArray(attestation.occurrences)
+      ? attestation.occurrences
+      : attestation.occurrence && typeof attestation.occurrence === "object"
+        ? [attestation.occurrence]
+        : [attestation];
+
+    for (const rawOccurrence of occurrences) {
+      if (!rawOccurrence || typeof rawOccurrence !== "object") continue;
+      const occurrence = rawOccurrence as Record<string, unknown>;
+      const start = Number(occurrence.start ?? occurrence._start ?? occurrence.begin ?? occurrence.startIndex);
+      const end = Number(occurrence.end ?? occurrence._end ?? occurrence.stop ?? occurrence.endIndex);
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) continue;
+
+      const key = `${start}:${end}`;
+      const current = grouped.get(key) ?? { start, end, labels: new Set<string>() };
+      [
+        ...attestationLabels,
+        ...collectLabels(occurrence.labels),
+        ...collectLabels(occurrence.label),
+        ...collectLabels(occurrence.defaultLabel),
+        ...collectLabels(occurrence.description),
+      ].forEach((label) => current.labels.add(label));
+      grouped.set(key, current);
+    }
+  }
+
+  return [...grouped.values()]
+    .map((annotation) => ({
+      start: annotation.start,
+      end: annotation.end,
+      label: [...annotation.labels].join("\n") || "Attestazione",
+    }))
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+function parseLexicalConcepts(payload: unknown) {
+  const container = payload && typeof payload === "object"
+    ? payload as Record<string, unknown>
+    : {};
+  const nestedData = container.data && typeof container.data === "object" && !Array.isArray(container.data)
+    ? container.data as Record<string, unknown>
+    : {};
+  const rawItems = Array.isArray(payload)
+    ? payload
+    : [
+        container.lexicalConcepts,
+        container.list,
+        container.items,
+        container.results,
+        container.collection,
+        container.data,
+        nestedData.lexicalConcepts,
+        nestedData.list,
+        nestedData.items,
+        nestedData.results,
+      ].find(Array.isArray) ?? [];
+
+  const concepts = (rawItems as Array<unknown>).flatMap((rawItem) => {
+    if (!rawItem || typeof rawItem !== "object") return [];
+    const item = rawItem as Record<string, unknown>;
+    const defaultLabel = typeof item.defaultLabel === "string" ? item.defaultLabel : "";
+    const lexicalConcept = typeof item.lexicalConcept === "string" ? item.lexicalConcept : "";
+    return defaultLabel && lexicalConcept ? [{ defaultLabel, lexicalConcept }] : [];
+  });
+  const rawTotalHits = container.totalHits
+    ?? container.totalhits
+    ?? nestedData.totalHits
+    ?? nestedData.totalhits;
+  const parsedTotalHits = Number(rawTotalHits);
+
+  return {
+    concepts,
+    totalHits: Number.isFinite(parsedTotalHits) ? parsedTotalHits : concepts.length,
+  };
+}
+
+function containsTimestamp(payload: unknown): boolean {
+  if (typeof payload === "number") return Number.isFinite(payload);
+  if (typeof payload === "string") {
+    const value = payload.trim();
+    return /^\d{10,}$/.test(value) || (!/^\d+$/.test(value) && !Number.isNaN(Date.parse(value)));
+  }
+  if (!payload || typeof payload !== "object") return false;
+  const container = payload as Record<string, unknown>;
+  return [container.timestamp, container.timeStamp, container.lastUpdate, container.date]
+    .some(containsTimestamp);
+}
 
 export default function Home() {
   const [activePage, setActivePage] = useState(0);
@@ -61,19 +190,37 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [archiveLoading, setArchiveLoading] = useState(true);
   const [archiveError, setArchiveError] = useState("");
+  const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
+  const [conceptTotalHits, setConceptTotalHits] = useState(0);
+  const [conceptsLoading, setConceptsLoading] = useState(false);
+  const [conceptsError, setConceptsError] = useState("");
+  const [conceptSearchQuery, setConceptSearchQuery] = useState("");
+  const [editingConceptUrl, setEditingConceptUrl] = useState("");
+  const [editedConceptLabel, setEditedConceptLabel] = useState("");
+  const [savingConceptUrl, setSavingConceptUrl] = useState("");
+  const [growlMessage, setGrowlMessage] = useState("");
+  const [attestationSaving, setAttestationSaving] = useState(false);
   const [textLoading, setTextLoading] = useState(false);
   const [textError, setTextError] = useState("");
   const textRef = useRef<HTMLDivElement>(null);
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
+  const conceptsRequestId = useRef(0);
+  const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeInterview = interviews.find((item) => item.id === activeInterviewId) ?? interviews[0];
   const text = activeInterview?.text ?? "";
   const fileName = activeInterview?.name ?? "Nessuna intervista";
   const annotations = activeInterview?.annotations ?? [];
   const description = activeInterview?.description?.trim() ?? "";
-  const filteredInterviews = interviews.filter((interview) =>
-    interview.name.toLocaleLowerCase("it").includes(searchQuery.trim().toLocaleLowerCase("it")),
+  const normalizedInterviewQuery = searchQuery.trim().toLocaleLowerCase("it-IT");
+  const filteredInterviews = normalizedInterviewQuery
+    ? interviews.filter((interview) =>
+        interview.name.toLocaleLowerCase("it-IT").includes(normalizedInterviewQuery),
+      )
+    : interviews;
+  const filteredConcepts = concepts.filter((concept) =>
+    concept.defaultLabel.toLocaleLowerCase("it").includes(conceptSearchQuery.trim().toLocaleLowerCase("it")),
   );
 
   const loadCanonicalText = useCallback(async (interviewId: string) => {
@@ -124,8 +271,21 @@ export default function Home() {
           ?? item.description
           ?? "";
 
+        const id = readResourceIdentifier(
+          item.fileId ?? item.id ?? item.textId ?? item.iri ?? item["@id"] ?? `server-${index}`,
+        );
+        const explicitContextIri = readResourceIdentifier(
+          item.contextIri ?? item.nifContext ?? item.context,
+        );
+        const documentUri = readResourceIdentifier(
+          item.documentUri ?? item.fileIri ?? item.fileIRI ?? item.iri ?? item["@id"],
+        );
+        const contextIri = explicitContextIri
+          || (documentUri ? `${documentUri.replace(/#.*$/, "")}#context` : "");
+
         return {
-          id: String(item.fileId ?? item.id ?? item.textId ?? item.iri ?? item["@id"] ?? `server-${index}`),
+          id,
+          contextIri,
           name: String(item.fileName ?? item.filename ?? item.name ?? item.title ?? item.label ?? `Intervista ${index + 1}`),
           text: String(item.text ?? item.content ?? item.body ?? item.value ?? ""),
           description: String(rawDescription),
@@ -134,7 +294,7 @@ export default function Home() {
           sizeBytes: Number(item.sizeBytes ?? 0),
           sentenceCount: Number(item.sentenceCount ?? 0),
           tokenCount: Number(item.tokenCount ?? 0),
-          annotationCount: Number(item.annotationCount ?? 0),
+          annotationCount: Number(item.annotationCount ?? item.attestationCount ?? 0),
         };
       });
 
@@ -156,11 +316,112 @@ export default function Home() {
     }
   }, [loadCanonicalText]);
 
+  const loadConcepts = useCallback(async () => {
+    const requestId = ++conceptsRequestId.current;
+    setConceptsLoading(true);
+    setConceptsError("");
+    setEditingConceptUrl("");
+    try {
+      const response = await fetch(conceptsEndpoint, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const parsed = parseLexicalConcepts(await response.json() as unknown);
+      if (requestId !== conceptsRequestId.current) return;
+      setConcepts(parsed.concepts);
+      setConceptTotalHits(parsed.totalHits);
+    } catch (error) {
+      if (requestId !== conceptsRequestId.current) return;
+      setConceptsError(`Impossibile caricare i concetti (${error instanceof Error ? error.message : "errore sconosciuto"}).`);
+    } finally {
+      if (requestId === conceptsRequestId.current) setConceptsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadArchive();
   }, [loadArchive]);
 
+  useEffect(() => () => {
+    if (growlTimer.current) clearTimeout(growlTimer.current);
+  }, []);
+
+  function showError(message: string) {
+    setGrowlMessage(message);
+    if (growlTimer.current) clearTimeout(growlTimer.current);
+    growlTimer.current = setTimeout(() => setGrowlMessage(""), 6000);
+  }
+
+  function showConceptError() {
+    showError("La label non è stata modificata a causa di un errore in LexO-server.");
+  }
+
+  function startEditingConcept(concept: LexicalConcept) {
+    if (savingConceptUrl) return;
+    setEditingConceptUrl(concept.lexicalConcept);
+    setEditedConceptLabel(concept.defaultLabel);
+  }
+
+  async function saveConceptLabel(concept: LexicalConcept) {
+    const target = editedConceptLabel.trim();
+    if (!target) {
+      setEditingConceptUrl("");
+      return;
+    }
+    if (target === concept.defaultLabel) {
+      setEditingConceptUrl("");
+      return;
+    }
+
+    setSavingConceptUrl(concept.lexicalConcept);
+    try {
+      const response = await fetch(updateLexicalLabelEndpoint, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          relation: "http://www.w3.org/2004/02/skos/core#prefLabel",
+          source: concept.lexicalConcept,
+          target,
+          oldTarget: concept.defaultLabel,
+          targetLanguage: "it",
+          oldTargetLanguage: "it",
+        }),
+      });
+      const body = await response.text();
+      let payload: unknown = body;
+      try {
+        payload = JSON.parse(body) as unknown;
+      } catch {
+        // LexO-server può restituire il timestamp anche come testo semplice.
+      }
+      if (!response.ok || !containsTimestamp(payload)) throw new Error(`HTTP ${response.status}`);
+
+      setConcepts((current) => current.map((item) => item.lexicalConcept === concept.lexicalConcept
+        ? { ...item, defaultLabel: target }
+        : item));
+      setEditingConceptUrl("");
+    } catch {
+      setEditedConceptLabel(concept.defaultLabel);
+      setEditingConceptUrl("");
+      showConceptError();
+    } finally {
+      setSavingConceptUrl("");
+    }
+  }
+
+  function handleConceptEditKeyDown(event: KeyboardEvent<HTMLInputElement>, concept: LexicalConcept) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void saveConceptLabel(concept);
+    } else if (event.key === "Escape") {
+      setEditingConceptUrl("");
+      setEditedConceptLabel(concept.defaultLabel);
+    }
+  }
+
   async function selectInterview(interview: Interview) {
+    if (attestationSaving) return;
     activeInterviewIdRef.current = interview.id;
     setActiveInterviewId(interview.id);
     setSelection(null);
@@ -202,6 +463,10 @@ export default function Home() {
   }
 
   function captureSelection(event: MouseEvent<HTMLDivElement>) {
+    if (attestationSaving) {
+      setDragging(false);
+      return;
+    }
     if (!dragging) return;
     setDragging(false);
     const root = textRef.current;
@@ -232,27 +497,81 @@ export default function Home() {
     });
   }
 
-  function addAnnotation() {
-    if (!selection || selectedConcepts.length === 0) return;
-    setInterviews((current) => current.map((interview) => interview.id === activeInterviewId
-      ? {
-          ...interview,
-          annotations: [
-            ...interview.annotations.filter((item) => item.end <= selection.start || item.start >= selection.end),
-            { start: selection.start, end: selection.end, label: selectedConcepts.join(", ") },
-          ].sort((a, b) => a.start - b.start),
+  async function addAnnotation() {
+    if (!selection || selectedConcepts.length === 0 || attestationSaving) return;
+    if (!activeInterview || activeInterview.source !== "server" || !activeInterview.contextIri) {
+      showError("Non è possibile creare l’attestazione: l’intervista non contiene l’IRI del nif:Context.");
+      return;
+    }
+
+    const selectedLexicalConcepts = selectedConcepts.flatMap((lexicalConcept) => {
+      const concept = concepts.find((item) => item.lexicalConcept === lexicalConcept);
+      return concept ? [concept] : [];
+    });
+    if (selectedLexicalConcepts.length !== selectedConcepts.length) {
+      showError("Non è possibile creare l’attestazione: uno dei concetti selezionati non è più disponibile.");
+      return;
+    }
+
+    setAttestationSaving(true);
+    setGrowlMessage("");
+    try {
+      const results = await Promise.allSettled(selectedLexicalConcepts.map(async (concept) => {
+        const parameters = new URLSearchParams({
+          observable: concept.lexicalConcept,
+          corpus: activeInterview.contextIri ?? "",
+        });
+        const response = await fetch(`${attestationsEndpoint}?${parameters.toString()}`, {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify([
+            {
+              description: `occurrence of ${concept.defaultLabel}`,
+              value: selection.text,
+              start: selection.start,
+              end: selection.end,
+            },
+          ]),
+        });
+        if (!response.ok) {
+          const detail = (await response.text()).trim();
+          throw new Error(`${concept.defaultLabel}: ${detail || `HTTP ${response.status}`}`);
         }
-      : interview));
-    window.getSelection()?.removeAllRanges();
-    setSelectedConcepts([]);
-    setSelection(null);
+      }));
+
+      const failures = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+      if (failures.length) {
+        const details = failures.map((failure) => failure instanceof Error ? failure.message : String(failure));
+        throw new Error(details.join(" · "));
+      }
+
+      const response = await fetch(
+        `${attestationsEndpoint}/${encodeURIComponent(activeInterview.id)}`,
+        { headers: { Accept: "application/json" }, cache: "no-store" },
+      );
+      if (!response.ok) {
+        const detail = (await response.text()).trim();
+        throw new Error(detail || `HTTP ${response.status}`);
+      }
+      const loadedAnnotations = parseAttestations(await response.json() as unknown, concepts);
+      setInterviews((current) => current.map((interview) => interview.id === activeInterview.id
+        ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
+        : interview));
+      window.getSelection()?.removeAllRanges();
+      setSelectedConcepts([]);
+      setSelection(null);
+    } catch (error) {
+      showError(`Errore durante il salvataggio dell’annotazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+    } finally {
+      setAttestationSaving(false);
+    }
   }
 
-  function toggleConcept(concept: string) {
-    if (!selection) return;
-    setSelectedConcepts((current) => current.includes(concept)
-      ? current.filter((item) => item !== concept)
-      : [...current, concept]);
+  function toggleConcept(lexicalConcept: string) {
+    if (!selection || attestationSaving) return;
+    setSelectedConcepts((current) => current.includes(lexicalConcept)
+      ? current.filter((item) => item !== lexicalConcept)
+      : [...current, lexicalConcept]);
   }
 
   function renderAnnotatedRange(rangeStart: number, rangeEnd: number, keyPrefix: string) {
@@ -268,7 +587,7 @@ export default function Home() {
         );
       }
       chunks.push(
-        <mark key={`${keyPrefix}-annotation-${annotationStart}-${index}`} title={annotation.label}>
+        <mark key={`${keyPrefix}-annotation-${annotationStart}-${index}`} data-labels={annotation.label}>
           {text.slice(annotationStart, annotationEnd)}
         </mark>,
       );
@@ -336,7 +655,10 @@ export default function Home() {
           <button
             key={item}
             className={activePage === index ? "active" : ""}
-            onClick={() => setActivePage(index)}
+            onClick={() => {
+              setActivePage(index);
+              if (index === 3) void loadConcepts();
+            }}
             aria-label={index === 3 ? `${item}, area riservata con autenticazione` : item}
             title={index === 3 ? "Area riservata: sarà richiesta l’autenticazione" : undefined}
           >
@@ -375,7 +697,7 @@ export default function Home() {
                     >
                       ↻
                     </button>
-                    <small>{interviews.length} {interviews.length === 1 ? "file" : "file"}</small>
+                    <small className="sidebar-count">{interviews.length} {interviews.length === 1 ? "file" : "file"}</small>
                   </div>
                 </div>
                 <div className="interview-search">
@@ -386,6 +708,8 @@ export default function Home() {
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Cerca intervista…"
                     aria-label="Cerca intervista per nome del file"
+                    autoComplete="off"
+                    spellCheck={false}
                   />
                 </div>
                 <div className="interview-list">
@@ -465,7 +789,13 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="document-foot">
-                  <span>Seleziona una porzione di testo con il mouse</span>
+                  {attestationSaving ? (
+                    <div className="annotation-progress" role="status" aria-live="polite" aria-label="Salvataggio annotazione in corso">
+                      <span aria-hidden="true" />
+                    </div>
+                  ) : (
+                    <span>Seleziona una porzione di testo con il mouse</span>
+                  )}
                   <div className="legend"><span /> {annotations.length} annotazioni</div>
                 </div>
               </div>
@@ -475,7 +805,16 @@ export default function Home() {
                   <span>REPERTORIO</span>
                   <div className="concept-heading-row">
                     <strong>Concetti</strong>
-                    <small>{mockLexoItems.length} voci</small>
+                    <button
+                      className="archive-reload"
+                      onClick={() => void loadConcepts()}
+                      disabled={conceptsLoading}
+                      aria-label="Ricarica concetti da LexO-server"
+                      title="Ricarica concetti"
+                    >
+                      ↻
+                    </button>
+                    <small className="sidebar-count">{conceptTotalHits} voci</small>
                   </div>
                 </div>
                 <div className="concept-intro">
@@ -483,22 +822,76 @@ export default function Home() {
                     ? "Seleziona uno o più concetti, poi premi nuovamente la penna."
                     : "Seleziona una parte dell’intervista per associare i concetti."}
                 </div>
+                <div className="interview-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input
+                    type="search"
+                    value={conceptSearchQuery}
+                    onChange={(event) => setConceptSearchQuery(event.target.value)}
+                    placeholder="Cerca concetto…"
+                    aria-label="Cerca concetto per label"
+                  />
+                </div>
                 <div className="concept-list">
-                  {mockLexoItems.map((concept) => {
-                    const isSelected = selectedConcepts.includes(concept.name);
+                  {conceptsLoading && (
+                    <div className="archive-loading" role="status" aria-live="polite">
+                      <span className="loading-spinner" aria-hidden="true" />
+                      <small>Caricamento da LexO-server…</small>
+                    </div>
+                  )}
+                  {!conceptsLoading && conceptsError && (
+                    <div className="archive-error">
+                      <strong>Repertorio non disponibile</strong>
+                      <small>{conceptsError}</small>
+                      <code>LexO-server /service/data/lexicalConcepts?id=root</code>
+                    </div>
+                  )}
+                  {!conceptsLoading && !conceptsError && filteredConcepts.map((concept) => {
+                    const isSelected = selectedConcepts.includes(concept.lexicalConcept);
+                    const isEditing = editingConceptUrl === concept.lexicalConcept;
+                    const isSaving = savingConceptUrl === concept.lexicalConcept;
                     return (
-                      <button
-                        key={concept.name}
-                        className={isSelected ? "selected" : ""}
-                        disabled={!selection}
-                        onClick={() => toggleConcept(concept.name)}
-                        aria-pressed={isSelected}
+                      <div
+                        key={concept.lexicalConcept}
+                        className={`concept-item ${isSelected ? "selected" : ""} ${!selection ? "selection-disabled" : ""}`}
                       >
                         <span className="concept-check">{isSelected ? "✓" : ""}</span>
-                        <span><strong>{concept.name}</strong><small>{concept.detail}</small></span>
-                      </button>
+                        {isEditing ? (
+                          <input
+                            className="concept-edit-input"
+                            value={editedConceptLabel}
+                            onChange={(event) => setEditedConceptLabel(event.target.value)}
+                            onKeyDown={(event) => handleConceptEditKeyDown(event, concept)}
+                            onBlur={() => {
+                              if (!isSaving) {
+                                setEditedConceptLabel(concept.defaultLabel);
+                                setEditingConceptUrl("");
+                              }
+                            }}
+                            disabled={isSaving}
+                            aria-label={`Modifica ${concept.defaultLabel}`}
+                            autoFocus
+                          />
+                        ) : (
+                          <button
+                            className="concept-label-button"
+                            onClick={() => toggleConcept(concept.lexicalConcept)}
+                            onDoubleClick={() => startEditingConcept(concept)}
+                            aria-pressed={isSelected}
+                            aria-disabled={!selection || attestationSaving}
+                            title="Doppio clic per modificare la label"
+                          >
+                            <strong>{concept.defaultLabel}</strong>
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
+                  {!conceptsLoading && !conceptsError && filteredConcepts.length === 0 && (
+                    <p className="empty-search">
+                      {concepts.length === 0 ? "Nessun concetto trovato." : "Nessun concetto corrispondente."}
+                    </p>
+                  )}
                 </div>
                 {selection && (
                   <div className={`concept-status ${selectedConcepts.length ? "ready" : ""}`}>
@@ -600,11 +993,19 @@ export default function Home() {
           data-ready={selectedConcepts.length > 0}
           style={{ left: selection.x, top: selection.y }}
           onClick={addAnnotation}
+          disabled={attestationSaving}
           aria-label={selectedConcepts.length ? "Conferma l’annotazione" : "Seleziona uno o più concetti"}
           title={selectedConcepts.length ? "Conferma l’annotazione" : "Seleziona uno o più concetti nel repertorio"}
         >
           ✎
         </button>
+      )}
+      {growlMessage && (
+        <div className="error-growl" role="alert" aria-live="assertive">
+          <span aria-hidden="true">!</span>
+          <p>{growlMessage}</p>
+          <button onClick={() => setGrowlMessage("")} aria-label="Chiudi messaggio">×</button>
+        </div>
       )}
     </div>
   );
