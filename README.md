@@ -1,6 +1,6 @@
-# LexO · Textual Insights
+# Web App per ill progetto Futuri (im)possibili
 
-Interfaccia React locale per caricare, leggere e annotare trascrizioni testuali. Le opzioni di annotazione sono attualmente dimostrative e potranno essere sostituite dalle chiamate reali a LexO-server.
+Interfaccia React per caricare, leggere, annotare, consultare e interrogare trascrizioni testuali. delle intervite ai ragazzi di Caivano.
 
 ## Avvio rapido su macOS
 
@@ -23,7 +23,7 @@ Poi visita <http://localhost:3000> nel browser.
 
 ## Requisiti
 
-- macOS
+- [LexO-server](hhttps://github.com/andreabellandi/LexO-server) installato
 - Node.js 22 o successivo; lo script utilizza automaticamente il runtime già incluso in Codex quando disponibile.
 
 ## Collegamento a LexO-server
