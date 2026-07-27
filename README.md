@@ -1,6 +1,7 @@
 # Web App per il progetto Futuri (im)possibili
 
-Interfaccia React per caricare, leggere, annotare, consultare e interrogare trascrizioni testuali. delle intervite ai ragazzi di Caivano.
+Interfaccia React per caricare, leggere, annotare, consultare e interrogare le trascrizioni testuali delle intervite ai ragazzi di Caivano.
+L'accesso alle interviste è basato su un dizionario narrativo creato sulla base delle stesse, in cui sono rappresentati i concetti associati dai ragazzi alle parole di indagine.
 
 ## Avvio rapido su macOS
 
