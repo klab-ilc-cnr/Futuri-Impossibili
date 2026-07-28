@@ -184,7 +184,7 @@ function parseLexicalConcepts(payload: unknown) {
     const item = rawItem as Record<string, unknown>;
     const defaultLabel = typeof item.defaultLabel === "string" ? item.defaultLabel : "";
     const lexicalConcept = typeof item.lexicalConcept === "string" ? item.lexicalConcept : "";
-    const parsedAttestation = Number(item.attestation);
+    const parsedAttestation = Number(item.attestations);
     const attestation = Number.isFinite(parsedAttestation) ? parsedAttestation : 0;
     return defaultLabel && lexicalConcept ? [{ defaultLabel, lexicalConcept, attestation }] : [];
   });

@@ -140,7 +140,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .concept-label-button[aria-disabled="true"] { cursor: default; }
 .concept-label-copy { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
 .concept-label-button strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 10px; white-space: nowrap; }
-.concept-attestation { flex: none; color: #aab1ad; font-size: 9px; font-weight: 500; }
+.concept-attestation { flex: none; color: #7f8984; font-size: 9px; font-weight: 500; }
 .concept-item.selection-disabled .concept-label-button strong { color: #65716b; }
 .concept-edit-input { flex: 1; min-width: 0; height: 28px; border: 1px solid #79a991; border-radius: 7px; outline: 0; padding: 0 8px; background: #fff; color: var(--ink); font-size: 10px; font-weight: 800; box-shadow: 0 0 0 3px rgba(121,169,145,.12); }
 .concept-edit-input:disabled { cursor: wait; opacity: .65; }
