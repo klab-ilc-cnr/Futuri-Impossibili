@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, KeyboardEvent, MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type SelectionInfo = {
   start: number;
@@ -33,6 +33,12 @@ type Interview = {
 type LexicalConcept = {
   defaultLabel: string;
   lexicalConcept: string;
+  attestation: number;
+};
+
+type TextConversionJob = {
+  state: string;
+  message?: string;
 };
 
 const menuItems = [
@@ -45,6 +51,7 @@ const menuItems = [
 ];
 
 const textsEndpoint = "/api/lexo/texts";
+const textUploadEndpoint = "/api/lexo/texts/upload";
 const conceptsEndpoint = "/api/lexo/lexical-concepts";
 const updateLexicalLabelEndpoint = "/api/lexo/update-lexical-label";
 const attestationsEndpoint = "/api/lexo/attestations";
@@ -78,6 +85,12 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
     return label ? [label] : [];
   }
 
+  function collectObservableLabels(value: unknown): string[] {
+    return collectLabels(value)
+      .map((label) => label.replace(/@[a-z]{2,3}(?:-[a-z0-9]+)*$/i, "").trim())
+      .filter(Boolean);
+  }
+
   const grouped = new Map<string, { start: number; end: number; labels: Set<string> }>();
   for (const rawAttestation of findItems(payload)) {
     if (!rawAttestation || typeof rawAttestation !== "object") continue;
@@ -86,7 +99,8 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
       attestation.observable ?? attestation.lexicalConcept ?? attestation.concept ?? attestation.uri,
     );
     const conceptLabel = lexicalConcepts.find((concept) => concept.lexicalConcept === observable)?.defaultLabel;
-    const attestationLabels = [
+    const attestationObservableLabels = collectObservableLabels(attestation.observableLabel);
+    const attestationFallbackLabels = [
       ...collectLabels(attestation.labels),
       ...collectLabels(attestation.label),
       ...collectLabels(attestation.defaultLabel),
@@ -107,13 +121,17 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
 
       const key = `${start}:${end}`;
       const current = grouped.get(key) ?? { start, end, labels: new Set<string>() };
-      [
-        ...attestationLabels,
-        ...collectLabels(occurrence.labels),
-        ...collectLabels(occurrence.label),
-        ...collectLabels(occurrence.defaultLabel),
-        ...collectLabels(occurrence.description),
-      ].forEach((label) => current.labels.add(label));
+      const occurrenceObservableLabels = collectObservableLabels(occurrence.observableLabel);
+      const observableLabels = [...attestationObservableLabels, ...occurrenceObservableLabels];
+      const labels = observableLabels.length
+        ? observableLabels
+        : [
+            ...attestationFallbackLabels,
+            ...collectLabels(occurrence.labels),
+            ...collectLabels(occurrence.label),
+            ...collectLabels(occurrence.defaultLabel),
+          ];
+      labels.forEach((label) => current.labels.add(label));
       grouped.set(key, current);
     }
   }
@@ -125,6 +143,18 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
       label: [...annotation.labels].join("\n") || "Attestazione",
     }))
     .sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+async function fetchAttestations(fileId: string, lexicalConcepts: LexicalConcept[] = []) {
+  const response = await fetch(
+    `${attestationsEndpoint}/${encodeURIComponent(fileId)}`,
+    { headers: { Accept: "application/json" }, cache: "no-store" },
+  );
+  if (!response.ok) {
+    const detail = (await response.text()).trim();
+    throw new Error(detail || `HTTP ${response.status}`);
+  }
+  return parseAttestations(await response.json() as unknown, lexicalConcepts);
 }
 
 function parseLexicalConcepts(payload: unknown) {
@@ -154,7 +184,9 @@ function parseLexicalConcepts(payload: unknown) {
     const item = rawItem as Record<string, unknown>;
     const defaultLabel = typeof item.defaultLabel === "string" ? item.defaultLabel : "";
     const lexicalConcept = typeof item.lexicalConcept === "string" ? item.lexicalConcept : "";
-    return defaultLabel && lexicalConcept ? [{ defaultLabel, lexicalConcept }] : [];
+    const parsedAttestation = Number(item.attestation);
+    const attestation = Number.isFinite(parsedAttestation) ? parsedAttestation : 0;
+    return defaultLabel && lexicalConcept ? [{ defaultLabel, lexicalConcept, attestation }] : [];
   });
   const rawTotalHits = container.totalHits
     ?? container.totalhits
@@ -180,6 +212,54 @@ function containsTimestamp(payload: unknown): boolean {
     .some(containsTimestamp);
 }
 
+function readConversionJob(payload: unknown): TextConversionJob | null {
+  const container = payload && typeof payload === "object"
+    ? payload as Record<string, unknown>
+    : {};
+  const jobs = Array.isArray(payload)
+    ? payload
+    : [container.jobs, container.items, container.data, container.results].find(Array.isArray) ?? [];
+  const rawJob = jobs[0] ?? (!Array.isArray(payload) ? payload : null);
+  if (!rawJob || typeof rawJob !== "object") return null;
+  const job = rawJob as Record<string, unknown>;
+  const state = typeof job.state === "string" ? job.state.toUpperCase() : "";
+  if (!state) return null;
+  return {
+    state,
+    message: typeof job.message === "string" ? job.message : undefined,
+  };
+}
+
+async function readErrorDetail(response: Response) {
+  const body = (await response.text()).trim();
+  if (!body) return `HTTP ${response.status}`;
+  try {
+    const payload = JSON.parse(body) as Record<string, unknown>;
+    return String(payload.detail ?? payload.error ?? payload.message ?? body);
+  } catch {
+    return body;
+  }
+}
+
+async function waitForTextConversion(fileId: string) {
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    const response = await fetch(
+      `${textsEndpoint}/${encodeURIComponent(fileId)}/status`,
+      { headers: { Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!response.ok) throw new Error(await readErrorDetail(response));
+
+    const job = readConversionJob(await response.json() as unknown);
+    if (job?.state === "COMPLETED") return;
+    if (job && ["FAILED", "CANCELLED"].includes(job.state)) {
+      throw new Error(job.message || `Conversione ${job.state.toLocaleLowerCase("it-IT")}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  throw new Error("Tempo massimo superato durante la conversione del testo");
+}
+
 export default function Home() {
   const [activePage, setActivePage] = useState(0);
   const [interviews, setInterviews] = useState<Interview[]>([]);
@@ -190,6 +270,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [archiveLoading, setArchiveLoading] = useState(true);
   const [archiveError, setArchiveError] = useState("");
+  const [uploadLoading, setUploadLoading] = useState(false);
   const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
   const [conceptTotalHits, setConceptTotalHits] = useState(0);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -223,30 +304,56 @@ export default function Home() {
     concept.defaultLabel.toLocaleLowerCase("it").includes(conceptSearchQuery.trim().toLocaleLowerCase("it")),
   );
 
+  const showError = useCallback((message: string) => {
+    setGrowlMessage(message);
+    if (growlTimer.current) clearTimeout(growlTimer.current);
+    growlTimer.current = setTimeout(() => setGrowlMessage(""), 6000);
+  }, []);
+
   const loadCanonicalText = useCallback(async (interviewId: string) => {
     const requestId = ++textRequestId.current;
     setTextError("");
     setTextLoading(true);
     try {
-      const response = await fetch(
-        `/api/lexo/texts/${encodeURIComponent(interviewId)}/canonical`,
-        { headers: { Accept: "text/plain" }, cache: "no-store" },
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const canonicalText = await response.text();
+      const [canonicalResult, attestationsResult] = await Promise.allSettled([
+        (async () => {
+          const response = await fetch(
+            `/api/lexo/texts/${encodeURIComponent(interviewId)}/canonical`,
+            { headers: { Accept: "text/plain" }, cache: "no-store" },
+          );
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.text();
+        })(),
+        fetchAttestations(interviewId),
+      ]);
+      if (canonicalResult.status === "rejected") throw canonicalResult.reason;
       if (requestId !== textRequestId.current) return;
       setInterviews((current) => current.map((item) => item.id === interviewId
-        ? { ...item, text: canonicalText }
+        ? {
+            ...item,
+            text: canonicalResult.value,
+            ...(attestationsResult.status === "fulfilled"
+              ? {
+                  annotations: attestationsResult.value,
+                  annotationCount: attestationsResult.value.length,
+                }
+              : {}),
+          }
         : item));
+      if (attestationsResult.status === "rejected") {
+        showError(`Impossibile caricare le attestazioni: ${attestationsResult.reason instanceof Error
+          ? attestationsResult.reason.message
+          : "errore sconosciuto"}`);
+      }
     } catch (error) {
       if (requestId !== textRequestId.current) return;
       setTextError(`Impossibile caricare il testo (${error instanceof Error ? error.message : "errore sconosciuto"}).`);
     } finally {
       if (requestId === textRequestId.current) setTextLoading(false);
     }
-  }, []);
+  }, [showError]);
 
-  const loadArchive = useCallback(async () => {
+  const loadArchive = useCallback(async (preferredInterviewId?: string) => {
     setArchiveLoading(true);
     setArchiveError("");
     try {
@@ -302,15 +409,21 @@ export default function Home() {
         ...serverInterviews,
         ...current.filter((item) => item.source === "local"),
       ]);
-      const interviewToLoad = serverInterviews.find((item) => item.id === activeInterviewIdRef.current)
+      const requestedInterviewId = preferredInterviewId ?? activeInterviewIdRef.current;
+      const interviewToLoad = serverInterviews.find((item) => item.id === requestedInterviewId)
         ?? serverInterviews[0];
       if (interviewToLoad) {
         activeInterviewIdRef.current = interviewToLoad.id;
         setActiveInterviewId(interviewToLoad.id);
-        void loadCanonicalText(interviewToLoad.id);
+        await loadCanonicalText(interviewToLoad.id);
+      } else {
+        setTextLoading(false);
       }
+      return preferredInterviewId ? interviewToLoad?.id === preferredInterviewId : true;
     } catch (error) {
       setArchiveError(`Impossibile caricare l’archivio (${error instanceof Error ? error.message : "errore sconosciuto"}).`);
+      setTextLoading(false);
+      return false;
     } finally {
       setArchiveLoading(false);
     }
@@ -340,18 +453,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    void loadArchive();
+    const timer = setTimeout(() => void loadArchive(), 0);
+    return () => clearTimeout(timer);
   }, [loadArchive]);
 
   useEffect(() => () => {
     if (growlTimer.current) clearTimeout(growlTimer.current);
   }, []);
-
-  function showError(message: string) {
-    setGrowlMessage(message);
-    if (growlTimer.current) clearTimeout(growlTimer.current);
-    growlTimer.current = setTimeout(() => setGrowlMessage(""), 6000);
-  }
 
   function showConceptError() {
     showError("La label non è stata modificata a causa di un errore in LexO-server.");
@@ -421,7 +529,7 @@ export default function Home() {
   }
 
   async function selectInterview(interview: Interview) {
-    if (attestationSaving) return;
+    if (attestationSaving || uploadLoading) return;
     activeInterviewIdRef.current = interview.id;
     setActiveInterviewId(interview.id);
     setSelection(null);
@@ -437,32 +545,58 @@ export default function Home() {
     await loadCanonicalText(interview.id);
   }
 
-  function handleFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+  async function handleFile(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const newInterview: Interview = {
-        id: `${Date.now()}-${file.name}`,
-        name: file.name,
-        text: String(reader.result ?? ""),
-        annotations: [],
-        source: "local",
-      };
-      setInterviews((current) => [...current, newInterview]);
-      activeInterviewIdRef.current = newInterview.id;
-      setActiveInterviewId(newInterview.id);
-      textRequestId.current += 1;
+
+    textRequestId.current += 1;
+    setUploadLoading(true);
+    setArchiveLoading(true);
+    setArchiveError("");
+    setTextLoading(true);
+    setTextError("");
+    setSelection(null);
+    setSelectedConcepts([]);
+    setGrowlMessage("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      formData.append("language", "it");
+      const uploadResponse = await fetch(textUploadEndpoint, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: formData,
+      });
+      if (!uploadResponse.ok) throw new Error(await readErrorDetail(uploadResponse));
+      const uploadPayload = await uploadResponse.json() as Record<string, unknown>;
+      const fileId = readResourceIdentifier(uploadPayload.fileId ?? uploadPayload.id);
+      if (!fileId) throw new Error("LexO-server non ha restituito l’identificativo del testo");
+
+      const conversionResponse = await fetch(
+        `${textsEndpoint}/${encodeURIComponent(fileId)}/convert`,
+        { method: "POST", headers: { Accept: "application/json" } },
+      );
+      if (!conversionResponse.ok) throw new Error(await readErrorDetail(conversionResponse));
+      await waitForTextConversion(fileId);
+
+      activeInterviewIdRef.current = fileId;
+      setSearchQuery("");
+      if (!await loadArchive(fileId)) {
+        throw new Error("Il testo convertito non è ancora disponibile nell’archivio");
+      }
+    } catch (error) {
+      setArchiveLoading(false);
       setTextLoading(false);
-      setTextError("");
-      setSelection(null);
-      setSelectedConcepts([]);
-      event.target.value = "";
-    };
-    reader.readAsText(file);
+      showError(`Errore durante l’importazione dell’intervista: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+    } finally {
+      setUploadLoading(false);
+      input.value = "";
+    }
   }
 
-  function captureSelection(event: MouseEvent<HTMLDivElement>) {
+  function captureSelection() {
     if (attestationSaving) {
       setDragging(false);
       return;
@@ -516,44 +650,26 @@ export default function Home() {
     setAttestationSaving(true);
     setGrowlMessage("");
     try {
-      const results = await Promise.allSettled(selectedLexicalConcepts.map(async (concept) => {
-        const parameters = new URLSearchParams({
-          observable: concept.lexicalConcept,
-          corpus: activeInterview.contextIri ?? "",
-        });
-        const response = await fetch(`${attestationsEndpoint}?${parameters.toString()}`, {
+      const parameters = new URLSearchParams({ corpus: activeInterview.contextIri });
+      const response = await fetch(
+        `${attestationsEndpoint}/by-locus?${parameters.toString()}`,
+        {
           method: "POST",
           headers: { Accept: "application/json", "Content-Type": "application/json" },
-          body: JSON.stringify([
-            {
-              description: `occurrence of ${concept.defaultLabel}`,
-              value: selection.text,
-              start: selection.start,
-              end: selection.end,
-            },
-          ]),
-        });
-        if (!response.ok) {
-          const detail = (await response.text()).trim();
-          throw new Error(`${concept.defaultLabel}: ${detail || `HTTP ${response.status}`}`);
-        }
-      }));
-
-      const failures = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
-      if (failures.length) {
-        const details = failures.map((failure) => failure instanceof Error ? failure.message : String(failure));
-        throw new Error(details.join(" · "));
-      }
-
-      const response = await fetch(
-        `${attestationsEndpoint}/${encodeURIComponent(activeInterview.id)}`,
-        { headers: { Accept: "application/json" }, cache: "no-store" },
+          body: JSON.stringify({
+            value: selection.text,
+            start: selection.start,
+            end: selection.end,
+            observables: selectedLexicalConcepts.map((concept) => concept.lexicalConcept),
+          }),
+        },
       );
       if (!response.ok) {
         const detail = (await response.text()).trim();
         throw new Error(detail || `HTTP ${response.status}`);
       }
-      const loadedAnnotations = parseAttestations(await response.json() as unknown, concepts);
+
+      const loadedAnnotations = await fetchAttestations(activeInterview.id, concepts);
       setInterviews((current) => current.map((interview) => interview.id === activeInterview.id
         ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
         : interview));
@@ -684,14 +800,23 @@ export default function Home() {
                   <span>ARCHIVIO</span>
                   <div className="sidebar-heading-row">
                     <strong>Interviste</strong>
-                    <label className="archive-upload" aria-label="Carica intervista">
+                    <label
+                      className={`archive-upload ${uploadLoading ? "disabled" : ""}`}
+                      aria-label="Carica intervista"
+                      aria-disabled={uploadLoading}
+                    >
                       <span aria-hidden="true">↑</span>
-                      <input type="file" accept=".txt,text/plain" onChange={handleFile} />
+                      <input
+                        type="file"
+                        accept=".txt,.md,.markdown,text/plain,text/markdown"
+                        onChange={(event) => void handleFile(event)}
+                        disabled={uploadLoading}
+                      />
                     </label>
                     <button
                       className="archive-reload"
                       onClick={() => void loadArchive()}
-                      disabled={archiveLoading}
+                      disabled={archiveLoading || uploadLoading}
                       aria-label="Ricarica archivio da LexO-server"
                       title="Ricarica archivio"
                     >
@@ -881,7 +1006,10 @@ export default function Home() {
                             aria-disabled={!selection || attestationSaving}
                             title="Doppio clic per modificare la label"
                           >
-                            <strong>{concept.defaultLabel}</strong>
+                            <span className="concept-label-copy">
+                              <strong>{concept.defaultLabel}</strong>
+                              <small className="concept-attestation">({concept.attestation})</small>
+                            </span>
                           </button>
                         )}
                       </div>

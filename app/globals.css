@@ -97,6 +97,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .archive-upload { font-size: 16px; font-weight: 900; }
 .archive-upload:hover, .archive-reload:hover:not(:disabled) { background: #e8f2ed; border-color: #cdd9d3; transform: translateY(-1px); }
 .archive-upload input { display: none; }
+.archive-upload.disabled { cursor: wait; opacity: .5; pointer-events: none; }
 .archive-reload:hover:not(:disabled) { background: #e8f2ed; transform: rotate(25deg); }
 .archive-reload:disabled { cursor: wait; opacity: .5; }
 .interview-search { margin: 12px 12px 4px; height: 38px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid #dfe5e1; border-radius: 10px; background: #f8faf8; color: #739080; transition: border-color .18s, background .18s; }
@@ -137,7 +138,9 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .concept-item.selected .concept-check { border-color: var(--green); background: var(--green); }
 .concept-label-button { flex: 1; min-width: 0; align-self: stretch; border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; }
 .concept-label-button[aria-disabled="true"] { cursor: default; }
-.concept-label-button strong { display: block; overflow: hidden; text-overflow: ellipsis; font-size: 10px; white-space: nowrap; }
+.concept-label-copy { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.concept-label-button strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 10px; white-space: nowrap; }
+.concept-attestation { flex: none; color: #aab1ad; font-size: 9px; font-weight: 500; }
 .concept-item.selection-disabled .concept-label-button strong { color: #65716b; }
 .concept-edit-input { flex: 1; min-width: 0; height: 28px; border: 1px solid #79a991; border-radius: 7px; outline: 0; padding: 0 8px; background: #fff; color: var(--ink); font-size: 10px; font-weight: 800; box-shadow: 0 0 0 3px rgba(121,169,145,.12); }
 .concept-edit-input:disabled { cursor: wait; opacity: .65; }
