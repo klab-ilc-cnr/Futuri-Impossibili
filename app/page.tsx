@@ -8,12 +8,20 @@ type SelectionInfo = {
   text: string;
   x: number;
   y: number;
+  mode: "create" | "edit";
+};
+
+type AnnotationConcept = {
+  lexicalConcept: string;
+  label: string;
+  options: ConceptAnnotationOptions;
 };
 
 type Annotation = {
   start: number;
   end: number;
   label: string;
+  concepts: AnnotationConcept[];
 };
 
 type Interview = {
@@ -180,7 +188,12 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
       .filter(Boolean);
   }
 
-  const grouped = new Map<string, { start: number; end: number; labels: Set<string> }>();
+  const grouped = new Map<string, {
+    start: number;
+    end: number;
+    labels: Set<string>;
+    concepts: Map<string, AnnotationConcept>;
+  }>();
   for (const rawAttestation of findItems(payload)) {
     if (!rawAttestation || typeof rawAttestation !== "object") continue;
     const attestation = rawAttestation as Record<string, unknown>;
@@ -209,7 +222,12 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
       if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) continue;
 
       const key = `${start}:${end}`;
-      const current = grouped.get(key) ?? { start, end, labels: new Set<string>() };
+      const current = grouped.get(key) ?? {
+        start,
+        end,
+        labels: new Set<string>(),
+        concepts: new Map<string, AnnotationConcept>(),
+      };
       const occurrenceObservableLabels = collectObservableLabels(occurrence.observableLabel);
       const observableLabels = [...attestationObservableLabels, ...occurrenceObservableLabels];
       const labels = observableLabels.length
@@ -221,6 +239,28 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
             ...collectLabels(occurrence.defaultLabel),
           ];
       labels.forEach((label) => current.labels.add(label));
+      if (observable) {
+        const polarity = String(occurrence.polarity ?? attestation.polarity ?? "");
+        const definitionType = String(
+          occurrence.definitionType
+          ?? occurrence.definition_type
+          ?? attestation.definitionType
+          ?? attestation.definition_type
+          ?? "",
+        );
+        current.concepts.set(observable, {
+          lexicalConcept: observable,
+          label: observableLabels[0] ?? conceptLabel ?? observable,
+          options: {
+            polarity: polarityOptions.some((option) => option.value === polarity)
+              ? polarity as ConceptPolarity
+              : "",
+            definitionType: definitionTypeOptions.some((option) => option.value === definitionType)
+              ? definitionType as DefinitionType
+              : "",
+          },
+        });
+      }
       grouped.set(key, current);
     }
   }
@@ -230,6 +270,7 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
       start: annotation.start,
       end: annotation.end,
       label: [...annotation.labels].join("\n") || "Attestazione",
+      concepts: [...annotation.concepts.values()],
     }))
     .sort((a, b) => a.start - b.start || a.end - b.end);
 }
@@ -413,6 +454,7 @@ export default function Home() {
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [selectedConcepts, setSelectedConcepts] = useState<string[]>([]);
   const [conceptAnnotationOptions, setConceptAnnotationOptions] = useState<Record<string, ConceptAnnotationOptions>>({});
+  const [editDirty, setEditDirty] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [archiveLoading, setArchiveLoading] = useState(true);
@@ -427,6 +469,7 @@ export default function Home() {
   const [editedConceptLabel, setEditedConceptLabel] = useState("");
   const [savingConceptUrl, setSavingConceptUrl] = useState("");
   const [growlMessage, setGrowlMessage] = useState("");
+  const [growlTone, setGrowlTone] = useState<"error" | "notice">("error");
   const [attestationSaving, setAttestationSaving] = useState(false);
   const [textLoading, setTextLoading] = useState(false);
   const [textError, setTextError] = useState("");
@@ -454,8 +497,18 @@ export default function Home() {
     const options = conceptAnnotationOptions[lexicalConcept];
     return Boolean(options?.polarity && options.definitionType);
   });
+  const editingAttestation = selection?.mode === "edit";
+  const annotationActionReady = editingAttestation ? editDirty : selectedConceptsConfigured;
 
   const showError = useCallback((message: string) => {
+    setGrowlTone("error");
+    setGrowlMessage(message);
+    if (growlTimer.current) clearTimeout(growlTimer.current);
+    growlTimer.current = setTimeout(() => setGrowlMessage(""), 6000);
+  }, []);
+
+  const showNotice = useCallback((message: string) => {
+    setGrowlTone("notice");
     setGrowlMessage(message);
     if (growlTimer.current) clearTimeout(growlTimer.current);
     growlTimer.current = setTimeout(() => setGrowlMessage(""), 6000);
@@ -686,6 +739,7 @@ export default function Home() {
     setSelection(null);
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
+    setEditDirty(false);
     setTextError("");
 
     if (interview.source !== "server") {
@@ -711,6 +765,7 @@ export default function Home() {
     setSelection(null);
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
+    setEditDirty(false);
     setGrowlMessage("");
 
     try {
@@ -763,6 +818,7 @@ export default function Home() {
     setSelection(null);
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
+    setEditDirty(false);
     setGrowlMessage("");
 
     try {
@@ -818,6 +874,7 @@ export default function Home() {
       setSelection(null);
       setSelectedConcepts([]);
       setConceptAnnotationOptions({});
+      setEditDirty(false);
       return;
     }
 
@@ -834,12 +891,14 @@ export default function Home() {
     if (!selectedText.trim()) return;
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
+    setEditDirty(false);
     setSelection({
       start,
       end: start + selectedText.length,
       text: selectedText,
       x: Math.min(window.innerWidth - 54, Math.max(12, rect.left + rect.width / 2 - 21)),
       y: Math.max(12, rect.top - 52),
+      mode: "create",
     });
   }
 
@@ -892,6 +951,7 @@ export default function Home() {
       window.getSelection()?.removeAllRanges();
       setSelectedConcepts([]);
       setConceptAnnotationOptions({});
+      setEditDirty(false);
       setSelection(null);
     } catch (error) {
       showError(`Errore durante il salvataggio dell’annotazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
@@ -917,6 +977,7 @@ export default function Home() {
       delete nextOptions[lexicalConcept];
       return nextOptions;
     });
+    if (editingAttestation) setEditDirty(true);
   }
 
   function updateConceptAnnotationOptions(
@@ -932,6 +993,41 @@ export default function Home() {
         ...change,
       },
     }));
+    if (editingAttestation) setEditDirty(true);
+  }
+
+  function editAnnotation(annotation: Annotation, target: HTMLElement) {
+    if (attestationSaving) return;
+    const rect = target.getBoundingClientRect();
+    const knownConcepts = annotation.concepts.filter((annotationConcept) =>
+      concepts.some((concept) => concept.lexicalConcept === annotationConcept.lexicalConcept),
+    );
+    setDragging(false);
+    window.getSelection()?.removeAllRanges();
+    setConceptSearchQuery("");
+    setSelectedConcepts(knownConcepts.map((concept) => concept.lexicalConcept));
+    setConceptAnnotationOptions(Object.fromEntries(
+      knownConcepts.map((concept) => [concept.lexicalConcept, concept.options]),
+    ));
+    setEditDirty(false);
+    setSelection({
+      start: annotation.start,
+      end: annotation.end,
+      text: text.slice(annotation.start, annotation.end),
+      x: Math.min(window.innerWidth - 104, Math.max(12, rect.left + rect.width / 2 - 46)),
+      y: Math.max(12, rect.top - 52),
+      mode: "edit",
+    });
+  }
+
+  function requestAnnotationUpdate() {
+    if (!editingAttestation || !editDirty) return;
+    showNotice("La modifica è pronta. Il servizio di aggiornamento dell’attestazione sarà collegato appena disponibile.");
+  }
+
+  function requestAnnotationDeletion() {
+    if (!editingAttestation) return;
+    showNotice("Il comando eliminerà l’intera attestazione e tutti i concetti associati. Il servizio di eliminazione non è ancora disponibile.");
   }
 
   function renderAnnotatedRange(rangeStart: number, rangeEnd: number, keyPrefix: string) {
@@ -947,7 +1043,28 @@ export default function Home() {
         );
       }
       chunks.push(
-        <mark key={`${keyPrefix}-annotation-${annotationStart}-${index}`} data-labels={annotation.label}>
+        <mark
+          key={`${keyPrefix}-annotation-${annotationStart}-${index}`}
+          data-labels={annotation.label}
+          className={editingAttestation && selection?.start === annotation.start && selection.end === annotation.end
+            ? "editing"
+            : undefined}
+          role="button"
+          tabIndex={0}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            editAnnotation(annotation, event.currentTarget);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              editAnnotation(annotation, event.currentTarget);
+            }
+          }}
+          aria-label={`Modifica attestazione: ${annotation.label.replace(/\n/g, ", ")}`}
+          title="Modifica attestazione"
+        >
           {text.slice(annotationStart, annotationEnd)}
         </mark>,
       );
@@ -1181,7 +1298,7 @@ export default function Home() {
                       <span aria-hidden="true" />
                     </div>
                   ) : (
-                    <span>Seleziona una porzione di testo con il mouse</span>
+                    <span>{editingAttestation ? "Modalità modifica attestazione" : "Seleziona una porzione di testo con il mouse"}</span>
                   )}
                   <div className="legend"><span /> {annotations.length} annotazioni</div>
                 </div>
@@ -1205,8 +1322,10 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="concept-intro">
-                  {selection
-                    ? "Seleziona uno o più concetti e completa gli attributi, poi premi nuovamente la penna."
+                  {editingAttestation
+                    ? "Modifica i concetti associati o i loro attributi. La penna si attiva al primo cambiamento."
+                    : selection
+                      ? "Seleziona uno o più concetti e completa gli attributi, poi premi nuovamente la penna."
                     : "Seleziona una parte dell’intervista per associare i concetti."}
                 </div>
                 <div className="interview-search">
@@ -1328,12 +1447,16 @@ export default function Home() {
                   )}
                 </div>
                 {selection && (
-                  <div className={`concept-status ${selectedConceptsConfigured ? "ready" : ""}`}>
+                  <div className={`concept-status ${annotationActionReady ? "ready" : ""}`}>
                     <strong>{selectedConcepts.length}</strong>
                     <span>{selectedConcepts.length === 1 ? "concetto selezionato" : "concetti selezionati"}</span>
                     <small>
-                      {selectedConceptsConfigured
-                        ? "Premi la penna per confermare"
+                      {editingAttestation
+                        ? editDirty
+                          ? "Premi la penna per applicare le modifiche"
+                          : "Modifica concetti o attributi"
+                        : selectedConceptsConfigured
+                          ? "Premi la penna per confermare"
                         : selectedConcepts.length
                           ? "Completa polarità e tipo di definizione"
                           : "Scegli almeno un concetto"}
@@ -1428,21 +1551,36 @@ export default function Home() {
       </main>
 
       {selection && activePage === 4 && (
-        <button
-          className="annotation-trigger"
-          data-ready={selectedConceptsConfigured}
-          style={{ left: selection.x, top: selection.y }}
-          onClick={addAnnotation}
-          disabled={attestationSaving || !selectedConceptsConfigured}
-          aria-label={selectedConceptsConfigured ? "Conferma l’annotazione" : "Completa concetti e attributi"}
-          title={selectedConceptsConfigured ? "Conferma l’annotazione" : "Seleziona i concetti e completa i relativi attributi"}
-        >
-          ✎
-        </button>
+        <div className="annotation-actions" style={{ left: selection.x, top: selection.y }}>
+          <button
+            className="annotation-trigger"
+            data-ready={annotationActionReady}
+            onClick={editingAttestation ? requestAnnotationUpdate : addAnnotation}
+            disabled={attestationSaving || !annotationActionReady}
+            aria-label={editingAttestation
+              ? annotationActionReady ? "Conferma modifiche all’attestazione" : "Modifica i concetti per attivare la penna"
+              : selectedConceptsConfigured ? "Conferma l’annotazione" : "Completa concetti e attributi"}
+            title={editingAttestation
+              ? annotationActionReady ? "Conferma modifiche" : "Modifica concetti o attributi"
+              : selectedConceptsConfigured ? "Conferma l’annotazione" : "Seleziona i concetti e completa i relativi attributi"}
+          >
+            ✎
+          </button>
+          {editingAttestation && (
+            <button
+              className="annotation-eraser"
+              onClick={requestAnnotationDeletion}
+              aria-label="Elimina l’intera attestazione"
+              title="Elimina attestazione e concetti associati"
+            >
+              <span aria-hidden="true" />
+            </button>
+          )}
+        </div>
       )}
       {growlMessage && (
-        <div className="error-growl" role="alert" aria-live="assertive">
-          <span aria-hidden="true">!</span>
+        <div className={`error-growl ${growlTone === "notice" ? "notice" : ""}`} role="alert" aria-live="assertive">
+          <span aria-hidden="true">{growlTone === "notice" ? "i" : "!"}</span>
           <p>{growlMessage}</p>
           <button onClick={() => setGrowlMessage("")} aria-label="Chiudi messaggio">×</button>
         </div>

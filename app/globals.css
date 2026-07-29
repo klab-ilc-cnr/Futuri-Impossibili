@@ -208,8 +208,10 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .text-area::selection, .text-area *::selection { background: #c9e8d8; color: var(--ink); }
 .text-area mark {
   position: relative; background: var(--yellow); color: inherit; padding: 2px 0;
-  box-shadow: 2px 0 var(--yellow), -2px 0 var(--yellow); border-radius: 2px; cursor: help;
+  box-shadow: 2px 0 var(--yellow), -2px 0 var(--yellow); border-radius: 2px; cursor: pointer;
 }
+.text-area mark.editing { outline: 2px solid #4d876b; outline-offset: 3px; }
+.text-area mark:focus-visible { outline: 2px solid #315f4a; outline-offset: 3px; }
 .text-area mark::after {
   content: attr(data-labels); position: absolute; z-index: 12; left: 50%; bottom: calc(100% + 8px);
   min-width: 130px; max-width: 260px; padding: 8px 10px; border: 1px solid #cfdad4; border-radius: 9px;
@@ -218,6 +220,9 @@ main { height: calc(100vh - 176px); min-height: 520px; }
   pointer-events: none; opacity: 0; transform: translate(-50%, 5px); transition: opacity .16s, transform .16s;
 }
 .text-area mark:hover::after { opacity: 1; transform: translate(-50%, 0); }
+.text-area mark.editing::after,
+.text-area mark.editing:hover::after,
+.text-area mark.editing:focus::after { opacity: 0; transform: translate(-50%, 5px); }
 .interview-offset-prefix { display: none; }
 .transcript-heading { font-weight: 800; color: #1e2c26; }
 .text-loading, .text-error {
@@ -251,14 +256,28 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 }
 kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; padding: 2px 5px; }
 
+.annotation-actions {
+  position: fixed; z-index: 20; display: flex; align-items: center; gap: 7px;
+  animation: pop .18s ease-out;
+}
 .annotation-trigger {
-  position: fixed; z-index: 20; width: 42px; height: 42px; border-radius: 50%; border: 3px solid #fff;
+  width: 42px; height: 42px; border-radius: 50%; border: 3px solid #fff;
   color: #fff; background: var(--green); box-shadow: 0 8px 22px rgba(15,48,36,.28); cursor: pointer;
-  font: 22px/1 Georgia, serif; animation: pop .18s ease-out;
+  font: 22px/1 Georgia, serif;
 }
 .annotation-trigger[data-ready="false"] { background: #789186; cursor: default; }
 .annotation-trigger[data-ready="true"] { box-shadow: 0 8px 22px rgba(15,48,36,.32), 0 0 0 5px rgba(89,167,127,.16); }
 .annotation-trigger:disabled { cursor: wait; opacity: .62; }
+.annotation-eraser {
+  width: 42px; height: 42px; display: grid; place-items: center; border: 3px solid #fff; border-radius: 50%;
+  background: #fff8ef; color: #945b37; box-shadow: 0 8px 22px rgba(64,42,24,.2); cursor: pointer;
+}
+.annotation-eraser span {
+  width: 19px; height: 12px; border: 2px solid currentColor; border-radius: 4px 4px 3px 3px;
+  background: linear-gradient(135deg, #edb9a2 0 54%, #fff 55%); transform: rotate(-38deg);
+  box-shadow: 0 2px 0 rgba(148,91,55,.13);
+}
+.annotation-eraser:hover { background: #fff1e3; transform: translateY(-1px); }
 @keyframes pop { from { transform: translateY(5px) scale(.88); opacity: 0; } }
 
 .error-growl {
@@ -270,6 +289,9 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .error-growl > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #b83b30; color: #fff; font-weight: 900; }
 .error-growl p { margin: 0; font-size: 11px; font-weight: 800; line-height: 1.45; }
 .error-growl button { border: 0; background: transparent; color: #a76159; cursor: pointer; padding: 0; font-size: 22px; line-height: 1; }
+.error-growl.notice { border-color: #9bc5b0; background: #f1f8f4; color: #2f654c; }
+.error-growl.notice > span { background: var(--green); }
+.error-growl.notice button { color: #5b8370; }
 
 .annotation-popover {
   position: fixed; z-index: 30; width: min(370px, calc(100vw - 24px)); max-height: min(500px, calc(100vh - 120px)); overflow-y: auto;
