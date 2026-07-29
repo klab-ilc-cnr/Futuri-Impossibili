@@ -36,13 +36,39 @@ type LexicalConcept = {
   attestation: number;
 };
 
+type ConceptPolarity = "positive" | "neutral" | "negative";
+type DefinitionType = "sinonimo" | "parafrasi" | "esempio-prototipo" | "associazione-concettuale";
+
+type ConceptAnnotationOptions = {
+  polarity: ConceptPolarity | "";
+  definitionType: DefinitionType | "";
+};
+
 type TextConversionJob = {
   state: string;
   message?: string;
 };
 
+type BulkTextJobItem = {
+  fileId: string;
+  originalFileName?: string;
+  state: string;
+  message?: string;
+  resultId?: string;
+};
+
+type BulkTextJob = {
+  bulkId: string;
+  state: string;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  items: BulkTextJobItem[];
+};
+
 const menuItems = [
   "Il Progetto",
+  "Statistiche",
   "Esplora Dizionario",
   "Interrogazioni",
   "Costruisci Dizionario",
@@ -52,9 +78,72 @@ const menuItems = [
 
 const textsEndpoint = "/api/lexo/texts";
 const textUploadEndpoint = "/api/lexo/texts/upload";
+const textBulkUploadEndpoint = "/api/lexo/texts/bulk";
 const conceptsEndpoint = "/api/lexo/lexical-concepts";
 const updateLexicalLabelEndpoint = "/api/lexo/update-lexical-label";
 const attestationsEndpoint = "/api/lexo/attestations";
+
+const polarityOptions: Array<{ value: ConceptPolarity; label: string }> = [
+  { value: "negative", label: "Negative" },
+  { value: "neutral", label: "Neutral" },
+  { value: "positive", label: "Positive" },
+];
+
+const definitionTypeOptions: Array<{ value: DefinitionType; label: string }> = [
+  { value: "sinonimo", label: "Sinonimo" },
+  { value: "parafrasi", label: "Parafrasi" },
+  { value: "esempio-prototipo", label: "Esempio prototipo" },
+  { value: "associazione-concettuale", label: "Associazione concettuale" },
+];
+
+function DefinitionTypeIcon({ type }: { type: DefinitionType }) {
+  const commonProps = {
+    viewBox: "0 0 32 32",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (type === "sinonimo") {
+    return (
+      <svg {...commonProps}>
+        <path d="M12.2 10.2 9.8 7.8a5 5 0 0 0-7.1 7.1l3.8 3.8a5 5 0 0 0 7.1 0l1.5-1.5" />
+        <path d="m19.8 21.8 2.4 2.4a5 5 0 0 0 7.1-7.1l-3.8-3.8a5 5 0 0 0-7.1 0l-1.5 1.5" />
+        <path d="m10.8 21.2 10.4-10.4" />
+      </svg>
+    );
+  }
+  if (type === "parafrasi") {
+    return (
+      <svg {...commonProps}>
+        <path d="M4 6.5h15a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H10l-5 4v-4H4a3 3 0 0 1-3-3v-5a3 3 0 0 1 3-3Z" />
+        <path d="M10 23.5h12l5 4v-4h1a3 3 0 0 0 3-3v-5a3 3 0 0 0-3-3h-2" />
+        <path d="M7 11h9M7 14h6" />
+      </svg>
+    );
+  }
+  if (type === "esempio-prototipo") {
+    return (
+      <svg {...commonProps}>
+        <path d="M11 23h10M12.5 27h7" />
+        <path d="M9.2 18.5A9 9 0 1 1 22.8 18.5c-1.2 1-1.8 2-1.8 4.5H11c0-2.5-.6-3.5-1.8-4.5Z" />
+        <path d="m16 7.5 1.2 2.5 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4L16 7.5Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...commonProps}>
+      <circle cx="16" cy="7" r="3.5" />
+      <circle cx="7" cy="24" r="3.5" />
+      <circle cx="25" cy="24" r="3.5" />
+      <circle cx="16" cy="20" r="2.5" />
+      <path d="m14.3 10.1-5.6 10.8M17.7 10.1l5.6 10.8M16 10.5v7M10.5 24h11" />
+    </svg>
+  );
+}
 
 function readResourceIdentifier(value: unknown): string {
   if (typeof value === "string" || typeof value === "number") return String(value);
@@ -260,12 +349,70 @@ async function waitForTextConversion(fileId: string) {
   throw new Error("Tempo massimo superato durante la conversione del testo");
 }
 
+function readBulkTextJob(payload: unknown): BulkTextJob | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const job = payload as Record<string, unknown>;
+  const bulkId = readResourceIdentifier(job.bulkId ?? job.id);
+  const state = typeof job.state === "string" ? job.state.toUpperCase() : "";
+  if (!bulkId || !state) return null;
+  const rawItems = Array.isArray(job.items) ? job.items : [];
+  const items = rawItems.flatMap((rawItem) => {
+    if (!rawItem || typeof rawItem !== "object") return [];
+    const item = rawItem as Record<string, unknown>;
+    const fileId = readResourceIdentifier(item.fileId ?? item.id);
+    const itemState = typeof item.state === "string" ? item.state.toUpperCase() : "";
+    if (!fileId || !itemState) return [];
+    return [{
+      fileId,
+      state: itemState,
+      originalFileName: typeof item.originalFileName === "string" ? item.originalFileName : undefined,
+      message: typeof item.message === "string" ? item.message : undefined,
+      resultId: readResourceIdentifier(item.resultId) || undefined,
+    }];
+  });
+  return {
+    bulkId,
+    state,
+    completed: Number(job.completed ?? 0),
+    failed: Number(job.failed ?? 0),
+    cancelled: Number(job.cancelled ?? 0),
+    items,
+  };
+}
+
+async function waitForBulkTextConversion(bulkId: string) {
+  const deadline = Date.now() + 15 * 60_000;
+  while (Date.now() < deadline) {
+    const response = await fetch(
+      `${textBulkUploadEndpoint}/${encodeURIComponent(bulkId)}/status`,
+      { headers: { Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!response.ok) throw new Error(await readErrorDetail(response));
+
+    const job = readBulkTextJob(await response.json() as unknown);
+    if (job && ["COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "CANCELLED"].includes(job.state)) {
+      return job;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("Tempo massimo superato durante l’importazione bulk");
+}
+
+function describeBulkFailures(job: BulkTextJob) {
+  const details = job.items
+    .filter((item) => ["FAILED", "CANCELLED"].includes(item.state))
+    .slice(0, 3)
+    .map((item) => `${item.originalFileName ?? item.fileId}: ${item.message ?? item.state.toLocaleLowerCase("it-IT")}`);
+  return details.join(" · ");
+}
+
 export default function Home() {
   const [activePage, setActivePage] = useState(0);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [activeInterviewId, setActiveInterviewId] = useState("");
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [selectedConcepts, setSelectedConcepts] = useState<string[]>([]);
+  const [conceptAnnotationOptions, setConceptAnnotationOptions] = useState<Record<string, ConceptAnnotationOptions>>({});
   const [dragging, setDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [archiveLoading, setArchiveLoading] = useState(true);
@@ -303,6 +450,10 @@ export default function Home() {
   const filteredConcepts = concepts.filter((concept) =>
     concept.defaultLabel.toLocaleLowerCase("it").includes(conceptSearchQuery.trim().toLocaleLowerCase("it")),
   );
+  const selectedConceptsConfigured = selectedConcepts.length > 0 && selectedConcepts.every((lexicalConcept) => {
+    const options = conceptAnnotationOptions[lexicalConcept];
+    return Boolean(options?.polarity && options.definitionType);
+  });
 
   const showError = useCallback((message: string) => {
     setGrowlMessage(message);
@@ -534,6 +685,7 @@ export default function Home() {
     setActiveInterviewId(interview.id);
     setSelection(null);
     setSelectedConcepts([]);
+    setConceptAnnotationOptions({});
     setTextError("");
 
     if (interview.source !== "server") {
@@ -558,6 +710,7 @@ export default function Home() {
     setTextError("");
     setSelection(null);
     setSelectedConcepts([]);
+    setConceptAnnotationOptions({});
     setGrowlMessage("");
 
     try {
@@ -596,6 +749,62 @@ export default function Home() {
     }
   }
 
+  async function handleBulkFiles(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    if (files.length === 0) return;
+
+    textRequestId.current += 1;
+    setUploadLoading(true);
+    setArchiveLoading(true);
+    setArchiveError("");
+    setTextLoading(true);
+    setTextError("");
+    setSelection(null);
+    setSelectedConcepts([]);
+    setConceptAnnotationOptions({});
+    setGrowlMessage("");
+
+    try {
+      const formData = new FormData();
+      files.forEach((file) => formData.append("file", file, file.name));
+      formData.append("language", "it");
+      const response = await fetch(textBulkUploadEndpoint, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: formData,
+      });
+      if (!response.ok) throw new Error(await readErrorDetail(response));
+      const acceptedJob = readBulkTextJob(await response.json() as unknown);
+      if (!acceptedJob) throw new Error("LexO-server non ha restituito l’identificativo del bulk");
+
+      const completedJob = await waitForBulkTextConversion(acceptedJob.bulkId);
+      const firstCompleted = completedJob.items.find((item) => item.state === "COMPLETED");
+      if (!firstCompleted) {
+        throw new Error(describeBulkFailures(completedJob) || "Nessun testo del bulk è stato convertito");
+      }
+
+      const preferredInterviewId = firstCompleted.resultId ?? firstCompleted.fileId;
+      activeInterviewIdRef.current = preferredInterviewId;
+      setSearchQuery("");
+      if (!await loadArchive(preferredInterviewId)) {
+        throw new Error("I testi convertiti non sono ancora disponibili nell’archivio");
+      }
+
+      if (completedJob.state === "PARTIALLY_COMPLETED") {
+        const detail = describeBulkFailures(completedJob);
+        showError(`Importazione parziale: ${completedJob.completed} file caricati, ${completedJob.failed} non riusciti${detail ? `. ${detail}` : "."}`);
+      }
+    } catch (error) {
+      setArchiveLoading(false);
+      setTextLoading(false);
+      showError(`Errore durante l’importazione bulk: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+    } finally {
+      setUploadLoading(false);
+      input.value = "";
+    }
+  }
+
   function captureSelection() {
     if (attestationSaving) {
       setDragging(false);
@@ -607,6 +816,8 @@ export default function Home() {
     const browserSelection = window.getSelection();
     if (!root || !browserSelection || browserSelection.isCollapsed || browserSelection.rangeCount === 0) {
       setSelection(null);
+      setSelectedConcepts([]);
+      setConceptAnnotationOptions({});
       return;
     }
 
@@ -622,6 +833,7 @@ export default function Home() {
 
     if (!selectedText.trim()) return;
     setSelectedConcepts([]);
+    setConceptAnnotationOptions({});
     setSelection({
       start,
       end: start + selectedText.length,
@@ -633,6 +845,10 @@ export default function Home() {
 
   async function addAnnotation() {
     if (!selection || selectedConcepts.length === 0 || attestationSaving) return;
+    if (!selectedConceptsConfigured) {
+      showError("Scegli polarità e tipo di definizione per ogni concetto selezionato.");
+      return;
+    }
     if (!activeInterview || activeInterview.source !== "server" || !activeInterview.contextIri) {
       showError("Non è possibile creare l’attestazione: l’intervista non contiene l’IRI del nif:Context.");
       return;
@@ -675,6 +891,7 @@ export default function Home() {
         : interview));
       window.getSelection()?.removeAllRanges();
       setSelectedConcepts([]);
+      setConceptAnnotationOptions({});
       setSelection(null);
     } catch (error) {
       showError(`Errore durante il salvataggio dell’annotazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
@@ -685,9 +902,36 @@ export default function Home() {
 
   function toggleConcept(lexicalConcept: string) {
     if (!selection || attestationSaving) return;
-    setSelectedConcepts((current) => current.includes(lexicalConcept)
+    const isSelected = selectedConcepts.includes(lexicalConcept);
+    setSelectedConcepts((current) => isSelected
       ? current.filter((item) => item !== lexicalConcept)
       : [...current, lexicalConcept]);
+    setConceptAnnotationOptions((current) => {
+      if (!isSelected) {
+        return {
+          ...current,
+          [lexicalConcept]: { polarity: "", definitionType: "" },
+        };
+      }
+      const nextOptions = { ...current };
+      delete nextOptions[lexicalConcept];
+      return nextOptions;
+    });
+  }
+
+  function updateConceptAnnotationOptions(
+    lexicalConcept: string,
+    change: Partial<ConceptAnnotationOptions>,
+  ) {
+    if (attestationSaving) return;
+    setConceptAnnotationOptions((current) => ({
+      ...current,
+      [lexicalConcept]: {
+        polarity: current[lexicalConcept]?.polarity ?? "",
+        definitionType: current[lexicalConcept]?.definitionType ?? "",
+        ...change,
+      },
+    }));
   }
 
   function renderAnnotatedRange(rangeStart: number, rangeEnd: number, keyPrefix: string) {
@@ -773,19 +1017,21 @@ export default function Home() {
             className={activePage === index ? "active" : ""}
             onClick={() => {
               setActivePage(index);
-              if (index === 3) void loadConcepts();
+              if (index === 4) void loadConcepts();
             }}
-            aria-label={index === 3 ? `${item}, area riservata con autenticazione` : item}
-            title={index === 3 ? "Area riservata: sarà richiesta l’autenticazione" : undefined}
+            aria-label={index === 4 ? `${item}, area riservata con autenticazione` : item}
+            title={index === 4 ? "Area riservata: sarà richiesta l’autenticazione" : undefined}
           >
             {item}
-            {index === 3 && <span className="nav-lock" aria-hidden="true">🔒</span>}
+            {index === 4 && <span className="nav-lock" aria-hidden="true">🔒</span>}
           </button>
         ))}
       </nav>
 
       <main>
-        {activePage === 3 ? (
+        {activePage === 1 ? (
+          <section className="statistics-page" aria-label="Statistiche" />
+        ) : activePage === 4 ? (
           <section className="workspace" aria-label="Annotazione interviste">
             <div className="workspace-bar">
               <div>
@@ -804,6 +1050,7 @@ export default function Home() {
                       className={`archive-upload ${uploadLoading ? "disabled" : ""}`}
                       aria-label="Carica intervista"
                       aria-disabled={uploadLoading}
+                      title="Carica una intervista"
                     >
                       <span aria-hidden="true">↑</span>
                       <input
@@ -811,6 +1058,21 @@ export default function Home() {
                         accept=".txt,.md,.markdown,text/plain,text/markdown"
                         onChange={(event) => void handleFile(event)}
                         disabled={uploadLoading}
+                      />
+                    </label>
+                    <label
+                      className={`archive-upload archive-upload-bulk ${uploadLoading ? "disabled" : ""}`}
+                      aria-label="Carica più interviste in bulk"
+                      aria-disabled={uploadLoading}
+                      title="Carica più interviste in bulk"
+                    >
+                      <span aria-hidden="true">⇈</span>
+                      <input
+                        type="file"
+                        accept=".txt,.md,.markdown,text/plain,text/markdown"
+                        onChange={(event) => void handleBulkFiles(event)}
+                        disabled={uploadLoading}
+                        multiple
                       />
                     </label>
                     <button
@@ -944,7 +1206,7 @@ export default function Home() {
                 </div>
                 <div className="concept-intro">
                   {selection
-                    ? "Seleziona uno o più concetti, poi premi nuovamente la penna."
+                    ? "Seleziona uno o più concetti e completa gli attributi, poi premi nuovamente la penna."
                     : "Seleziona una parte dell’intervista per associare i concetti."}
                 </div>
                 <div className="interview-search">
@@ -975,42 +1237,86 @@ export default function Home() {
                     const isSelected = selectedConcepts.includes(concept.lexicalConcept);
                     const isEditing = editingConceptUrl === concept.lexicalConcept;
                     const isSaving = savingConceptUrl === concept.lexicalConcept;
+                    const annotationOptions = conceptAnnotationOptions[concept.lexicalConcept]
+                      ?? { polarity: "", definitionType: "" };
                     return (
                       <div
                         key={concept.lexicalConcept}
                         className={`concept-item ${isSelected ? "selected" : ""} ${!selection ? "selection-disabled" : ""}`}
                       >
-                        <span className="concept-check">{isSelected ? "✓" : ""}</span>
-                        {isEditing ? (
-                          <input
-                            className="concept-edit-input"
-                            value={editedConceptLabel}
-                            onChange={(event) => setEditedConceptLabel(event.target.value)}
-                            onKeyDown={(event) => handleConceptEditKeyDown(event, concept)}
-                            onBlur={() => {
-                              if (!isSaving) {
-                                setEditedConceptLabel(concept.defaultLabel);
-                                setEditingConceptUrl("");
-                              }
-                            }}
-                            disabled={isSaving}
-                            aria-label={`Modifica ${concept.defaultLabel}`}
-                            autoFocus
-                          />
-                        ) : (
-                          <button
-                            className="concept-label-button"
-                            onClick={() => toggleConcept(concept.lexicalConcept)}
-                            onDoubleClick={() => startEditingConcept(concept)}
-                            aria-pressed={isSelected}
-                            aria-disabled={!selection || attestationSaving}
-                            title="Doppio clic per modificare la label"
-                          >
-                            <span className="concept-label-copy">
-                              <strong>{concept.defaultLabel}</strong>
-                              <small className="concept-attestation">({concept.attestation})</small>
-                            </span>
-                          </button>
+                        <div className="concept-main-row">
+                          <span className="concept-check">{isSelected ? "✓" : ""}</span>
+                          {isEditing ? (
+                            <input
+                              className="concept-edit-input"
+                              value={editedConceptLabel}
+                              onChange={(event) => setEditedConceptLabel(event.target.value)}
+                              onKeyDown={(event) => handleConceptEditKeyDown(event, concept)}
+                              onBlur={() => {
+                                if (!isSaving) {
+                                  setEditedConceptLabel(concept.defaultLabel);
+                                  setEditingConceptUrl("");
+                                }
+                              }}
+                              disabled={isSaving}
+                              aria-label={`Modifica ${concept.defaultLabel}`}
+                              autoFocus
+                            />
+                          ) : (
+                            <button
+                              className="concept-label-button"
+                              onClick={() => toggleConcept(concept.lexicalConcept)}
+                              onDoubleClick={() => startEditingConcept(concept)}
+                              aria-pressed={isSelected}
+                              aria-disabled={!selection || attestationSaving}
+                              title="Doppio clic per modificare la label"
+                            >
+                              <span className="concept-label-copy">
+                                <strong>{concept.defaultLabel}</strong>
+                                <small className="concept-attestation">({concept.attestation})</small>
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <div className="concept-options-panel">
+                            <fieldset>
+                              <legend>Polarità</legend>
+                              <div className="concept-option-grid polarity-options">
+                                {polarityOptions.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    className={`concept-option polarity-${option.value} ${annotationOptions.polarity === option.value ? "active" : ""}`}
+                                    onClick={() => updateConceptAnnotationOptions(concept.lexicalConcept, { polarity: option.value })}
+                                    aria-pressed={annotationOptions.polarity === option.value}
+                                    aria-label={`Polarità ${option.label}`}
+                                    title={option.label}
+                                  >
+                                    <span className="sentiment-face" aria-hidden="true" />
+                                  </button>
+                                ))}
+                              </div>
+                            </fieldset>
+                            <fieldset>
+                              <legend>Tipo di definizione</legend>
+                              <div className="concept-option-grid definition-options">
+                                {definitionTypeOptions.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    className={`concept-option ${annotationOptions.definitionType === option.value ? "active" : ""}`}
+                                    onClick={() => updateConceptAnnotationOptions(concept.lexicalConcept, { definitionType: option.value })}
+                                    aria-pressed={annotationOptions.definitionType === option.value}
+                                    aria-label={`Tipo di definizione: ${option.label}`}
+                                    title={option.label}
+                                  >
+                                    <DefinitionTypeIcon type={option.value} />
+                                  </button>
+                                ))}
+                              </div>
+                            </fieldset>
+                          </div>
                         )}
                       </div>
                     );
@@ -1022,16 +1328,22 @@ export default function Home() {
                   )}
                 </div>
                 {selection && (
-                  <div className={`concept-status ${selectedConcepts.length ? "ready" : ""}`}>
+                  <div className={`concept-status ${selectedConceptsConfigured ? "ready" : ""}`}>
                     <strong>{selectedConcepts.length}</strong>
                     <span>{selectedConcepts.length === 1 ? "concetto selezionato" : "concetti selezionati"}</span>
-                    <small>{selectedConcepts.length ? "Premi la penna per confermare" : "Scegli almeno un concetto"}</small>
+                    <small>
+                      {selectedConceptsConfigured
+                        ? "Premi la penna per confermare"
+                        : selectedConcepts.length
+                          ? "Completa polarità e tipo di definizione"
+                          : "Scegli almeno un concetto"}
+                    </small>
                   </div>
                 )}
               </aside>
             </div>
           </section>
-        ) : activePage === 4 ? (
+        ) : activePage === 5 ? (
           <section className="publications-page" aria-labelledby="publications-title">
             <div className="publications-hero">
               <div className="publications-heading">
@@ -1115,15 +1427,15 @@ export default function Home() {
         )}
       </main>
 
-      {selection && activePage === 3 && (
+      {selection && activePage === 4 && (
         <button
           className="annotation-trigger"
-          data-ready={selectedConcepts.length > 0}
+          data-ready={selectedConceptsConfigured}
           style={{ left: selection.x, top: selection.y }}
           onClick={addAnnotation}
-          disabled={attestationSaving}
-          aria-label={selectedConcepts.length ? "Conferma l’annotazione" : "Seleziona uno o più concetti"}
-          title={selectedConcepts.length ? "Conferma l’annotazione" : "Seleziona uno o più concetti nel repertorio"}
+          disabled={attestationSaving || !selectedConceptsConfigured}
+          aria-label={selectedConceptsConfigured ? "Conferma l’annotazione" : "Completa concetti e attributi"}
+          title={selectedConceptsConfigured ? "Conferma l’annotazione" : "Seleziona i concetti e completa i relativi attributi"}
         >
           ✎
         </button>
