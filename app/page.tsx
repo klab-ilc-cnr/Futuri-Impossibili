@@ -1120,11 +1120,11 @@ export default function Home() {
           ),
         }
       : interview));
-    setSelection((current) => current ? {
-      ...current,
-      sourceStart: current.start,
-      sourceEnd: current.end,
-    } : current);
+    window.getSelection()?.removeAllRanges();
+    setSelection(null);
+    setSelectedConcepts([]);
+    setConceptAnnotationOptions({});
+    setEditDirty(false);
     setLocusEditing(false);
     showNotice(`Nuovo locus salvato localmente: start ${selection.start}, end ${selection.end}.`);
   }
