@@ -8,6 +8,7 @@ type SelectionInfo = {
   text: string;
   x: number;
   y: number;
+  actionX?: number;
   mode: "create" | "edit";
   sourceStart?: number;
   sourceEnd?: number;
@@ -48,6 +49,7 @@ type LexicalConcept = {
 
 type ConceptPolarity = "positive" | "neutral" | "negative";
 type DefinitionType = "sinonimo" | "parafrasi" | "esempio-prototipo" | "associazione-concettuale";
+type SelectionCategory = "femmina" | "criminale" | "infame";
 
 type ConceptAnnotationOptions = {
   polarity: ConceptPolarity | "";
@@ -105,6 +107,8 @@ const definitionTypeOptions: Array<{ value: DefinitionType; label: string }> = [
   { value: "esempio-prototipo", label: "Esempio prototipo" },
   { value: "associazione-concettuale", label: "Associazione concettuale" },
 ];
+
+const selectionCategories: SelectionCategory[] = ["femmina", "criminale", "infame"];
 
 function DefinitionTypeIcon({ type }: { type: DefinitionType }) {
   const commonProps = {
@@ -190,6 +194,43 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
       .filter(Boolean);
   }
 
+  function collectMetadataValues(value: unknown, property: string): string[] {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const metadata = value as Record<string, unknown>;
+    const rawValues = metadata[property];
+    const values = Array.isArray(rawValues) ? rawValues : rawValues ? [rawValues] : [];
+    return values
+      .map((item) => readResourceIdentifier(item).trim())
+      .filter(Boolean);
+  }
+
+  function parsePolarity(values: unknown[]): ConceptPolarity | "" {
+    for (const value of values.flatMap((item) => Array.isArray(item) ? item : [item])) {
+      const identifier = readResourceIdentifier(value).toLocaleLowerCase("it");
+      const localName = identifier.split(/[/#]/).pop();
+      if (localName === "positive") return "positive";
+      if (localName === "neutral") return "neutral";
+      if (localName === "negative") return "negative";
+    }
+    return "";
+  }
+
+  function parseDefinitionType(values: unknown[]): DefinitionType | "" {
+    for (const value of values.flatMap((item) => Array.isArray(item) ? item : [item])) {
+      const identifier = readResourceIdentifier(value).toLocaleLowerCase("it");
+      const localName = (identifier.split(/[/#]/).pop() ?? "").replace(/[_\s]/g, "-");
+      if (["sinonimo", "synonym"].includes(localName)) return "sinonimo";
+      if (["parafrasi", "paraphrase"].includes(localName)) return "parafrasi";
+      if (["esempio-prototipo", "esempioprototipo", "prototype-example"].includes(localName)) {
+        return "esempio-prototipo";
+      }
+      if (["associazione-concettuale", "associazioneconcettuale", "conceptual-association"].includes(localName)) {
+        return "associazione-concettuale";
+      }
+    }
+    return "";
+  }
+
   const grouped = new Map<string, {
     start: number;
     end: number;
@@ -240,27 +281,31 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
             ...collectLabels(occurrence.label),
             ...collectLabels(occurrence.defaultLabel),
           ];
-      labels.forEach((label) => current.labels.add(label));
+      const metadataLabel = [
+        ...collectMetadataValues(occurrence.metadata, "http://www.w3.org/2000/01/rdf-schema#label"),
+        ...collectMetadataValues(attestation.metadata, "http://www.w3.org/2000/01/rdf-schema#label"),
+      ][0];
+      const displayLabels = labels.map((label) => metadataLabel ? `${metadataLabel} - ${label}` : label);
+      displayLabels.forEach((label) => current.labels.add(label));
       if (observable) {
-        const polarity = String(occurrence.polarity ?? attestation.polarity ?? "");
-        const definitionType = String(
-          occurrence.definitionType
-          ?? occurrence.definition_type
-          ?? attestation.definitionType
-          ?? attestation.definition_type
-          ?? "",
-        );
+        const polarity = parsePolarity([
+          ...collectMetadataValues(occurrence.metadata, "http://purl.org/marl/ns#hasPolarity"),
+          ...collectMetadataValues(attestation.metadata, "http://purl.org/marl/ns#hasPolarity"),
+          occurrence.polarity,
+          attestation.polarity,
+        ]);
+        const definitionType = parseDefinitionType([
+          ...collectMetadataValues(occurrence.metadata, "https://lexo.ilc.cnr.it#definitionType"),
+          ...collectMetadataValues(attestation.metadata, "https://lexo.ilc.cnr.it#definitionType"),
+          occurrence.definitionType,
+          occurrence.definition_type,
+          attestation.definitionType,
+          attestation.definition_type,
+        ]);
         current.concepts.set(observable, {
           lexicalConcept: observable,
-          label: observableLabels[0] ?? conceptLabel ?? observable,
-          options: {
-            polarity: polarityOptions.some((option) => option.value === polarity)
-              ? polarity as ConceptPolarity
-              : "",
-            definitionType: definitionTypeOptions.some((option) => option.value === definitionType)
-              ? definitionType as DefinitionType
-              : "",
-          },
+          label: displayLabels[0] ?? conceptLabel ?? observable,
+          options: { polarity, definitionType },
         });
       }
       grouped.set(key, current);
@@ -454,6 +499,7 @@ export default function Home() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [activeInterviewId, setActiveInterviewId] = useState("");
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const [selectionCategory, setSelectionCategory] = useState<SelectionCategory | null>(null);
   const [selectedConcepts, setSelectedConcepts] = useState<string[]>([]);
   const [conceptAnnotationOptions, setConceptAnnotationOptions] = useState<Record<string, ConceptAnnotationOptions>>({});
   const [editDirty, setEditDirty] = useState(false);
@@ -477,11 +523,14 @@ export default function Home() {
   const [textLoading, setTextLoading] = useState(false);
   const [textError, setTextError] = useState("");
   const textRef = useRef<HTMLDivElement>(null);
+  const conceptSidebarRef = useRef<HTMLElement>(null);
+  const annotationActionsRef = useRef<HTMLDivElement>(null);
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
+  const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
 
   const activeInterview = interviews.find((item) => item.id === activeInterviewId) ?? interviews[0];
   const text = activeInterview?.text ?? "";
@@ -502,6 +551,7 @@ export default function Home() {
     return Boolean(options?.polarity && options.definitionType);
   });
   const editingAttestation = selection?.mode === "edit";
+  const conceptSelectionActive = Boolean(selection && (editingAttestation || selectionCategory));
   const annotationActionReady = editingAttestation ? editDirty : selectedConceptsConfigured;
 
   const showError = useCallback((message: string) => {
@@ -516,6 +566,16 @@ export default function Home() {
     setGrowlMessage(message);
     if (growlTimer.current) clearTimeout(growlTimer.current);
     growlTimer.current = setTimeout(() => setGrowlMessage(""), 6000);
+  }, []);
+
+  const resetSelectionFlow = useCallback(() => {
+    window.getSelection()?.removeAllRanges();
+    setSelection(null);
+    setSelectionCategory(null);
+    setSelectedConcepts([]);
+    setConceptAnnotationOptions({});
+    setEditDirty(false);
+    setLocusEditing(false);
   }, []);
 
   const loadCanonicalText = useCallback(async (interviewId: string) => {
@@ -725,6 +785,41 @@ export default function Home() {
     };
   }, [locusEditing, text]);
 
+  useEffect(() => {
+    function leaveSelectionFlow(event: PointerEvent) {
+      if (!selection || attestationSaving) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (locusEditing) {
+        const targetElement = target instanceof Element ? target : target.parentElement;
+        if (targetElement?.closest("mark.locus-editing") || annotationActionsRef.current?.contains(target)) return;
+        locusOutsidePointerStart.current = { x: event.clientX, y: event.clientY };
+        return;
+      }
+      if (textRef.current?.contains(target) || annotationActionsRef.current?.contains(target)) return;
+      if (conceptSelectionActive && conceptSidebarRef.current?.contains(target)) return;
+      resetSelectionFlow();
+    }
+
+    function finishOutsideLocusPointer(event: PointerEvent) {
+      const start = locusOutsidePointerStart.current;
+      locusOutsidePointerStart.current = null;
+      if (!start || !locusEditing) return;
+      const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+      if (distance <= 3) resetSelectionFlow();
+    }
+
+    document.addEventListener("pointerdown", leaveSelectionFlow);
+    document.addEventListener("pointerup", finishOutsideLocusPointer);
+    document.addEventListener("pointercancel", finishOutsideLocusPointer);
+    return () => {
+      locusOutsidePointerStart.current = null;
+      document.removeEventListener("pointerdown", leaveSelectionFlow);
+      document.removeEventListener("pointerup", finishOutsideLocusPointer);
+      document.removeEventListener("pointercancel", finishOutsideLocusPointer);
+    };
+  }, [attestationSaving, conceptSelectionActive, locusEditing, resetSelectionFlow, selection]);
+
   function showConceptError() {
     showError("La label non è stata modificata a causa di un errore in LexO-server.");
   }
@@ -796,11 +891,7 @@ export default function Home() {
     if (attestationSaving || uploadLoading) return;
     activeInterviewIdRef.current = interview.id;
     setActiveInterviewId(interview.id);
-    setSelection(null);
-    setSelectedConcepts([]);
-    setConceptAnnotationOptions({});
-    setEditDirty(false);
-    setLocusEditing(false);
+    resetSelectionFlow();
     setTextError("");
 
     if (interview.source !== "server") {
@@ -823,11 +914,7 @@ export default function Home() {
     setArchiveError("");
     setTextLoading(true);
     setTextError("");
-    setSelection(null);
-    setSelectedConcepts([]);
-    setConceptAnnotationOptions({});
-    setEditDirty(false);
-    setLocusEditing(false);
+    resetSelectionFlow();
     setGrowlMessage("");
 
     try {
@@ -877,11 +964,7 @@ export default function Home() {
     setArchiveError("");
     setTextLoading(true);
     setTextError("");
-    setSelection(null);
-    setSelectedConcepts([]);
-    setConceptAnnotationOptions({});
-    setEditDirty(false);
-    setLocusEditing(false);
+    resetSelectionFlow();
     setGrowlMessage("");
 
     try {
@@ -935,10 +1018,7 @@ export default function Home() {
     const browserSelection = window.getSelection();
     if (!root || !browserSelection || browserSelection.isCollapsed || browserSelection.rangeCount === 0) {
       if (locusEditing) return;
-      setSelection(null);
-      setSelectedConcepts([]);
-      setConceptAnnotationOptions({});
-      setEditDirty(false);
+      resetSelectionFlow();
       return;
     }
 
@@ -951,6 +1031,7 @@ export default function Home() {
     const start = before.toString().length;
     const selectedText = selectedRange.toString();
     const rect = selectedRange.getBoundingClientRect();
+    const categoryMenuWidth = Math.min(250, window.innerWidth - 24);
 
     if (!selectedText.trim()) return;
     if (locusEditing && selection?.mode === "edit") {
@@ -969,18 +1050,23 @@ export default function Home() {
     setConceptAnnotationOptions({});
     setEditDirty(false);
     setLocusEditing(false);
+    setSelectionCategory(null);
     setSelection({
       start,
       end: start + selectedText.length,
       text: selectedText,
-      x: Math.min(window.innerWidth - 54, Math.max(12, rect.left + rect.width / 2 - 21)),
+      x: Math.max(12, Math.min(
+        window.innerWidth - categoryMenuWidth - 12,
+        rect.left + rect.width / 2 - categoryMenuWidth / 2,
+      )),
       y: Math.max(12, rect.top - 52),
+      actionX: Math.min(window.innerWidth - 54, Math.max(12, rect.left + rect.width / 2 - 21)),
       mode: "create",
     });
   }
 
   async function addAnnotation() {
-    if (!selection || selectedConcepts.length === 0 || attestationSaving) return;
+    if (!selection || !selectionCategory || selectedConcepts.length === 0 || attestationSaving) return;
     if (!selectedConceptsConfigured) {
       showError("Scegli polarità e tipo di definizione per ogni concetto selezionato.");
       return;
@@ -1025,11 +1111,7 @@ export default function Home() {
       setInterviews((current) => current.map((interview) => interview.id === activeInterview.id
         ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
         : interview));
-      window.getSelection()?.removeAllRanges();
-      setSelectedConcepts([]);
-      setConceptAnnotationOptions({});
-      setEditDirty(false);
-      setSelection(null);
+      resetSelectionFlow();
     } catch (error) {
       showError(`Errore durante il salvataggio dell’annotazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
     } finally {
@@ -1038,7 +1120,7 @@ export default function Home() {
   }
 
   function toggleConcept(lexicalConcept: string) {
-    if (!selection || attestationSaving) return;
+    if (!conceptSelectionActive || attestationSaving) return;
     const isSelected = selectedConcepts.includes(lexicalConcept);
     setSelectedConcepts((current) => isSelected
       ? current.filter((item) => item !== lexicalConcept)
@@ -1061,7 +1143,7 @@ export default function Home() {
     lexicalConcept: string,
     change: Partial<ConceptAnnotationOptions>,
   ) {
-    if (attestationSaving) return;
+    if (!conceptSelectionActive || attestationSaving) return;
     setConceptAnnotationOptions((current) => ({
       ...current,
       [lexicalConcept]: {
@@ -1081,6 +1163,7 @@ export default function Home() {
     );
     setDragging(false);
     window.getSelection()?.removeAllRanges();
+    setSelectionCategory(null);
     setConceptSearchQuery("");
     setSelectedConcepts(knownConcepts.map((concept) => concept.lexicalConcept));
     setConceptAnnotationOptions(Object.fromEntries(
@@ -1120,12 +1203,7 @@ export default function Home() {
           ),
         }
       : interview));
-    window.getSelection()?.removeAllRanges();
-    setSelection(null);
-    setSelectedConcepts([]);
-    setConceptAnnotationOptions({});
-    setEditDirty(false);
-    setLocusEditing(false);
+    resetSelectionFlow();
     showNotice(`Nuovo locus salvato localmente: start ${selection.start}, end ${selection.end}.`);
   }
 
@@ -1246,6 +1324,31 @@ export default function Home() {
               }}
             />
           )}
+          <span className="attestation-tooltip" aria-hidden="true">
+            {(annotation.concepts.length
+              ? annotation.concepts
+              : annotation.label.split("\n").map((label, labelIndex) => ({
+                  lexicalConcept: `fallback-${labelIndex}`,
+                  label,
+                  options: { polarity: "", definitionType: "" } as ConceptAnnotationOptions,
+                }))).map((concept) => (
+              <span className="attestation-tooltip-row" key={concept.lexicalConcept}>
+                <span className="attestation-tooltip-label" data-label={concept.label} />
+                <span className="attestation-tooltip-icons">
+                  {concept.options.polarity && (
+                    <span className={`tooltip-polarity polarity-${concept.options.polarity}`}>
+                      <span className="sentiment-face tooltip-sentiment" />
+                    </span>
+                  )}
+                  {concept.options.definitionType && (
+                    <span className="tooltip-definition-icon">
+                      <DefinitionTypeIcon type={concept.options.definitionType} />
+                    </span>
+                  )}
+                </span>
+              </span>
+            ))}
+          </span>
         </mark>,
       );
       cursor = annotationEnd;
@@ -1488,7 +1591,11 @@ export default function Home() {
                 </div>
               </div>
 
-              <aside className={`concept-sidebar ${selection ? "selection-active" : ""}`} aria-label="Repertorio dei concetti">
+              <aside
+                ref={conceptSidebarRef}
+                className={`concept-sidebar ${conceptSelectionActive ? "selection-active" : ""}`}
+                aria-label="Repertorio dei concetti"
+              >
                 <div className="sidebar-heading concept-heading">
                   <span>REPERTORIO</span>
                   <div className="concept-heading-row">
@@ -1508,7 +1615,7 @@ export default function Home() {
                 <div className="concept-intro">
                   {editingAttestation
                     ? "Modifica i concetti associati o i loro attributi. La penna si attiva al primo cambiamento."
-                    : selection
+                    : conceptSelectionActive
                       ? "Seleziona uno o più concetti e completa gli attributi, poi premi nuovamente la penna."
                     : "Seleziona una parte dell’intervista per associare i concetti."}
                 </div>
@@ -1545,7 +1652,7 @@ export default function Home() {
                     return (
                       <div
                         key={concept.lexicalConcept}
-                        className={`concept-item ${isSelected ? "selected" : ""} ${!selection ? "selection-disabled" : ""}`}
+                        className={`concept-item ${isSelected ? "selected" : ""} ${!conceptSelectionActive ? "selection-disabled" : ""}`}
                       >
                         <div className="concept-main-row">
                           <span className="concept-check">{isSelected ? "✓" : ""}</span>
@@ -1571,7 +1678,7 @@ export default function Home() {
                               onClick={() => toggleConcept(concept.lexicalConcept)}
                               onDoubleClick={() => startEditingConcept(concept)}
                               aria-pressed={isSelected}
-                              aria-disabled={!selection || attestationSaving}
+                              aria-disabled={!conceptSelectionActive || attestationSaving}
                               title="Doppio clic per modificare la label"
                             >
                               <span className="concept-label-copy">
@@ -1630,7 +1737,7 @@ export default function Home() {
                     </p>
                   )}
                 </div>
-                {selection && (
+                {conceptSelectionActive && (
                   <div className={`concept-status ${annotationActionReady ? "ready" : ""}`}>
                     <strong>{selectedConcepts.length}</strong>
                     <span>{selectedConcepts.length === 1 ? "concetto selezionato" : "concetti selezionati"}</span>
@@ -1734,8 +1841,33 @@ export default function Home() {
         )}
       </main>
 
-      {selection && activePage === 4 && (
-        <div className="annotation-actions" style={{ left: selection.x, top: selection.y }}>
+      {selection && activePage === 4 && selection.mode === "create" && !selectionCategory && (
+        <div
+          ref={annotationActionsRef}
+          className="selection-category-menu"
+          style={{ left: selection.x, top: selection.y }}
+          role="group"
+          aria-label="Scegli il tipo di selezione"
+        >
+          {selectionCategories.map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setSelectionCategory(category)}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selection && activePage === 4 && (selection.mode === "edit" || selectionCategory) && (
+        <div
+          ref={annotationActionsRef}
+          className="annotation-actions"
+          style={{ left: selection.actionX ?? selection.x, top: selection.y }}
+          data-selection-category={selection.mode === "create" ? selectionCategory ?? undefined : undefined}
+        >
           <button
             className="annotation-trigger"
             data-ready={annotationActionReady}

@@ -234,17 +234,33 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .locus-handle-end::after { left: 0; }
 .locus-handle:focus-visible::before { outline: 2px solid #173f31; outline-offset: 2px; }
 .text-area mark:focus-visible { outline: 2px solid #315f4a; outline-offset: 3px; }
-.text-area mark::after {
-  content: attr(data-labels); position: absolute; z-index: 12; left: 50%; bottom: calc(100% + 8px);
-  min-width: 130px; max-width: 260px; padding: 8px 10px; border: 1px solid #cfdad4; border-radius: 9px;
-  background: #173f31; color: #fff; box-shadow: 0 9px 24px rgba(16,58,44,.23);
-  font: 700 9px/1.55 Arial, Helvetica, sans-serif; white-space: pre-line; text-align: left;
-  pointer-events: none; opacity: 0; transform: translate(-50%, 5px); transition: opacity .16s, transform .16s;
+.attestation-tooltip {
+  position: absolute; z-index: 12; left: 50%; bottom: calc(100% + 8px); width: max-content;
+  min-width: 190px; max-width: 330px; display: grid; gap: 5px; padding: 8px 10px;
+  border: 1px solid #cfdad4; border-radius: 9px; background: #173f31; color: #fff;
+  box-shadow: 0 9px 24px rgba(16,58,44,.23); pointer-events: none; opacity: 0;
+  transform: translate(-50%, 5px); transition: opacity .16s, transform .16s;
 }
-.text-area mark:hover::after { opacity: 1; transform: translate(-50%, 0); }
-.text-area mark.editing::after,
-.text-area mark.editing:hover::after,
-.text-area mark.editing:focus::after { opacity: 0; transform: translate(-50%, 5px); }
+.attestation-tooltip-row {
+  min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px;
+}
+.attestation-tooltip-label { min-width: 0; font: 700 9px/1.45 Arial, Helvetica, sans-serif; text-align: left; }
+.attestation-tooltip-label::before { content: attr(data-label); white-space: normal; overflow-wrap: anywhere; }
+.attestation-tooltip-icons { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
+.tooltip-polarity { width: 18px; height: 18px; overflow: hidden; flex: none; }
+.attestation-tooltip .tooltip-sentiment {
+  width: 18px; height: 18px; background-size: 93.27px 53.59px;
+}
+.attestation-tooltip .polarity-negative .tooltip-sentiment { background-position: -9.41px -14.32px; }
+.attestation-tooltip .polarity-neutral .tooltip-sentiment { background-position: -38.45px -14.32px; }
+.attestation-tooltip .polarity-positive .tooltip-sentiment { background-position: -66.27px -14.32px; }
+.tooltip-definition-icon { width: 18px; height: 18px; display: grid; place-items: center; color: #bfe3d1; flex: none; }
+.tooltip-definition-icon svg { width: 18px; height: 18px; }
+.text-area mark:hover .attestation-tooltip,
+.text-area mark:focus-visible .attestation-tooltip { opacity: 1; transform: translate(-50%, 0); }
+.text-area mark.editing .attestation-tooltip,
+.text-area mark.editing:hover .attestation-tooltip,
+.text-area mark.editing:focus .attestation-tooltip { opacity: 0; transform: translate(-50%, 5px); }
 .interview-offset-prefix { display: none; }
 .transcript-heading { font-weight: 800; color: #1e2c26; }
 .text-loading, .text-error {
@@ -281,6 +297,21 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .annotation-actions {
   position: fixed; z-index: 20; display: flex; align-items: center; gap: 7px;
   animation: pop .18s ease-out;
+}
+.selection-category-menu {
+  position: fixed; z-index: 21; width: min(250px, calc(100vw - 24px)); display: grid;
+  grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 5px;
+  border: 1px solid #c7d8cf; border-radius: 12px; background: rgba(255,255,255,.97);
+  box-shadow: 0 10px 28px rgba(15,48,36,.2); animation: pop .18s ease-out;
+}
+.selection-category-menu button {
+  min-width: 0; height: 32px; border: 1px solid transparent; border-radius: 8px;
+  background: #edf5f1; color: #315f4a; cursor: pointer; font-size: 10px; font-weight: 850;
+  text-transform: capitalize; transition: border-color .16s, background .16s, color .16s;
+}
+.selection-category-menu button:hover,
+.selection-category-menu button:focus-visible {
+  border-color: #76a88f; outline: 0; background: #dceee5; color: #174f3b;
 }
 .annotation-trigger {
   width: 42px; height: 42px; border-radius: 50%; border: 3px solid #fff;
