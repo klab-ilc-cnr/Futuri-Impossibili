@@ -211,6 +211,28 @@ main { height: calc(100vh - 176px); min-height: 520px; }
   box-shadow: 2px 0 var(--yellow), -2px 0 var(--yellow); border-radius: 2px; cursor: pointer;
 }
 .text-area mark.editing { outline: 2px solid #4d876b; outline-offset: 3px; }
+.text-area mark.locus-editing {
+  background: #b9dfca; box-shadow: 2px 0 #b9dfca, -2px 0 #b9dfca;
+  cursor: text; touch-action: none;
+}
+.locus-handle {
+  position: relative; display: inline-block; width: 0; height: 1em; vertical-align: text-bottom;
+  color: #245f45; cursor: ew-resize; touch-action: none;
+}
+.locus-handle::before {
+  content: ""; position: absolute; z-index: 4; top: -8px; width: 12px; height: 12px;
+  border: 2px solid #fff; border-radius: 50%; background: currentColor;
+  box-shadow: 0 2px 7px rgba(21, 67, 48, .3);
+}
+.locus-handle::after {
+  content: ""; position: absolute; z-index: 3; top: 2px; width: 2px; height: calc(1em + 8px);
+  border-radius: 2px; background: currentColor;
+}
+.locus-handle-start::before { right: -5px; }
+.locus-handle-start::after { right: 0; }
+.locus-handle-end::before { left: -5px; }
+.locus-handle-end::after { left: 0; }
+.locus-handle:focus-visible::before { outline: 2px solid #173f31; outline-offset: 2px; }
 .text-area mark:focus-visible { outline: 2px solid #315f4a; outline-offset: 3px; }
 .text-area mark::after {
   content: attr(data-labels); position: absolute; z-index: 12; left: 50%; bottom: calc(100% + 8px);
@@ -268,16 +290,27 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .annotation-trigger[data-ready="false"] { background: #789186; cursor: default; }
 .annotation-trigger[data-ready="true"] { box-shadow: 0 8px 22px rgba(15,48,36,.32), 0 0 0 5px rgba(89,167,127,.16); }
 .annotation-trigger:disabled { cursor: wait; opacity: .62; }
-.annotation-eraser {
+.annotation-eraser, .annotation-locus {
   width: 42px; height: 42px; display: grid; place-items: center; border: 3px solid #fff; border-radius: 50%;
-  background: #fff8ef; color: #945b37; box-shadow: 0 8px 22px rgba(64,42,24,.2); cursor: pointer;
+  background: var(--green); color: #fff; box-shadow: 0 8px 22px rgba(15,48,36,.28); cursor: pointer;
 }
-.annotation-eraser span {
-  width: 19px; height: 12px; border: 2px solid currentColor; border-radius: 4px 4px 3px 3px;
-  background: linear-gradient(135deg, #edb9a2 0 54%, #fff 55%); transform: rotate(-38deg);
-  box-shadow: 0 2px 0 rgba(148,91,55,.13);
+.annotation-locus svg { width: 23px; height: 23px; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.annotation-locus.active { background: var(--green-dark); box-shadow: 0 8px 22px rgba(15,48,36,.32), 0 0 0 5px rgba(89,167,127,.22); }
+.annotation-locus:disabled { cursor: wait; opacity: .62; }
+.annotation-eraser .trash-icon {
+  position: relative; width: 14px; height: 16px; margin-top: 3px;
+  border: 2px solid currentColor; border-top: 0; border-radius: 0 0 3px 3px;
+  background: repeating-linear-gradient(90deg, transparent 0 3px, rgba(255,255,255,.72) 3px 4px);
 }
-.annotation-eraser:hover { background: #fff1e3; transform: translateY(-1px); }
+.annotation-eraser .trash-icon::before {
+  content: ""; position: absolute; left: -4px; top: -5px; width: 18px; height: 2px;
+  border-radius: 2px; background: currentColor;
+}
+.annotation-eraser .trash-icon::after {
+  content: ""; position: absolute; left: 3px; top: -9px; width: 6px; height: 4px;
+  border: 2px solid currentColor; border-bottom: 0; border-radius: 3px 3px 0 0;
+}
+.annotation-eraser:hover, .annotation-locus:hover { background: var(--green-dark); transform: translateY(-1px); }
 @keyframes pop { from { transform: translateY(5px) scale(.88); opacity: 0; } }
 
 .error-growl {

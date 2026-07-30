@@ -9,6 +9,8 @@ type SelectionInfo = {
   x: number;
   y: number;
   mode: "create" | "edit";
+  sourceStart?: number;
+  sourceEnd?: number;
 };
 
 type AnnotationConcept = {
@@ -455,6 +457,7 @@ export default function Home() {
   const [selectedConcepts, setSelectedConcepts] = useState<string[]>([]);
   const [conceptAnnotationOptions, setConceptAnnotationOptions] = useState<Record<string, ConceptAnnotationOptions>>({});
   const [editDirty, setEditDirty] = useState(false);
+  const [locusEditing, setLocusEditing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [archiveLoading, setArchiveLoading] = useState(true);
@@ -478,6 +481,7 @@ export default function Home() {
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const locusDragEndpoint = useRef<"start" | "end" | null>(null);
 
   const activeInterview = interviews.find((item) => item.id === activeInterviewId) ?? interviews[0];
   const text = activeInterview?.text ?? "";
@@ -665,6 +669,62 @@ export default function Home() {
     if (growlTimer.current) clearTimeout(growlTimer.current);
   }, []);
 
+  useEffect(() => {
+    function textOffsetAtPoint(clientX: number, clientY: number) {
+      const root = textRef.current;
+      if (!root) return null;
+      const browserDocument = document as Document & {
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      };
+      const caretPosition = document.caretPositionFromPoint?.(clientX, clientY);
+      const caretRange = caretPosition ? null : browserDocument.caretRangeFromPoint?.(clientX, clientY);
+      const node = caretPosition?.offsetNode ?? caretRange?.startContainer;
+      const offset = caretPosition?.offset ?? caretRange?.startOffset;
+      if (!node || offset === undefined || !root.contains(node)) return null;
+
+      const before = document.createRange();
+      before.selectNodeContents(root);
+      before.setEnd(node, offset);
+      return before.toString().length;
+    }
+
+    function moveLocusEndpoint(event: PointerEvent) {
+      const endpoint = locusDragEndpoint.current;
+      if (!endpoint || !locusEditing) return;
+      const offset = textOffsetAtPoint(event.clientX, event.clientY);
+      if (offset === null) return;
+      event.preventDefault();
+      setSelection((current) => {
+        if (!current || current.mode !== "edit") return current;
+        const nextStart = endpoint === "start"
+          ? Math.min(Math.max(0, offset), current.end - 1)
+          : current.start;
+        const nextEnd = endpoint === "end"
+          ? Math.max(Math.min(text.length, offset), current.start + 1)
+          : current.end;
+        return {
+          ...current,
+          start: nextStart,
+          end: nextEnd,
+          text: text.slice(nextStart, nextEnd),
+        };
+      });
+    }
+
+    function stopLocusDrag() {
+      locusDragEndpoint.current = null;
+    }
+
+    document.addEventListener("pointermove", moveLocusEndpoint);
+    document.addEventListener("pointerup", stopLocusDrag);
+    document.addEventListener("pointercancel", stopLocusDrag);
+    return () => {
+      document.removeEventListener("pointermove", moveLocusEndpoint);
+      document.removeEventListener("pointerup", stopLocusDrag);
+      document.removeEventListener("pointercancel", stopLocusDrag);
+    };
+  }, [locusEditing, text]);
+
   function showConceptError() {
     showError("La label non è stata modificata a causa di un errore in LexO-server.");
   }
@@ -740,6 +800,7 @@ export default function Home() {
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
     setEditDirty(false);
+    setLocusEditing(false);
     setTextError("");
 
     if (interview.source !== "server") {
@@ -766,6 +827,7 @@ export default function Home() {
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
     setEditDirty(false);
+    setLocusEditing(false);
     setGrowlMessage("");
 
     try {
@@ -819,6 +881,7 @@ export default function Home() {
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
     setEditDirty(false);
+    setLocusEditing(false);
     setGrowlMessage("");
 
     try {
@@ -871,6 +934,7 @@ export default function Home() {
     const root = textRef.current;
     const browserSelection = window.getSelection();
     if (!root || !browserSelection || browserSelection.isCollapsed || browserSelection.rangeCount === 0) {
+      if (locusEditing) return;
       setSelection(null);
       setSelectedConcepts([]);
       setConceptAnnotationOptions({});
@@ -889,9 +953,22 @@ export default function Home() {
     const rect = selectedRange.getBoundingClientRect();
 
     if (!selectedText.trim()) return;
+    if (locusEditing && selection?.mode === "edit") {
+      setSelection((current) => current && current.mode === "edit" ? {
+        ...current,
+        start,
+        end: start + selectedText.length,
+        text: selectedText,
+        x: Math.min(window.innerWidth - 154, Math.max(12, rect.left + rect.width / 2 - 71)),
+        y: Math.max(12, rect.top - 52),
+      } : current);
+      browserSelection.removeAllRanges();
+      return;
+    }
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
     setEditDirty(false);
+    setLocusEditing(false);
     setSelection({
       start,
       end: start + selectedText.length,
@@ -1010,13 +1087,63 @@ export default function Home() {
       knownConcepts.map((concept) => [concept.lexicalConcept, concept.options]),
     ));
     setEditDirty(false);
+    setLocusEditing(false);
     setSelection({
       start: annotation.start,
       end: annotation.end,
       text: text.slice(annotation.start, annotation.end),
-      x: Math.min(window.innerWidth - 104, Math.max(12, rect.left + rect.width / 2 - 46)),
+      x: Math.min(window.innerWidth - 154, Math.max(12, rect.left + rect.width / 2 - 71)),
       y: Math.max(12, rect.top - 52),
       mode: "edit",
+      sourceStart: annotation.start,
+      sourceEnd: annotation.end,
+    });
+  }
+
+  function toggleLocusEditing() {
+    if (!selection || selection.mode !== "edit" || attestationSaving) return;
+    if (!locusEditing) {
+      window.getSelection()?.removeAllRanges();
+      setLocusEditing(true);
+      return;
+    }
+
+    const sourceStart = selection.sourceStart ?? selection.start;
+    const sourceEnd = selection.sourceEnd ?? selection.end;
+    setInterviews((current) => current.map((interview) => interview.id === activeInterview?.id
+      ? {
+          ...interview,
+          annotations: interview.annotations.map((annotation) =>
+            annotation.start === sourceStart && annotation.end === sourceEnd
+              ? { ...annotation, start: selection.start, end: selection.end }
+              : annotation,
+          ),
+        }
+      : interview));
+    setSelection((current) => current ? {
+      ...current,
+      sourceStart: current.start,
+      sourceEnd: current.end,
+    } : current);
+    setLocusEditing(false);
+    showNotice(`Nuovo locus salvato localmente: start ${selection.start}, end ${selection.end}.`);
+  }
+
+  function nudgeLocusEndpoint(endpoint: "start" | "end", delta: number) {
+    setSelection((current) => {
+      if (!current || current.mode !== "edit") return current;
+      const nextStart = endpoint === "start"
+        ? Math.min(Math.max(0, current.start + delta), current.end - 1)
+        : current.start;
+      const nextEnd = endpoint === "end"
+        ? Math.max(Math.min(text.length, current.end + delta), current.start + 1)
+        : current.end;
+      return {
+        ...current,
+        start: nextStart,
+        end: nextEnd,
+        text: text.slice(nextStart, nextEnd),
+      };
     });
   }
 
@@ -1034,8 +1161,13 @@ export default function Home() {
     const chunks: React.ReactNode[] = [];
     let cursor = rangeStart;
     annotations.forEach((annotation, index) => {
-      const annotationStart = Math.max(rangeStart, annotation.start);
-      const annotationEnd = Math.min(rangeEnd, annotation.end);
+      const isEditingAnnotation = selection?.mode === "edit"
+        && annotation.start === (selection.sourceStart ?? selection.start)
+        && annotation.end === (selection.sourceEnd ?? selection.end);
+      const displayStart = isEditingAnnotation && locusEditing ? selection!.start : annotation.start;
+      const displayEnd = isEditingAnnotation && locusEditing ? selection!.end : annotation.end;
+      const annotationStart = Math.max(rangeStart, displayStart);
+      const annotationEnd = Math.min(rangeEnd, displayEnd);
       if (annotationStart >= annotationEnd) return;
       if (annotationStart > cursor) {
         chunks.push(
@@ -1046,17 +1178,21 @@ export default function Home() {
         <mark
           key={`${keyPrefix}-annotation-${annotationStart}-${index}`}
           data-labels={annotation.label}
-          className={editingAttestation && selection?.start === annotation.start && selection.end === annotation.end
-            ? "editing"
+          className={isEditingAnnotation
+            ? locusEditing ? "editing locus-editing" : "editing"
             : undefined}
           role="button"
           tabIndex={0}
-          onMouseDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            if (!locusEditing) event.stopPropagation();
+          }}
           onClick={(event) => {
             event.stopPropagation();
+            if (locusEditing) return;
             editAnnotation(annotation, event.currentTarget);
           }}
           onKeyDown={(event) => {
+            if (locusEditing) return;
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               editAnnotation(annotation, event.currentTarget);
@@ -1065,7 +1201,51 @@ export default function Home() {
           aria-label={`Modifica attestazione: ${annotation.label.replace(/\n/g, ", ")}`}
           title="Modifica attestazione"
         >
+          {isEditingAnnotation && locusEditing && annotationStart === displayStart && (
+            <span
+              className="locus-handle locus-handle-start"
+              role="slider"
+              tabIndex={0}
+              aria-label="Sposta l’inizio dell’evidenziazione"
+              aria-valuemin={0}
+              aria-valuemax={selection!.end - 1}
+              aria-valuenow={selection!.start}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                locusDragEndpoint.current = "start";
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                event.preventDefault();
+                event.stopPropagation();
+                nudgeLocusEndpoint("start", event.key === "ArrowLeft" ? -1 : 1);
+              }}
+            />
+          )}
           {text.slice(annotationStart, annotationEnd)}
+          {isEditingAnnotation && locusEditing && annotationEnd === displayEnd && (
+            <span
+              className="locus-handle locus-handle-end"
+              role="slider"
+              tabIndex={0}
+              aria-label="Sposta la fine dell’evidenziazione"
+              aria-valuemin={selection!.start + 1}
+              aria-valuemax={text.length}
+              aria-valuenow={selection!.end}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                locusDragEndpoint.current = "end";
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                event.preventDefault();
+                event.stopPropagation();
+                nudgeLocusEndpoint("end", event.key === "ArrowLeft" ? -1 : 1);
+              }}
+            />
+          )}
         </mark>,
       );
       cursor = annotationEnd;
@@ -1298,7 +1478,11 @@ export default function Home() {
                       <span aria-hidden="true" />
                     </div>
                   ) : (
-                    <span>{editingAttestation ? "Modalità modifica attestazione" : "Seleziona una porzione di testo con il mouse"}</span>
+                    <span>{locusEditing
+                      ? "Modifica locus: trascina le maniglie oppure seleziona un nuovo intervallo"
+                      : editingAttestation
+                        ? "Modalità modifica attestazione"
+                        : "Seleziona una porzione di testo con il mouse"}</span>
                   )}
                   <div className="legend"><span /> {annotations.length} annotazioni</div>
                 </div>
@@ -1567,14 +1751,29 @@ export default function Home() {
             ✎
           </button>
           {editingAttestation && (
-            <button
-              className="annotation-eraser"
-              onClick={requestAnnotationDeletion}
-              aria-label="Elimina l’intera attestazione"
-              title="Elimina attestazione e concetti associati"
-            >
-              <span aria-hidden="true" />
-            </button>
+            <>
+              <button
+                className={`annotation-locus ${locusEditing ? "active" : ""}`}
+                onClick={toggleLocusEditing}
+                disabled={attestationSaving}
+                aria-pressed={locusEditing}
+                aria-label={locusEditing ? "Salva i nuovi limiti dell’evidenziazione" : "Modifica i limiti dell’evidenziazione"}
+                title={locusEditing ? "Salva nuovo start ed end" : "Modifica start ed end"}
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M8 4H5v16h3M16 4h3v16h-3" />
+                  <path d="M9 12h6M11 9l-3 3 3 3M13 9l3 3-3 3" />
+                </svg>
+              </button>
+              <button
+                className="annotation-eraser"
+                onClick={requestAnnotationDeletion}
+                aria-label="Elimina l’intera attestazione"
+                title="Elimina attestazione e concetti associati"
+              >
+                <span className="trash-icon" aria-hidden="true" />
+              </button>
+            </>
           )}
         </div>
       )}
