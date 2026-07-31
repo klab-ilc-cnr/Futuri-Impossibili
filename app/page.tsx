@@ -49,9 +49,11 @@ type LexicalConcept = {
 
 type ConceptPolarity = "positive" | "neutral" | "negative";
 type DefinitionType = "sinonimo" | "parafrasi" | "esempio-prototipo" | "associazione-concettuale";
+type ConceptRelationType = "paradigmatico" | "narrativo";
 type SelectionCategory = "femmina" | "criminale" | "infame";
 
 type ConceptAnnotationOptions = {
+  relationType: ConceptRelationType | "";
   polarity: ConceptPolarity | "";
   definitionType: DefinitionType | "";
 };
@@ -106,6 +108,11 @@ const definitionTypeOptions: Array<{ value: DefinitionType; label: string }> = [
   { value: "parafrasi", label: "Parafrasi" },
   { value: "esempio-prototipo", label: "Esempio prototipo" },
   { value: "associazione-concettuale", label: "Associazione concettuale" },
+];
+
+const conceptRelationOptions: Array<{ value: ConceptRelationType; label: string }> = [
+  { value: "paradigmatico", label: "Paradigmatico" },
+  { value: "narrativo", label: "Narrativo" },
 ];
 
 const selectionCategories: SelectionCategory[] = ["femmina", "criminale", "infame"];
@@ -305,7 +312,11 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
         current.concepts.set(observable, {
           lexicalConcept: observable,
           label: displayLabels[0] ?? conceptLabel ?? observable,
-          options: { polarity, definitionType },
+          options: {
+            relationType: polarity || definitionType ? "narrativo" : "",
+            polarity,
+            definitionType,
+          },
         });
       }
       grouped.set(key, current);
@@ -548,7 +559,8 @@ export default function Home() {
   );
   const selectedConceptsConfigured = selectedConcepts.length > 0 && selectedConcepts.every((lexicalConcept) => {
     const options = conceptAnnotationOptions[lexicalConcept];
-    return Boolean(options?.polarity && options.definitionType);
+    return options?.relationType === "paradigmatico"
+      || Boolean(options?.relationType === "narrativo" && options.polarity && options.definitionType);
   });
   const editingAttestation = selection?.mode === "edit";
   const conceptSelectionActive = Boolean(selection && (editingAttestation || selectionCategory));
@@ -1068,7 +1080,7 @@ export default function Home() {
   async function addAnnotation() {
     if (!selection || !selectionCategory || selectedConcepts.length === 0 || attestationSaving) return;
     if (!selectedConceptsConfigured) {
-      showError("Scegli polarità e tipo di definizione per ogni concetto selezionato.");
+      showError("Scegli paradigmatico o narrativo e completa gli attributi richiesti per ogni concetto.");
       return;
     }
     if (!activeInterview || activeInterview.source !== "server" || !activeInterview.contextIri) {
@@ -1129,7 +1141,7 @@ export default function Home() {
       if (!isSelected) {
         return {
           ...current,
-          [lexicalConcept]: { polarity: "", definitionType: "" },
+          [lexicalConcept]: { relationType: "", polarity: "", definitionType: "" },
         };
       }
       const nextOptions = { ...current };
@@ -1147,12 +1159,19 @@ export default function Home() {
     setConceptAnnotationOptions((current) => ({
       ...current,
       [lexicalConcept]: {
+        relationType: current[lexicalConcept]?.relationType ?? "",
         polarity: current[lexicalConcept]?.polarity ?? "",
         definitionType: current[lexicalConcept]?.definitionType ?? "",
         ...change,
       },
     }));
     if (editingAttestation) setEditDirty(true);
+  }
+
+  function selectConceptRelation(lexicalConcept: string, relationType: ConceptRelationType) {
+    updateConceptAnnotationOptions(lexicalConcept, relationType === "paradigmatico"
+      ? { relationType, polarity: "", definitionType: "" }
+      : { relationType });
   }
 
   function editAnnotation(annotation: Annotation, target: HTMLElement) {
@@ -1330,7 +1349,7 @@ export default function Home() {
               : annotation.label.split("\n").map((label, labelIndex) => ({
                   lexicalConcept: `fallback-${labelIndex}`,
                   label,
-                  options: { polarity: "", definitionType: "" } as ConceptAnnotationOptions,
+                  options: { relationType: "", polarity: "", definitionType: "" } as ConceptAnnotationOptions,
                 }))).map((concept) => (
               <span className="attestation-tooltip-row" key={concept.lexicalConcept}>
                 <span className="attestation-tooltip-label" data-label={concept.label} />
@@ -1648,7 +1667,7 @@ export default function Home() {
                     const isEditing = editingConceptUrl === concept.lexicalConcept;
                     const isSaving = savingConceptUrl === concept.lexicalConcept;
                     const annotationOptions = conceptAnnotationOptions[concept.lexicalConcept]
-                      ?? { polarity: "", definitionType: "" };
+                      ?? { relationType: "", polarity: "", definitionType: "" };
                     return (
                       <div
                         key={concept.lexicalConcept}
@@ -1691,6 +1710,25 @@ export default function Home() {
                         {isSelected && (
                           <div className="concept-options-panel">
                             <fieldset>
+                              <legend>Relazione</legend>
+                              <div className="concept-option-grid relation-options">
+                                {conceptRelationOptions.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    className={`concept-option ${annotationOptions.relationType === option.value ? "active" : ""}`}
+                                    onClick={() => selectConceptRelation(concept.lexicalConcept, option.value)}
+                                    aria-pressed={annotationOptions.relationType === option.value}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </fieldset>
+                            <fieldset
+                              className="dependent-concept-options"
+                              disabled={annotationOptions.relationType === "paradigmatico"}
+                            >
                               <legend>Polarità</legend>
                               <div className="concept-option-grid polarity-options">
                                 {polarityOptions.map((option) => (
@@ -1708,7 +1746,10 @@ export default function Home() {
                                 ))}
                               </div>
                             </fieldset>
-                            <fieldset>
+                            <fieldset
+                              className="dependent-concept-options"
+                              disabled={annotationOptions.relationType === "paradigmatico"}
+                            >
                               <legend>Tipo di definizione</legend>
                               <div className="concept-option-grid definition-options">
                                 {definitionTypeOptions.map((option) => (
@@ -1749,7 +1790,7 @@ export default function Home() {
                         : selectedConceptsConfigured
                           ? "Premi la penna per confermare"
                         : selectedConcepts.length
-                          ? "Completa polarità e tipo di definizione"
+                          ? "Scegli paradigmatico o narrativo e completa gli attributi"
                           : "Scegli almeno un concetto"}
                     </small>
                   </div>
