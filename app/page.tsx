@@ -50,7 +50,11 @@ type LexicalConcept = {
 type ConceptPolarity = "positive" | "neutral" | "negative";
 type DefinitionType = "sinonimo" | "parafrasi" | "esempio-prototipo" | "associazione-concettuale";
 type ConceptRelationType = "paradigmatico" | "narrativo";
-type SelectionCategory = "femmina" | "criminale" | "infame";
+
+type LexicalEntryOption = {
+  label: string;
+  entry: string;
+};
 
 type ConceptAnnotationOptions = {
   relationType: ConceptRelationType | "";
@@ -94,6 +98,7 @@ const textsEndpoint = "/api/lexo/texts";
 const textUploadEndpoint = "/api/lexo/texts/upload";
 const textBulkUploadEndpoint = "/api/lexo/texts/bulk";
 const conceptsEndpoint = "/api/lexo/lexical-concepts";
+const lexicalEntriesEndpoint = "/api/lexo/lexical-entries";
 const updateLexicalLabelEndpoint = "/api/lexo/update-lexical-label";
 const attestationsEndpoint = "/api/lexo/attestations";
 
@@ -114,8 +119,6 @@ const conceptRelationOptions: Array<{ value: ConceptRelationType; label: string 
   { value: "paradigmatico", label: "Paradigmatico" },
   { value: "narrativo", label: "Narrativo" },
 ];
-
-const selectionCategories: SelectionCategory[] = ["femmina", "criminale", "infame"];
 
 function DefinitionTypeIcon({ type }: { type: DefinitionType }) {
   const commonProps = {
@@ -388,6 +391,38 @@ function parseLexicalConcepts(payload: unknown) {
   };
 }
 
+function parseLexicalEntries(payload: unknown): LexicalEntryOption[] {
+  const container = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : {};
+  const nestedData = container.data && typeof container.data === "object" && !Array.isArray(container.data)
+    ? container.data as Record<string, unknown>
+    : {};
+  const rawItems = Array.isArray(payload)
+    ? payload
+    : [
+        container.entries,
+        container.list,
+        container.items,
+        container.results,
+        container.data,
+        nestedData.entries,
+        nestedData.list,
+        nestedData.items,
+        nestedData.results,
+      ].find(Array.isArray) ?? [];
+
+  const entries = (rawItems as unknown[]).flatMap((rawItem) => {
+    if (!rawItem || typeof rawItem !== "object") return [];
+    const item = rawItem as Record<string, unknown>;
+    const entry = readResourceIdentifier(item.entry).trim();
+    const label = readResourceIdentifier(item.label).trim();
+    return entry && label ? [{ entry, label }] : [];
+  });
+
+  return [...new Map(entries.map((item) => [item.entry, item])).values()];
+}
+
 function containsTimestamp(payload: unknown): boolean {
   if (typeof payload === "number") return Number.isFinite(payload);
   if (typeof payload === "string") {
@@ -510,7 +545,10 @@ export default function Home() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [activeInterviewId, setActiveInterviewId] = useState("");
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
-  const [selectionCategory, setSelectionCategory] = useState<SelectionCategory | null>(null);
+  const [selectedLexicalEntry, setSelectedLexicalEntry] = useState<LexicalEntryOption | null>(null);
+  const [lexicalEntries, setLexicalEntries] = useState<LexicalEntryOption[]>([]);
+  const [lexicalEntriesLoading, setLexicalEntriesLoading] = useState(false);
+  const [lexicalEntriesError, setLexicalEntriesError] = useState("");
   const [selectedConcepts, setSelectedConcepts] = useState<string[]>([]);
   const [conceptAnnotationOptions, setConceptAnnotationOptions] = useState<Record<string, ConceptAnnotationOptions>>({});
   const [editDirty, setEditDirty] = useState(false);
@@ -563,7 +601,7 @@ export default function Home() {
       || Boolean(options?.relationType === "narrativo" && options.polarity && options.definitionType);
   });
   const editingAttestation = selection?.mode === "edit";
-  const conceptSelectionActive = Boolean(selection && (editingAttestation || selectionCategory));
+  const conceptSelectionActive = Boolean(selection && (editingAttestation || selectedLexicalEntry));
   const annotationActionReady = editingAttestation ? editDirty : selectedConceptsConfigured;
 
   const showError = useCallback((message: string) => {
@@ -583,7 +621,9 @@ export default function Home() {
   const resetSelectionFlow = useCallback(() => {
     window.getSelection()?.removeAllRanges();
     setSelection(null);
-    setSelectionCategory(null);
+    setSelectedLexicalEntry(null);
+    setLexicalEntries([]);
+    setLexicalEntriesError("");
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
     setEditDirty(false);
@@ -729,6 +769,27 @@ export default function Home() {
       setConceptsError(`Impossibile caricare i concetti (${error instanceof Error ? error.message : "errore sconosciuto"}).`);
     } finally {
       if (requestId === conceptsRequestId.current) setConceptsLoading(false);
+    }
+  }, []);
+
+  const loadLexicalEntries = useCallback(async () => {
+    setLexicalEntries([]);
+    setLexicalEntriesError("");
+    setLexicalEntriesLoading(true);
+    try {
+      const response = await fetch(lexicalEntriesEndpoint, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const detail = (await response.text()).trim();
+        throw new Error(detail || `HTTP ${response.status}`);
+      }
+      setLexicalEntries(parseLexicalEntries(await response.json() as unknown));
+    } catch (error) {
+      setLexicalEntriesError(error instanceof Error ? error.message : "errore sconosciuto");
+    } finally {
+      setLexicalEntriesLoading(false);
     }
   }, []);
 
@@ -1062,7 +1123,7 @@ export default function Home() {
     setConceptAnnotationOptions({});
     setEditDirty(false);
     setLocusEditing(false);
-    setSelectionCategory(null);
+    setSelectedLexicalEntry(null);
     setSelection({
       start,
       end: start + selectedText.length,
@@ -1075,10 +1136,11 @@ export default function Home() {
       actionX: Math.min(window.innerWidth - 54, Math.max(12, rect.left + rect.width / 2 - 21)),
       mode: "create",
     });
+    void loadLexicalEntries();
   }
 
   async function addAnnotation() {
-    if (!selection || !selectionCategory || selectedConcepts.length === 0 || attestationSaving) return;
+    if (!selection || !selectedLexicalEntry || selectedConcepts.length === 0 || attestationSaving) return;
     if (!selectedConceptsConfigured) {
       showError("Scegli paradigmatico o narrativo e completa gli attributi richiesti per ogni concetto.");
       return;
@@ -1182,7 +1244,7 @@ export default function Home() {
     );
     setDragging(false);
     window.getSelection()?.removeAllRanges();
-    setSelectionCategory(null);
+    setSelectedLexicalEntry(null);
     setConceptSearchQuery("");
     setSelectedConcepts(knownConcepts.map((concept) => concept.lexicalConcept));
     setConceptAnnotationOptions(Object.fromEntries(
@@ -1882,32 +1944,48 @@ export default function Home() {
         )}
       </main>
 
-      {selection && activePage === 4 && selection.mode === "create" && !selectionCategory && (
+      {selection && activePage === 4 && selection.mode === "create" && !selectedLexicalEntry && (
         <div
           ref={annotationActionsRef}
           className="selection-category-menu"
           style={{ left: selection.x, top: selection.y }}
           role="group"
-          aria-label="Scegli il tipo di selezione"
+          aria-label="Scegli un'entrata lessicale"
         >
-          {selectionCategories.map((category) => (
+          {lexicalEntriesLoading && (
+            <div className="selection-category-status" role="status">
+              <span className="mini-spinner" aria-hidden="true" />
+              Caricamento entrate…
+            </div>
+          )}
+          {!lexicalEntriesLoading && lexicalEntriesError && (
+            <div className="selection-category-status selection-category-error">
+              <span>Impossibile caricare le entrate.</span>
+              <button type="button" onClick={() => void loadLexicalEntries()}>Riprova</button>
+            </div>
+          )}
+          {!lexicalEntriesLoading && !lexicalEntriesError && lexicalEntries.length === 0 && (
+            <div className="selection-category-status">Nessuna entrata disponibile.</div>
+          )}
+          {lexicalEntries.map((lexicalEntry) => (
             <button
-              key={category}
+              key={lexicalEntry.entry}
               type="button"
-              onClick={() => setSelectionCategory(category)}
+              onClick={() => setSelectedLexicalEntry(lexicalEntry)}
+              title={lexicalEntry.label}
             >
-              {category}
+              {lexicalEntry.label}
             </button>
           ))}
         </div>
       )}
 
-      {selection && activePage === 4 && (selection.mode === "edit" || selectionCategory) && (
+      {selection && activePage === 4 && (selection.mode === "edit" || selectedLexicalEntry) && (
         <div
           ref={annotationActionsRef}
           className="annotation-actions"
           style={{ left: selection.actionX ?? selection.x, top: selection.y }}
-          data-selection-category={selection.mode === "create" ? selectionCategory ?? undefined : undefined}
+          data-lexical-entry={selection.mode === "create" ? selectedLexicalEntry?.entry : undefined}
         >
           <button
             className="annotation-trigger"
