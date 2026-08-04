@@ -310,7 +310,10 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
           ?? occurrence.locusIRI
           ?? occurrence.iri
           ?? occurrence["@id"]
-          ?? attestation.locus,
+          ?? occurrence.id
+          ?? attestation.locus
+          ?? attestation.locusIri
+          ?? attestation.locusIRI,
         ).trim(),
         labels: new Set<string>(),
         concepts: new Map<string, AnnotationConcept>(),
@@ -322,7 +325,10 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
           ?? occurrence.locusIRI
           ?? occurrence.iri
           ?? occurrence["@id"]
-          ?? attestation.locus,
+          ?? occurrence.id
+          ?? attestation.locus
+          ?? attestation.locusIri
+          ?? attestation.locusIRI,
         ).trim();
       }
       const occurrenceObservableLabels = collectObservableLabels(occurrence.observableLabel);
