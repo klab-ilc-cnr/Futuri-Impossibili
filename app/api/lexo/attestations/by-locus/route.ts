@@ -7,6 +7,11 @@ type ByLocusPayload = {
   observables?: unknown;
 };
 
+type ObservablePayload = {
+  observable: string;
+  metadata?: unknown[];
+};
+
 export async function POST(request: Request) {
   try {
     const requestUrl = new URL(request.url);
@@ -19,8 +24,19 @@ export async function POST(request: Request) {
     const value = typeof payload.value === "string" ? payload.value : "";
     const start = Number(payload.start);
     const end = Number(payload.end);
-    const observables = Array.isArray(payload.observables)
-      ? payload.observables.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    const observables: ObservablePayload[] = Array.isArray(payload.observables)
+      ? payload.observables.flatMap((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+          const observableItem = item as Record<string, unknown>;
+          const observable = typeof observableItem.observable === "string"
+            ? observableItem.observable.trim()
+            : "";
+          if (!observable) return [];
+          return [{
+            observable,
+            ...(Array.isArray(observableItem.metadata) ? { metadata: observableItem.metadata } : {}),
+          }];
+        })
       : [];
     if (!value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || observables.length === 0) {
       return Response.json(
@@ -39,6 +55,8 @@ export async function POST(request: Request) {
 
     const serviceUrl = new URL(`${lexoServerUrl}/service/attestations/by-locus`);
     serviceUrl.searchParams.set("corpus", corpus);
+    serviceUrl.searchParams.set("author", requestUrl.searchParams.get("author") ?? "");
+    serviceUrl.searchParams.set("external", requestUrl.searchParams.get("external") ?? "");
     const response = await fetch(serviceUrl, {
       method: "POST",
       headers,

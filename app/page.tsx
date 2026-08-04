@@ -12,6 +12,7 @@ type SelectionInfo = {
   mode: "create" | "edit";
   sourceStart?: number;
   sourceEnd?: number;
+  locusIri?: string;
 };
 
 type AnnotationConcept = {
@@ -23,6 +24,7 @@ type AnnotationConcept = {
 type Annotation = {
   start: number;
   end: number;
+  locusIri: string;
   label: string;
   concepts: AnnotationConcept[];
 };
@@ -54,6 +56,12 @@ type ConceptRelationType = "paradigmatico" | "narrativo";
 type LexicalEntryOption = {
   label: string;
   entry: string;
+  senses: string[];
+};
+
+type LexicalSenseType = {
+  sense: string;
+  type: string;
 };
 
 type ConceptAnnotationOptions = {
@@ -99,8 +107,14 @@ const textUploadEndpoint = "/api/lexo/texts/upload";
 const textBulkUploadEndpoint = "/api/lexo/texts/bulk";
 const conceptsEndpoint = "/api/lexo/lexical-concepts";
 const lexicalEntriesEndpoint = "/api/lexo/lexical-entries";
+const metadataEndpoint = "/api/lexo/metadata";
 const updateLexicalLabelEndpoint = "/api/lexo/update-lexical-label";
 const attestationsEndpoint = "/api/lexo/attestations";
+const dctTypeProperty = "http://purl.org/dc/terms/type";
+const legacyDctTypeProperty = "http://purl.org/dc/terms/";
+const conceptLabelProperty = "https://lexo.ilc.cnr.it#conceptLabel";
+const polarityProperty = "http://www.gsi.dit.upm.es/ontologies/marl/ns#hasPolarity";
+const definitionTypeProperty = "https://lexo.ilc.cnr.it#definitionType";
 
 const polarityOptions: Array<{ value: ConceptPolarity; label: string }> = [
   { value: "negative", label: "Negative" },
@@ -205,7 +219,18 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
   }
 
   function collectMetadataValues(value: unknown, property: string): string[] {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    if (Array.isArray(value)) {
+      return value.flatMap((rawProperty) => {
+        if (!rawProperty || typeof rawProperty !== "object") return [];
+        const metadataProperty = rawProperty as Record<string, unknown>;
+        return readResourceIdentifier(metadataProperty.property) === property
+          ? (Array.isArray(metadataProperty.values) ? metadataProperty.values : [metadataProperty.values])
+              .map((item) => readResourceIdentifier(item).trim())
+              .filter(Boolean)
+          : [];
+      });
+    }
+    if (!value || typeof value !== "object") return [];
     const metadata = value as Record<string, unknown>;
     const rawValues = metadata[property];
     const values = Array.isArray(rawValues) ? rawValues : rawValues ? [rawValues] : [];
@@ -231,7 +256,7 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
       const localName = (identifier.split(/[/#]/).pop() ?? "").replace(/[_\s]/g, "-");
       if (["sinonimo", "synonym"].includes(localName)) return "sinonimo";
       if (["parafrasi", "paraphrase"].includes(localName)) return "parafrasi";
-      if (["esempio-prototipo", "esempioprototipo", "prototype-example"].includes(localName)) {
+      if (["esempio-prototipo", "esempio-prototipico", "esempioprototipo", "esempioprototipico", "prototype-example"].includes(localName)) {
         return "esempio-prototipo";
       }
       if (["associazione-concettuale", "associazioneconcettuale", "conceptual-association"].includes(localName)) {
@@ -244,6 +269,7 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
   const grouped = new Map<string, {
     start: number;
     end: number;
+    locusIri: string;
     labels: Set<string>;
     concepts: Map<string, AnnotationConcept>;
   }>();
@@ -278,9 +304,27 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
       const current = grouped.get(key) ?? {
         start,
         end,
+        locusIri: readResourceIdentifier(
+          occurrence.locus
+          ?? occurrence.locusIri
+          ?? occurrence.locusIRI
+          ?? occurrence.iri
+          ?? occurrence["@id"]
+          ?? attestation.locus,
+        ).trim(),
         labels: new Set<string>(),
         concepts: new Map<string, AnnotationConcept>(),
       };
+      if (!current.locusIri) {
+        current.locusIri = readResourceIdentifier(
+          occurrence.locus
+          ?? occurrence.locusIri
+          ?? occurrence.locusIRI
+          ?? occurrence.iri
+          ?? occurrence["@id"]
+          ?? attestation.locus,
+        ).trim();
+      }
       const occurrenceObservableLabels = collectObservableLabels(occurrence.observableLabel);
       const observableLabels = [...attestationObservableLabels, ...occurrenceObservableLabels];
       const labels = observableLabels.length
@@ -295,12 +339,27 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
         ...collectMetadataValues(occurrence.metadata, "http://www.w3.org/2000/01/rdf-schema#label"),
         ...collectMetadataValues(attestation.metadata, "http://www.w3.org/2000/01/rdf-schema#label"),
       ][0];
+      const conceptLabelIri = [
+        ...collectMetadataValues(occurrence.metadata, conceptLabelProperty),
+        ...collectMetadataValues(attestation.metadata, conceptLabelProperty),
+      ][0];
+      const effectiveConceptIri = conceptLabelIri || observable;
+      const effectiveConceptLabel = lexicalConcepts.find(
+        (concept) => concept.lexicalConcept === effectiveConceptIri,
+      )?.defaultLabel;
       const displayLabels = labels.map((label) => metadataLabel ? `${metadataLabel} - ${label}` : label);
+      if (effectiveConceptLabel && conceptLabelIri) {
+        displayLabels.splice(0, displayLabels.length, metadataLabel
+          ? `${metadataLabel} - ${effectiveConceptLabel}`
+          : effectiveConceptLabel);
+      }
       displayLabels.forEach((label) => current.labels.add(label));
-      if (observable) {
+      if (effectiveConceptIri) {
         const polarity = parsePolarity([
           ...collectMetadataValues(occurrence.metadata, "http://purl.org/marl/ns#hasPolarity"),
           ...collectMetadataValues(attestation.metadata, "http://purl.org/marl/ns#hasPolarity"),
+          ...collectMetadataValues(occurrence.metadata, polarityProperty),
+          ...collectMetadataValues(attestation.metadata, polarityProperty),
           occurrence.polarity,
           attestation.polarity,
         ]);
@@ -312,11 +371,11 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
           attestation.definitionType,
           attestation.definition_type,
         ]);
-        current.concepts.set(observable, {
-          lexicalConcept: observable,
-          label: displayLabels[0] ?? conceptLabel ?? observable,
+        current.concepts.set(effectiveConceptIri, {
+          lexicalConcept: effectiveConceptIri,
+          label: displayLabels[0] ?? effectiveConceptLabel ?? conceptLabel ?? effectiveConceptIri,
           options: {
-            relationType: polarity || definitionType ? "narrativo" : "",
+            relationType: conceptLabelIri ? "paradigmatico" : polarity || definitionType ? "narrativo" : "",
             polarity,
             definitionType,
           },
@@ -330,6 +389,7 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
     .map((annotation) => ({
       start: annotation.start,
       end: annotation.end,
+      locusIri: annotation.locusIri,
       label: [...annotation.labels].join("\n") || "Attestazione",
       concepts: [...annotation.concepts.values()],
     }))
@@ -417,10 +477,46 @@ function parseLexicalEntries(payload: unknown): LexicalEntryOption[] {
     const item = rawItem as Record<string, unknown>;
     const entry = readResourceIdentifier(item.entry).trim();
     const label = readResourceIdentifier(item.label).trim();
-    return entry && label ? [{ entry, label }] : [];
+    const senses = (Array.isArray(item.senses) ? item.senses : [])
+      .map((sense) => readResourceIdentifier(sense).trim())
+      .filter(Boolean);
+    return entry && label ? [{ entry, label, senses }] : [];
   });
 
   return [...new Map(entries.map((item) => [item.entry, item])).values()];
+}
+
+function parseSenseTypes(payload: unknown, sense: string): LexicalSenseType[] {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  const container = payload as Record<string, unknown>;
+  const nestedData = container.data && typeof container.data === "object" && !Array.isArray(container.data)
+    ? container.data as Record<string, unknown>
+    : {};
+  const rawMetadata = container.metadata ?? nestedData.metadata;
+  const metadata = Array.isArray(rawMetadata)
+    ? rawMetadata
+    : rawMetadata && typeof rawMetadata === "object"
+      ? Object.entries(rawMetadata as Record<string, unknown>).map(([property, values]) => ({ property, values }))
+      : [];
+  return metadata.flatMap((rawProperty) => {
+    if (!rawProperty || typeof rawProperty !== "object") return [];
+    const property = rawProperty as Record<string, unknown>;
+    const propertyIri = readResourceIdentifier(property.property).trim();
+    if (
+      propertyIri !== dctTypeProperty
+      && propertyIri !== legacyDctTypeProperty
+      && propertyIri.toLocaleLowerCase("it-IT") !== "dct:type"
+    ) return [];
+    const values = Array.isArray(property.values)
+      ? property.values
+      : property.values === undefined || property.values === null
+        ? []
+        : [property.values];
+    return values.flatMap((rawValue) => {
+      const type = readResourceIdentifier(rawValue).trim();
+      return type ? [{ sense, type }] : [];
+    });
+  });
 }
 
 function containsTimestamp(payload: unknown): boolean {
@@ -549,6 +645,10 @@ export default function Home() {
   const [lexicalEntries, setLexicalEntries] = useState<LexicalEntryOption[]>([]);
   const [lexicalEntriesLoading, setLexicalEntriesLoading] = useState(false);
   const [lexicalEntriesError, setLexicalEntriesError] = useState("");
+  const [lexicalSenseTypes, setLexicalSenseTypes] = useState<LexicalSenseType[]>([]);
+  const [lexicalSenseTypesLoading, setLexicalSenseTypesLoading] = useState(false);
+  const [lexicalSenseTypesReady, setLexicalSenseTypesReady] = useState(false);
+  const [lexicalSenseTypesError, setLexicalSenseTypesError] = useState("");
   const [selectedConcepts, setSelectedConcepts] = useState<string[]>([]);
   const [conceptAnnotationOptions, setConceptAnnotationOptions] = useState<Record<string, ConceptAnnotationOptions>>({});
   const [editDirty, setEditDirty] = useState(false);
@@ -577,6 +677,7 @@ export default function Home() {
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
+  const lexicalSenseTypesRequestId = useRef(0);
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
   const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -601,8 +702,21 @@ export default function Home() {
       || Boolean(options?.relationType === "narrativo" && options.polarity && options.definitionType);
   });
   const editingAttestation = selection?.mode === "edit";
-  const conceptSelectionActive = Boolean(selection && (editingAttestation || selectedLexicalEntry));
-  const annotationActionReady = editingAttestation ? editDirty : selectedConceptsConfigured;
+  const paradigmaticSense = lexicalSenseTypes.find(({ type }) => {
+    const normalizedType = (type.trim().toLocaleLowerCase("it-IT").split(/[/#]/).pop() ?? "")
+      .replace(/^['"]|['"]$/g, "")
+      .replace(/@[a-z]{2,3}(?:-[a-z0-9]+)*$/i, "")
+      .replace(/[^a-z]/g, "");
+    return normalizedType === "paradigmatico" || normalizedType === "paradigmatic";
+  })?.sense;
+  const hasParadigmaticSelection = selectedConcepts.some(
+    (lexicalConcept) => conceptAnnotationOptions[lexicalConcept]?.relationType === "paradigmatico",
+  );
+  const conceptSelectionActive = Boolean(selection && (editingAttestation || (
+    selectedLexicalEntry && lexicalSenseTypesReady && !lexicalSenseTypesLoading && !lexicalSenseTypesError
+  )));
+  const creationPayloadReady = selectedConceptsConfigured;
+  const annotationActionReady = editingAttestation ? editDirty : creationPayloadReady;
 
   const showError = useCallback((message: string) => {
     setGrowlTone("error");
@@ -624,6 +738,11 @@ export default function Home() {
     setSelectedLexicalEntry(null);
     setLexicalEntries([]);
     setLexicalEntriesError("");
+    lexicalSenseTypesRequestId.current += 1;
+    setLexicalSenseTypes([]);
+    setLexicalSenseTypesLoading(false);
+    setLexicalSenseTypesReady(false);
+    setLexicalSenseTypesError("");
     setSelectedConcepts([]);
     setConceptAnnotationOptions({});
     setEditDirty(false);
@@ -792,6 +911,39 @@ export default function Home() {
       setLexicalEntriesLoading(false);
     }
   }, []);
+
+  async function selectLexicalEntryOption(lexicalEntry: LexicalEntryOption) {
+    const requestId = ++lexicalSenseTypesRequestId.current;
+    setSelectedLexicalEntry(lexicalEntry);
+    setLexicalSenseTypes([]);
+    setLexicalSenseTypesError("");
+    setLexicalSenseTypesReady(false);
+    setLexicalSenseTypesLoading(true);
+    try {
+      const senseTypes = await Promise.all(lexicalEntry.senses.map(async (sense) => {
+        const parameters = new URLSearchParams({ resource: sense });
+        const response = await fetch(`${metadataEndpoint}?${parameters.toString()}`, {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          const detail = (await response.text()).trim();
+          throw new Error(detail || `HTTP ${response.status}`);
+        }
+        return parseSenseTypes(await response.json() as unknown, sense);
+      }));
+      if (requestId !== lexicalSenseTypesRequestId.current) return;
+      setLexicalSenseTypes(senseTypes.flat());
+      setLexicalSenseTypesReady(true);
+    } catch (error) {
+      if (requestId !== lexicalSenseTypesRequestId.current) return;
+      const message = error instanceof Error ? error.message : "errore sconosciuto";
+      setLexicalSenseTypesError(message);
+      showError(`Impossibile caricare i metadata dei sensi: ${message}`);
+    } finally {
+      if (requestId === lexicalSenseTypesRequestId.current) setLexicalSenseTypesLoading(false);
+    }
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => void loadArchive(), 0);
@@ -1124,6 +1276,11 @@ export default function Home() {
     setEditDirty(false);
     setLocusEditing(false);
     setSelectedLexicalEntry(null);
+    lexicalSenseTypesRequestId.current += 1;
+    setLexicalSenseTypes([]);
+    setLexicalSenseTypesLoading(false);
+    setLexicalSenseTypesReady(false);
+    setLexicalSenseTypesError("");
     setSelection({
       start,
       end: start + selectedText.length,
@@ -1145,6 +1302,10 @@ export default function Home() {
       showError("Scegli paradigmatico o narrativo e completa gli attributi richiesti per ogni concetto.");
       return;
     }
+    if (hasParadigmaticSelection && !paradigmaticSense) {
+      showError("L’entrata lessicale scelta non contiene un senso con dct:type paradigmatico.");
+      return;
+    }
     if (!activeInterview || activeInterview.source !== "server" || !activeInterview.contextIri) {
       showError("Non è possibile creare l’attestazione: l’intervista non contiene l’IRI del nif:Context.");
       return;
@@ -1162,7 +1323,50 @@ export default function Home() {
     setAttestationSaving(true);
     setGrowlMessage("");
     try {
-      const parameters = new URLSearchParams({ corpus: activeInterview.contextIri });
+      const definitionTypeValues: Record<DefinitionType, string> = {
+        sinonimo: "sinonimo",
+        parafrasi: "parafrasi",
+        "esempio-prototipo": "esempio prototipico",
+        "associazione-concettuale": "associazione concettuale",
+      };
+      const parameters = new URLSearchParams({
+        corpus: activeInterview.contextIri,
+        author: "",
+        external: "",
+      });
+      const observables = selectedLexicalConcepts.map((concept) => {
+        const options = conceptAnnotationOptions[concept.lexicalConcept];
+        if (options.relationType === "paradigmatico") {
+          return {
+            observable: paradigmaticSense as string,
+            metadata: [{
+              property: conceptLabelProperty,
+              values: [{ value: concept.lexicalConcept, type: "iri" }],
+            }],
+          };
+        }
+        const polarityName = options.polarity.charAt(0).toUpperCase() + options.polarity.slice(1);
+        return {
+          observable: concept.lexicalConcept,
+          metadata: [
+            {
+              property: polarityProperty,
+              values: [{
+                value: `http://www.gsi.dit.upm.es/ontologies/marl/ns#${polarityName}`,
+                type: "iri",
+              }],
+            },
+            {
+              property: definitionTypeProperty,
+              values: [{
+                value: definitionTypeValues[options.definitionType as DefinitionType],
+                type: "literal",
+                language: "it",
+              }],
+            },
+          ],
+        };
+      });
       const response = await fetch(
         `${attestationsEndpoint}/by-locus?${parameters.toString()}`,
         {
@@ -1172,7 +1376,7 @@ export default function Home() {
             value: selection.text,
             start: selection.start,
             end: selection.end,
-            observables: selectedLexicalConcepts.map((concept) => concept.lexicalConcept),
+            observables,
           }),
         },
       );
@@ -1245,6 +1449,11 @@ export default function Home() {
     setDragging(false);
     window.getSelection()?.removeAllRanges();
     setSelectedLexicalEntry(null);
+    lexicalSenseTypesRequestId.current += 1;
+    setLexicalSenseTypes([]);
+    setLexicalSenseTypesLoading(false);
+    setLexicalSenseTypesReady(false);
+    setLexicalSenseTypesError("");
     setConceptSearchQuery("");
     setSelectedConcepts(knownConcepts.map((concept) => concept.lexicalConcept));
     setConceptAnnotationOptions(Object.fromEntries(
@@ -1261,6 +1470,7 @@ export default function Home() {
       mode: "edit",
       sourceStart: annotation.start,
       sourceEnd: annotation.end,
+      locusIri: annotation.locusIri,
     });
   }
 
@@ -1311,9 +1521,42 @@ export default function Home() {
     showNotice("La modifica è pronta. Il servizio di aggiornamento dell’attestazione sarà collegato appena disponibile.");
   }
 
-  function requestAnnotationDeletion() {
-    if (!editingAttestation) return;
-    showNotice("Il comando eliminerà l’intera attestazione e tutti i concetti associati. Il servizio di eliminazione non è ancora disponibile.");
+  async function requestAnnotationDeletion() {
+    if (!editingAttestation || attestationSaving) return;
+    if (!activeInterview || activeInterview.source !== "server" || !activeInterview.contextIri) {
+      showError("Non è possibile eliminare l’attestazione: l’intervista non contiene l’IRI del nif:Context.");
+      return;
+    }
+    if (!selection.locusIri) {
+      showError("Non è possibile eliminare l’attestazione: il servizio non ha restituito l’IRI del locus.");
+      return;
+    }
+
+    setAttestationSaving(true);
+    setGrowlMessage("");
+    try {
+      const parameters = new URLSearchParams({ corpus: activeInterview.contextIri });
+      const response = await fetch(
+        `${attestationsEndpoint}/${encodeURIComponent(activeInterview.id)}/by-locus?${parameters.toString()}`,
+        {
+          method: "DELETE",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({ locus: selection.locusIri, all: true }),
+        },
+      );
+      if (!response.ok) throw new Error(await readErrorDetail(response));
+
+      const loadedAnnotations = await fetchAttestations(activeInterview.id, concepts);
+      setInterviews((current) => current.map((interview) => interview.id === activeInterview.id
+        ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
+        : interview));
+      resetSelectionFlow();
+      showNotice("Attestazione eliminata.");
+    } catch (error) {
+      showError(`Errore durante l’eliminazione dell’attestazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+    } finally {
+      setAttestationSaving(false);
+    }
   }
 
   function renderAnnotatedRange(rangeStart: number, rangeEnd: number, keyPrefix: string) {
@@ -1696,6 +1939,17 @@ export default function Home() {
                 <div className="concept-intro">
                   {editingAttestation
                     ? "Modifica i concetti associati o i loro attributi. La penna si attiva al primo cambiamento."
+                    : lexicalSenseTypesLoading
+                      ? "Caricamento dei metadata dei sensi dell’entrata lessicale…"
+                    : lexicalSenseTypesError && selectedLexicalEntry
+                      ? (
+                          <>
+                            Metadata dei sensi non disponibili.
+                            <button type="button" onClick={() => void selectLexicalEntryOption(selectedLexicalEntry)}>
+                              Riprova
+                            </button>
+                          </>
+                        )
                     : conceptSelectionActive
                       ? "Seleziona uno o più concetti e completa gli attributi, poi premi nuovamente la penna."
                     : "Seleziona una parte dell’intervista per associare i concetti."}
@@ -1850,7 +2104,9 @@ export default function Home() {
                           ? "Premi la penna per applicare le modifiche"
                           : "Modifica concetti o attributi"
                         : selectedConceptsConfigured
-                          ? "Premi la penna per confermare"
+                          ? hasParadigmaticSelection && !paradigmaticSense
+                            ? "Nessun senso paradigmatico disponibile per l’entrata scelta"
+                            : "Premi la penna per confermare"
                         : selectedConcepts.length
                           ? "Scegli paradigmatico o narrativo e completa gli attributi"
                           : "Scegli almeno un concetto"}
@@ -1971,7 +2227,7 @@ export default function Home() {
             <button
               key={lexicalEntry.entry}
               type="button"
-              onClick={() => setSelectedLexicalEntry(lexicalEntry)}
+              onClick={() => void selectLexicalEntryOption(lexicalEntry)}
               title={lexicalEntry.label}
             >
               {lexicalEntry.label}
@@ -1994,10 +2250,10 @@ export default function Home() {
             disabled={attestationSaving || !annotationActionReady}
             aria-label={editingAttestation
               ? annotationActionReady ? "Conferma modifiche all’attestazione" : "Modifica i concetti per attivare la penna"
-              : selectedConceptsConfigured ? "Conferma l’annotazione" : "Completa concetti e attributi"}
+              : creationPayloadReady ? "Conferma l’annotazione" : "Completa concetti, attributi e senso paradigmatico"}
             title={editingAttestation
               ? annotationActionReady ? "Conferma modifiche" : "Modifica concetti o attributi"
-              : selectedConceptsConfigured ? "Conferma l’annotazione" : "Seleziona i concetti e completa i relativi attributi"}
+              : creationPayloadReady ? "Conferma l’annotazione" : "Seleziona i concetti e completa i relativi attributi"}
           >
             ✎
           </button>
@@ -2018,7 +2274,8 @@ export default function Home() {
               </button>
               <button
                 className="annotation-eraser"
-                onClick={requestAnnotationDeletion}
+                onClick={() => void requestAnnotationDeletion()}
+                disabled={attestationSaving}
                 aria-label="Elimina l’intera attestazione"
                 title="Elimina attestazione e concetti associati"
               >
