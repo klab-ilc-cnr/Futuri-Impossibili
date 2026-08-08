@@ -70,6 +70,16 @@ type ConceptAnnotationOptions = {
   definitionType: DefinitionType | "";
 };
 
+type ConceptSelection = ConceptAnnotationOptions & {
+  lexicalConcept: string;
+  lexicalEntry: string;
+  narrativeSense: string;
+  paradigmaticSense: string;
+  sensesLoading: boolean;
+  sensesReady: boolean;
+  sensesError: string;
+};
+
 type TextConversionJob = {
   state: string;
   message?: string;
@@ -108,11 +118,13 @@ const textBulkUploadEndpoint = "/api/lexo/texts/bulk";
 const conceptsEndpoint = "/api/lexo/lexical-concepts";
 const lexicalEntriesEndpoint = "/api/lexo/lexical-entries";
 const metadataEndpoint = "/api/lexo/metadata";
+const lexicalConceptEndpoint = "/api/lexo/lexical-concept";
 const updateLexicalLabelEndpoint = "/api/lexo/update-lexical-label";
 const attestationsEndpoint = "/api/lexo/attestations";
 const dctTypeProperty = "http://purl.org/dc/terms/type";
 const legacyDctTypeProperty = "http://purl.org/dc/terms/";
 const conceptLabelProperty = "https://lexo.ilc.cnr.it#conceptLabel";
+const referringConceptProperty = "https://lexo.ilc.cnr.it#referringConcept";
 const polarityProperty = "http://www.gsi.dit.upm.es/ontologies/marl/ns#hasPolarity";
 const definitionTypeProperty = "https://lexo.ilc.cnr.it#definitionType";
 
@@ -133,6 +145,28 @@ const conceptRelationOptions: Array<{ value: ConceptRelationType; label: string 
   { value: "paradigmatico", label: "Paradigmatico" },
   { value: "narrativo", label: "Narrativo" },
 ];
+
+function emptyConceptSelection(lexicalConcept: string): ConceptSelection {
+  return {
+    lexicalConcept,
+    lexicalEntry: "",
+    narrativeSense: "",
+    paradigmaticSense: "",
+    relationType: "",
+    polarity: "",
+    definitionType: "",
+    sensesLoading: false,
+    sensesReady: false,
+    sensesError: "",
+  };
+}
+
+function normalizedSenseType(type: string) {
+  return (type.trim().toLocaleLowerCase("it-IT").split(/[/#]/).pop() ?? "")
+    .replace(/^['"]|['"]$/g, "")
+    .replace(/@[a-z]{2,3}(?:-[a-z0-9]+)*$/i, "")
+    .replace(/[^a-z]/g, "");
+}
 
 function DefinitionTypeIcon({ type }: { type: DefinitionType }) {
   const commonProps = {
@@ -190,7 +224,71 @@ function readResourceIdentifier(value: unknown): string {
   return readResourceIdentifier(resource.iri ?? resource["@id"] ?? resource.id ?? resource.value);
 }
 
-function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]): Annotation[] {
+function readItalianPreferredLabel(payload: unknown): string {
+  function localizedValue(value: unknown, inheritedLanguage = ""): string {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const label = localizedValue(item, inheritedLanguage);
+        if (label) return label;
+      }
+      return "";
+    }
+    if (typeof value === "string") {
+      const label = value.trim();
+      if (!/@it$/i.test(label)) {
+        return inheritedLanguage === "it" || inheritedLanguage.startsWith("it-") ? label : "";
+      }
+      return label.replace(/^"|"@it$/gi, "").replace(/@it$/i, "").trim();
+    }
+    if (!value || typeof value !== "object") return "";
+    const labelValue = value as Record<string, unknown>;
+    const language = String(
+      labelValue.language ?? labelValue.lang ?? labelValue["@language"] ?? labelValue["xml:lang"] ?? "",
+    ).toLocaleLowerCase("it-IT");
+    const text = labelValue.value ?? labelValue.label ?? labelValue["@value"];
+    if ((language === "it" || language.startsWith("it-")) && typeof text === "string") {
+      return text.trim();
+    }
+    if (labelValue.it !== undefined) return localizedValue(`${readResourceIdentifier(labelValue.it)}@it`);
+    return "";
+  }
+
+  function findPreferredLabel(value: unknown): string {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const label = findPreferredLabel(item);
+        if (label) return label;
+      }
+      return "";
+    }
+    if (!value || typeof value !== "object") return "";
+    const container = value as Record<string, unknown>;
+    const property = readResourceIdentifier(container.property).trim();
+    if (property === "http://www.w3.org/2004/02/skos/core#prefLabel") {
+      const label = localizedValue(container);
+      if (label) return label;
+    }
+    for (const [key, candidate] of Object.entries(container)) {
+      const normalizedKey = key.toLocaleLowerCase("it-IT").replace(/[^a-z]/g, "");
+      if (normalizedKey.endsWith("preferredlabel") || normalizedKey.endsWith("preflabel")) {
+        const language = String(
+          container.language ?? container.lang ?? container["@language"] ?? container["xml:lang"] ?? "",
+        ).toLocaleLowerCase("it-IT");
+        const label = localizedValue(candidate, language);
+        if (label) return label;
+      }
+    }
+    for (const candidate of Object.values(container)) {
+      const label = findPreferredLabel(candidate);
+      if (label) return label;
+    }
+    return "";
+  }
+
+  return findPreferredLabel(payload);
+}
+
+async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]): Promise<Annotation[]> {
   function findItems(value: unknown): unknown[] {
     if (Array.isArray(value)) return value;
     if (!value || typeof value !== "object") return [];
@@ -239,6 +337,18 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
       .filter(Boolean);
   }
 
+  function hasLexicalSenseObservableType(...values: unknown[]) {
+    const lexicalSenseType = "http://www.w3.org/ns/lemon/ontolex#LexicalSense";
+    function collectTypes(value: unknown): string[] {
+      if (Array.isArray(value)) return value.flatMap(collectTypes);
+      if (typeof value === "string") return [value.trim()];
+      if (!value || typeof value !== "object") return [];
+      const container = value as Record<string, unknown>;
+      return collectTypes(container.value ?? container.iri ?? container["@id"] ?? container.id);
+    }
+    return values.flatMap(collectTypes).includes(lexicalSenseType);
+  }
+
   function parsePolarity(values: unknown[]): ConceptPolarity | "" {
     for (const value of values.flatMap((item) => Array.isArray(item) ? item : [item])) {
       const identifier = readResourceIdentifier(value).toLocaleLowerCase("it");
@@ -266,6 +376,56 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
     return "";
   }
 
+  const attestationItems = findItems(payload);
+  const preferredLabelsByAttestation = new Map<object, string>();
+  await Promise.all(attestationItems.map(async (rawAttestation) => {
+    if (!rawAttestation || typeof rawAttestation !== "object") return;
+    const attestation = rawAttestation as Record<string, unknown>;
+    const occurrences = Array.isArray(attestation.occurrences)
+      ? attestation.occurrences
+      : attestation.occurrence && typeof attestation.occurrence === "object"
+        ? [attestation.occurrence]
+        : [attestation];
+    const hasLexicalSense = occurrences.some((rawOccurrence) => {
+      const occurrence = rawOccurrence && typeof rawOccurrence === "object"
+        ? rawOccurrence as Record<string, unknown>
+        : {};
+      return hasLexicalSenseObservableType(
+        attestation.observableTypes,
+        attestation.observableType,
+        occurrence.observableTypes,
+        occurrence.observableType,
+      );
+    });
+    if (!hasLexicalSense) return;
+
+    const occurrenceMetadata = occurrences.flatMap((rawOccurrence) => {
+      if (!rawOccurrence || typeof rawOccurrence !== "object") return [];
+      return collectMetadataValues(
+        (rawOccurrence as Record<string, unknown>).metadata,
+        referringConceptProperty,
+      );
+    });
+    const lexicalConcept = [
+      ...collectMetadataValues(attestation.metadata, referringConceptProperty),
+      ...occurrenceMetadata,
+    ][0];
+    if (!lexicalConcept) return;
+
+    try {
+      const parameters = new URLSearchParams({ lexicalConcept });
+      const response = await fetch(`${lexicalConceptEndpoint}?${parameters.toString()}`, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const preferredLabel = readItalianPreferredLabel(await response.json() as unknown);
+      if (preferredLabel) preferredLabelsByAttestation.set(rawAttestation, preferredLabel);
+    } catch {
+      // Se la label non è disponibile resta valido il fallback corrente.
+    }
+  }));
+
   const grouped = new Map<string, {
     start: number;
     end: number;
@@ -273,9 +433,10 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
     labels: Set<string>;
     concepts: Map<string, AnnotationConcept>;
   }>();
-  for (const rawAttestation of findItems(payload)) {
+  for (const rawAttestation of attestationItems) {
     if (!rawAttestation || typeof rawAttestation !== "object") continue;
     const attestation = rawAttestation as Record<string, unknown>;
+    const storedPreferredLabel = preferredLabelsByAttestation.get(rawAttestation);
     const observable = readResourceIdentifier(
       attestation.observable ?? attestation.lexicalConcept ?? attestation.concept ?? attestation.uri,
     );
@@ -345,16 +506,20 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
         ...collectMetadataValues(occurrence.metadata, "http://www.w3.org/2000/01/rdf-schema#label"),
         ...collectMetadataValues(attestation.metadata, "http://www.w3.org/2000/01/rdf-schema#label"),
       ][0];
-      const conceptLabelIri = [
+      const lexicalSenseReferringConceptIri = [
+        ...collectMetadataValues(occurrence.metadata, referringConceptProperty),
+        ...collectMetadataValues(attestation.metadata, referringConceptProperty),
+      ][0];
+      const referringConceptIri = lexicalSenseReferringConceptIri || [
         ...collectMetadataValues(occurrence.metadata, conceptLabelProperty),
         ...collectMetadataValues(attestation.metadata, conceptLabelProperty),
       ][0];
-      const effectiveConceptIri = conceptLabelIri || observable;
-      const effectiveConceptLabel = lexicalConcepts.find(
+      const effectiveConceptIri = referringConceptIri || observable;
+      const effectiveConceptLabel = storedPreferredLabel ?? lexicalConcepts.find(
         (concept) => concept.lexicalConcept === effectiveConceptIri,
       )?.defaultLabel;
       const displayLabels = labels.map((label) => metadataLabel ? `${metadataLabel} - ${label}` : label);
-      if (effectiveConceptLabel && conceptLabelIri) {
+      if (effectiveConceptLabel && referringConceptIri) {
         displayLabels.splice(0, displayLabels.length, metadataLabel
           ? `${metadataLabel} - ${effectiveConceptLabel}`
           : effectiveConceptLabel);
@@ -381,7 +546,7 @@ function parseAttestations(payload: unknown, lexicalConcepts: LexicalConcept[]):
           lexicalConcept: effectiveConceptIri,
           label: displayLabels[0] ?? effectiveConceptLabel ?? conceptLabel ?? effectiveConceptIri,
           options: {
-            relationType: conceptLabelIri ? "paradigmatico" : polarity || definitionType ? "narrativo" : "",
+            relationType: referringConceptIri ? "paradigmatico" : polarity || definitionType ? "narrativo" : "",
             polarity,
             definitionType,
           },
@@ -647,16 +812,11 @@ export default function Home() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [activeInterviewId, setActiveInterviewId] = useState("");
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
-  const [selectedLexicalEntry, setSelectedLexicalEntry] = useState<LexicalEntryOption | null>(null);
   const [lexicalEntries, setLexicalEntries] = useState<LexicalEntryOption[]>([]);
   const [lexicalEntriesLoading, setLexicalEntriesLoading] = useState(false);
   const [lexicalEntriesError, setLexicalEntriesError] = useState("");
-  const [lexicalSenseTypes, setLexicalSenseTypes] = useState<LexicalSenseType[]>([]);
-  const [lexicalSenseTypesLoading, setLexicalSenseTypesLoading] = useState(false);
-  const [lexicalSenseTypesReady, setLexicalSenseTypesReady] = useState(false);
-  const [lexicalSenseTypesError, setLexicalSenseTypesError] = useState("");
   const [selectedConcepts, setSelectedConcepts] = useState<string[]>([]);
-  const [conceptAnnotationOptions, setConceptAnnotationOptions] = useState<Record<string, ConceptAnnotationOptions>>({});
+  const [conceptSelections, setConceptSelections] = useState<Record<string, ConceptSelection>>({});
   const [editDirty, setEditDirty] = useState(false);
   const [locusEditing, setLocusEditing] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -683,7 +843,7 @@ export default function Home() {
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
-  const lexicalSenseTypesRequestId = useRef(0);
+  const lexicalSenseTypesRequestIds = useRef<Record<string, number>>({});
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
   const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -703,24 +863,17 @@ export default function Home() {
     concept.defaultLabel.toLocaleLowerCase("it").includes(conceptSearchQuery.trim().toLocaleLowerCase("it")),
   );
   const selectedConceptsConfigured = selectedConcepts.length > 0 && selectedConcepts.every((lexicalConcept) => {
-    const options = conceptAnnotationOptions[lexicalConcept];
-    return options?.relationType === "paradigmatico"
-      || Boolean(options?.relationType === "narrativo" && options.polarity && options.definitionType);
+    const conceptSelection = conceptSelections[lexicalConcept];
+    return Boolean(conceptSelection?.lexicalEntry && conceptSelection.sensesReady && (
+      (conceptSelection.relationType === "paradigmatico" && conceptSelection.paradigmaticSense)
+      || (conceptSelection.relationType === "narrativo"
+        && conceptSelection.narrativeSense
+        && conceptSelection.polarity
+        && conceptSelection.definitionType)
+    ));
   });
   const editingAttestation = selection?.mode === "edit";
-  const paradigmaticSense = lexicalSenseTypes.find(({ type }) => {
-    const normalizedType = (type.trim().toLocaleLowerCase("it-IT").split(/[/#]/).pop() ?? "")
-      .replace(/^['"]|['"]$/g, "")
-      .replace(/@[a-z]{2,3}(?:-[a-z0-9]+)*$/i, "")
-      .replace(/[^a-z]/g, "");
-    return normalizedType === "paradigmatico" || normalizedType === "paradigmatic";
-  })?.sense;
-  const hasParadigmaticSelection = selectedConcepts.some(
-    (lexicalConcept) => conceptAnnotationOptions[lexicalConcept]?.relationType === "paradigmatico",
-  );
-  const conceptSelectionActive = Boolean(selection && (editingAttestation || (
-    selectedLexicalEntry && lexicalSenseTypesReady && !lexicalSenseTypesLoading && !lexicalSenseTypesError
-  )));
+  const conceptSelectionActive = Boolean(selection);
   const creationPayloadReady = selectedConceptsConfigured;
   const annotationActionReady = editingAttestation ? editDirty : creationPayloadReady;
 
@@ -741,16 +894,11 @@ export default function Home() {
   const resetSelectionFlow = useCallback(() => {
     window.getSelection()?.removeAllRanges();
     setSelection(null);
-    setSelectedLexicalEntry(null);
     setLexicalEntries([]);
     setLexicalEntriesError("");
-    lexicalSenseTypesRequestId.current += 1;
-    setLexicalSenseTypes([]);
-    setLexicalSenseTypesLoading(false);
-    setLexicalSenseTypesReady(false);
-    setLexicalSenseTypesError("");
+    lexicalSenseTypesRequestIds.current = {};
     setSelectedConcepts([]);
-    setConceptAnnotationOptions({});
+    setConceptSelections({});
     setEditDirty(false);
     setLocusEditing(false);
   }, []);
@@ -918,13 +1066,21 @@ export default function Home() {
     }
   }, []);
 
-  async function selectLexicalEntryOption(lexicalEntry: LexicalEntryOption) {
-    const requestId = ++lexicalSenseTypesRequestId.current;
-    setSelectedLexicalEntry(lexicalEntry);
-    setLexicalSenseTypes([]);
-    setLexicalSenseTypesError("");
-    setLexicalSenseTypesReady(false);
-    setLexicalSenseTypesLoading(true);
+  async function selectLexicalEntryOption(lexicalConcept: string, lexicalEntryIri: string) {
+    const lexicalEntry = lexicalEntries.find((entry) => entry.entry === lexicalEntryIri);
+    const requestId = (lexicalSenseTypesRequestIds.current[lexicalConcept] ?? 0) + 1;
+    lexicalSenseTypesRequestIds.current[lexicalConcept] = requestId;
+    setConceptSelections((current) => ({
+      ...current,
+      [lexicalConcept]: lexicalEntry
+        ? {
+            ...emptyConceptSelection(lexicalConcept),
+            lexicalEntry: lexicalEntry.entry,
+            sensesLoading: true,
+          }
+        : emptyConceptSelection(lexicalConcept),
+    }));
+    if (!lexicalEntry) return;
     try {
       const senseTypes = await Promise.all(lexicalEntry.senses.map(async (sense) => {
         const parameters = new URLSearchParams({ resource: sense });
@@ -938,16 +1094,42 @@ export default function Home() {
         }
         return parseSenseTypes(await response.json() as unknown, sense);
       }));
-      if (requestId !== lexicalSenseTypesRequestId.current) return;
-      setLexicalSenseTypes(senseTypes.flat());
-      setLexicalSenseTypesReady(true);
+      if (requestId !== lexicalSenseTypesRequestIds.current[lexicalConcept]) return;
+      const flattenedSenseTypes = senseTypes.flat();
+      const narrativeSense = flattenedSenseTypes.find(({ type }) => {
+        const normalizedType = normalizedSenseType(type);
+        return normalizedType === "narrativo" || normalizedType === "narrative";
+      })?.sense ?? "";
+      const paradigmaticSense = flattenedSenseTypes.find(({ type }) => {
+        const normalizedType = normalizedSenseType(type);
+        return normalizedType === "paradigmatico" || normalizedType === "paradigmatic";
+      })?.sense ?? "";
+      setConceptSelections((current) => ({
+        ...current,
+        [lexicalConcept]: {
+          ...(current[lexicalConcept] ?? emptyConceptSelection(lexicalConcept)),
+          lexicalEntry: lexicalEntry.entry,
+          narrativeSense,
+          paradigmaticSense,
+          sensesLoading: false,
+          sensesReady: true,
+          sensesError: "",
+        },
+      }));
     } catch (error) {
-      if (requestId !== lexicalSenseTypesRequestId.current) return;
+      if (requestId !== lexicalSenseTypesRequestIds.current[lexicalConcept]) return;
       const message = error instanceof Error ? error.message : "errore sconosciuto";
-      setLexicalSenseTypesError(message);
+      setConceptSelections((current) => ({
+        ...current,
+        [lexicalConcept]: {
+          ...(current[lexicalConcept] ?? emptyConceptSelection(lexicalConcept)),
+          lexicalEntry: lexicalEntry.entry,
+          sensesLoading: false,
+          sensesReady: false,
+          sensesError: message,
+        },
+      }));
       showError(`Impossibile caricare i metadata dei sensi: ${message}`);
-    } finally {
-      if (requestId === lexicalSenseTypesRequestId.current) setLexicalSenseTypesLoading(false);
     }
   }
 
@@ -1278,15 +1460,10 @@ export default function Home() {
       return;
     }
     setSelectedConcepts([]);
-    setConceptAnnotationOptions({});
+    setConceptSelections({});
     setEditDirty(false);
     setLocusEditing(false);
-    setSelectedLexicalEntry(null);
-    lexicalSenseTypesRequestId.current += 1;
-    setLexicalSenseTypes([]);
-    setLexicalSenseTypesLoading(false);
-    setLexicalSenseTypesReady(false);
-    setLexicalSenseTypesError("");
+    lexicalSenseTypesRequestIds.current = {};
     setSelection({
       start,
       end: start + selectedText.length,
@@ -1303,13 +1480,9 @@ export default function Home() {
   }
 
   async function addAnnotation() {
-    if (!selection || !selectedLexicalEntry || selectedConcepts.length === 0 || attestationSaving) return;
+    if (!selection || selectedConcepts.length === 0 || attestationSaving) return;
     if (!selectedConceptsConfigured) {
       showError("Scegli paradigmatico o narrativo e completa gli attributi richiesti per ogni concetto.");
-      return;
-    }
-    if (hasParadigmaticSelection && !paradigmaticSense) {
-      showError("L’entrata lessicale scelta non contiene un senso con dct:type paradigmatico.");
       return;
     }
     if (!activeInterview || activeInterview.source !== "server" || !activeInterview.contextIri) {
@@ -1341,12 +1514,12 @@ export default function Home() {
         external: "",
       });
       const observables = selectedLexicalConcepts.map((concept) => {
-        const options = conceptAnnotationOptions[concept.lexicalConcept];
+        const options = conceptSelections[concept.lexicalConcept];
         if (options.relationType === "paradigmatico") {
           return {
-            observable: paradigmaticSense as string,
+            observable: options.paradigmaticSense,
             metadata: [{
-              property: conceptLabelProperty,
+              property: referringConceptProperty,
               values: [{ value: concept.lexicalConcept, type: "iri" }],
             }],
           };
@@ -1391,11 +1564,46 @@ export default function Home() {
         throw new Error(detail || `HTTP ${response.status}`);
       }
 
-      const loadedAnnotations = await fetchAttestations(activeInterview.id, concepts);
-      setInterviews((current) => current.map((interview) => interview.id === activeInterview.id
-        ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
-        : interview));
+      const narrativeSelections = selectedLexicalConcepts.flatMap((concept) => {
+        const conceptSelection = conceptSelections[concept.lexicalConcept];
+        return conceptSelection.relationType === "narrativo"
+          ? [{ concept, conceptSelection }]
+          : [];
+      });
+      const lexicalConceptUpdates = await Promise.all(narrativeSelections.map(async ({ concept, conceptSelection }) => {
+        try {
+          const patchResponse = await fetch(lexicalConceptEndpoint, {
+            method: "PATCH",
+            headers: { Accept: "application/json", "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lexicalConcept: concept.lexicalConcept,
+              addSenses: [{ senseId: conceptSelection.narrativeSense, language: "it" }],
+            }),
+          });
+          if (patchResponse.ok) return "";
+          const detail = (await patchResponse.text()).trim();
+          return `${concept.defaultLabel}: ${detail || `HTTP ${patchResponse.status}`}`;
+        } catch (error) {
+          return `${concept.defaultLabel}: ${error instanceof Error ? error.message : "errore sconosciuto"}`;
+        }
+      }));
+
+      let annotationsReloadError = "";
+      try {
+        const loadedAnnotations = await fetchAttestations(activeInterview.id, concepts);
+        setInterviews((current) => current.map((interview) => interview.id === activeInterview.id
+          ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
+          : interview));
+      } catch (error) {
+        annotationsReloadError = error instanceof Error ? error.message : "errore sconosciuto";
+      }
       resetSelectionFlow();
+      const failedUpdates = lexicalConceptUpdates.filter(Boolean);
+      if (failedUpdates.length > 0) {
+        showError(`Attestazione creata, ma non è stato possibile aggiornare ${failedUpdates.length} concetti narrativi (${failedUpdates.join(" · ")}).`);
+      } else if (annotationsReloadError) {
+        showError(`Attestazione creata, ma non è stato possibile ricaricare l’elenco (${annotationsReloadError}).`);
+      }
     } catch (error) {
       showError(`Errore durante il salvataggio dell’annotazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
     } finally {
@@ -1406,14 +1614,18 @@ export default function Home() {
   function toggleConcept(lexicalConcept: string) {
     if (!conceptSelectionActive || attestationSaving) return;
     const isSelected = selectedConcepts.includes(lexicalConcept);
+    if (isSelected) {
+      lexicalSenseTypesRequestIds.current[lexicalConcept]
+        = (lexicalSenseTypesRequestIds.current[lexicalConcept] ?? 0) + 1;
+    }
     setSelectedConcepts((current) => isSelected
       ? current.filter((item) => item !== lexicalConcept)
       : [...current, lexicalConcept]);
-    setConceptAnnotationOptions((current) => {
+    setConceptSelections((current) => {
       if (!isSelected) {
         return {
           ...current,
-          [lexicalConcept]: { relationType: "", polarity: "", definitionType: "" },
+          [lexicalConcept]: emptyConceptSelection(lexicalConcept),
         };
       }
       const nextOptions = { ...current };
@@ -1428,12 +1640,10 @@ export default function Home() {
     change: Partial<ConceptAnnotationOptions>,
   ) {
     if (!conceptSelectionActive || attestationSaving) return;
-    setConceptAnnotationOptions((current) => ({
+    setConceptSelections((current) => ({
       ...current,
       [lexicalConcept]: {
-        relationType: current[lexicalConcept]?.relationType ?? "",
-        polarity: current[lexicalConcept]?.polarity ?? "",
-        definitionType: current[lexicalConcept]?.definitionType ?? "",
+        ...(current[lexicalConcept] ?? emptyConceptSelection(lexicalConcept)),
         ...change,
       },
     }));
@@ -1454,16 +1664,14 @@ export default function Home() {
     );
     setDragging(false);
     window.getSelection()?.removeAllRanges();
-    setSelectedLexicalEntry(null);
-    lexicalSenseTypesRequestId.current += 1;
-    setLexicalSenseTypes([]);
-    setLexicalSenseTypesLoading(false);
-    setLexicalSenseTypesReady(false);
-    setLexicalSenseTypesError("");
+    lexicalSenseTypesRequestIds.current = {};
     setConceptSearchQuery("");
     setSelectedConcepts(knownConcepts.map((concept) => concept.lexicalConcept));
-    setConceptAnnotationOptions(Object.fromEntries(
-      knownConcepts.map((concept) => [concept.lexicalConcept, concept.options]),
+    setConceptSelections(Object.fromEntries(
+      knownConcepts.map((concept) => [concept.lexicalConcept, {
+        ...emptyConceptSelection(concept.lexicalConcept),
+        ...concept.options,
+      }]),
     ));
     setEditDirty(false);
     setLocusEditing(false);
@@ -1945,19 +2153,8 @@ export default function Home() {
                 <div className="concept-intro">
                   {editingAttestation
                     ? "Modifica i concetti associati o i loro attributi. La penna si attiva al primo cambiamento."
-                    : lexicalSenseTypesLoading
-                      ? "Caricamento dei metadata dei sensi dell’entrata lessicale…"
-                    : lexicalSenseTypesError && selectedLexicalEntry
-                      ? (
-                          <>
-                            Metadata dei sensi non disponibili.
-                            <button type="button" onClick={() => void selectLexicalEntryOption(selectedLexicalEntry)}>
-                              Riprova
-                            </button>
-                          </>
-                        )
                     : conceptSelectionActive
-                      ? "Seleziona uno o più concetti e completa gli attributi, poi premi nuovamente la penna."
+                      ? "Seleziona uno o più concetti, poi scegli entrata lessicale e attributi in ciascun pannello."
                     : "Seleziona una parte dell’intervista per associare i concetti."}
                 </div>
                 <div className="interview-search">
@@ -1988,8 +2185,8 @@ export default function Home() {
                     const isSelected = selectedConcepts.includes(concept.lexicalConcept);
                     const isEditing = editingConceptUrl === concept.lexicalConcept;
                     const isSaving = savingConceptUrl === concept.lexicalConcept;
-                    const annotationOptions = conceptAnnotationOptions[concept.lexicalConcept]
-                      ?? { relationType: "", polarity: "", definitionType: "" };
+                    const annotationOptions = conceptSelections[concept.lexicalConcept]
+                      ?? emptyConceptSelection(concept.lexicalConcept);
                     return (
                       <div
                         key={concept.lexicalConcept}
@@ -2031,7 +2228,48 @@ export default function Home() {
                         </div>
                         {isSelected && (
                           <div className="concept-options-panel">
-                            <fieldset>
+                            {!editingAttestation && (
+                              <fieldset>
+                                <legend>Entrata lessicale</legend>
+                                <select
+                                  className="concept-entry-select"
+                                  value={annotationOptions.lexicalEntry}
+                                  onChange={(event) => void selectLexicalEntryOption(concept.lexicalConcept, event.target.value)}
+                                  disabled={lexicalEntriesLoading || attestationSaving}
+                                  aria-label={`Entrata lessicale per ${concept.defaultLabel}`}
+                                >
+                                  <option value="">{lexicalEntriesLoading ? "Caricamento…" : "Scegli un’entrata…"}</option>
+                                  {lexicalEntries.map((lexicalEntry) => (
+                                    <option key={lexicalEntry.entry} value={lexicalEntry.entry}>
+                                      {lexicalEntry.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                {lexicalEntriesError && (
+                                  <div className="concept-entry-message error">
+                                    Entrate non disponibili. <button type="button" onClick={() => void loadLexicalEntries()}>Riprova</button>
+                                  </div>
+                                )}
+                                {annotationOptions.sensesLoading && (
+                                  <div className="concept-entry-message">Caricamento metadata dei sensi…</div>
+                                )}
+                                {annotationOptions.sensesError && (
+                                  <div className="concept-entry-message error">
+                                    Metadata non disponibili. <button type="button" onClick={() => void selectLexicalEntryOption(concept.lexicalConcept, annotationOptions.lexicalEntry)}>Riprova</button>
+                                  </div>
+                                )}
+                                {annotationOptions.sensesReady && (!annotationOptions.narrativeSense || !annotationOptions.paradigmaticSense) && (
+                                  <div className="concept-entry-message error">
+                                    {!annotationOptions.narrativeSense && !annotationOptions.paradigmaticSense
+                                      ? "Nessun senso narrativo o paradigmatico trovato."
+                                      : !annotationOptions.narrativeSense
+                                        ? "Senso narrativo non disponibile."
+                                        : "Senso paradigmatico non disponibile."}
+                                  </div>
+                                )}
+                              </fieldset>
+                            )}
+                            <fieldset disabled={!editingAttestation && !annotationOptions.sensesReady}>
                               <legend>Relazione</legend>
                               <div className="concept-option-grid relation-options">
                                 {conceptRelationOptions.map((option) => (
@@ -2049,7 +2287,7 @@ export default function Home() {
                             </fieldset>
                             <fieldset
                               className="dependent-concept-options"
-                              disabled={annotationOptions.relationType === "paradigmatico"}
+                              disabled={annotationOptions.relationType !== "narrativo"}
                             >
                               <legend>Polarità</legend>
                               <div className="concept-option-grid polarity-options">
@@ -2070,7 +2308,7 @@ export default function Home() {
                             </fieldset>
                             <fieldset
                               className="dependent-concept-options"
-                              disabled={annotationOptions.relationType === "paradigmatico"}
+                              disabled={annotationOptions.relationType !== "narrativo"}
                             >
                               <legend>Tipo di definizione</legend>
                               <div className="concept-option-grid definition-options">
@@ -2110,11 +2348,9 @@ export default function Home() {
                           ? "Premi la penna per applicare le modifiche"
                           : "Modifica concetti o attributi"
                         : selectedConceptsConfigured
-                          ? hasParadigmaticSelection && !paradigmaticSense
-                            ? "Nessun senso paradigmatico disponibile per l’entrata scelta"
-                            : "Premi la penna per confermare"
+                          ? "Premi la penna per confermare"
                         : selectedConcepts.length
-                          ? "Scegli paradigmatico o narrativo e completa gli attributi"
+                          ? "Completa entrata, relazione e attributi di ogni concetto"
                           : "Scegli almeno un concetto"}
                     </small>
                   </div>
@@ -2206,48 +2442,11 @@ export default function Home() {
         )}
       </main>
 
-      {selection && activePage === 4 && selection.mode === "create" && !selectedLexicalEntry && (
-        <div
-          ref={annotationActionsRef}
-          className="selection-category-menu"
-          style={{ left: selection.x, top: selection.y }}
-          role="group"
-          aria-label="Scegli un'entrata lessicale"
-        >
-          {lexicalEntriesLoading && (
-            <div className="selection-category-status" role="status">
-              <span className="mini-spinner" aria-hidden="true" />
-              Caricamento entrate…
-            </div>
-          )}
-          {!lexicalEntriesLoading && lexicalEntriesError && (
-            <div className="selection-category-status selection-category-error">
-              <span>Impossibile caricare le entrate.</span>
-              <button type="button" onClick={() => void loadLexicalEntries()}>Riprova</button>
-            </div>
-          )}
-          {!lexicalEntriesLoading && !lexicalEntriesError && lexicalEntries.length === 0 && (
-            <div className="selection-category-status">Nessuna entrata disponibile.</div>
-          )}
-          {lexicalEntries.map((lexicalEntry) => (
-            <button
-              key={lexicalEntry.entry}
-              type="button"
-              onClick={() => void selectLexicalEntryOption(lexicalEntry)}
-              title={lexicalEntry.label}
-            >
-              {lexicalEntry.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {selection && activePage === 4 && (selection.mode === "edit" || selectedLexicalEntry) && (
+      {selection && activePage === 4 && (
         <div
           ref={annotationActionsRef}
           className="annotation-actions"
           style={{ left: selection.actionX ?? selection.x, top: selection.y }}
-          data-lexical-entry={selection.mode === "create" ? selectedLexicalEntry?.entry : undefined}
         >
           <button
             className="annotation-trigger"
@@ -2256,7 +2455,7 @@ export default function Home() {
             disabled={attestationSaving || !annotationActionReady}
             aria-label={editingAttestation
               ? annotationActionReady ? "Conferma modifiche all’attestazione" : "Modifica i concetti per attivare la penna"
-              : creationPayloadReady ? "Conferma l’annotazione" : "Completa concetti, attributi e senso paradigmatico"}
+              : creationPayloadReady ? "Conferma l’annotazione" : "Completa entrata, relazione e attributi per ogni concetto"}
             title={editingAttestation
               ? annotationActionReady ? "Conferma modifiche" : "Modifica concetti o attributi"
               : creationPayloadReady ? "Conferma l’annotazione" : "Seleziona i concetti e completa i relativi attributi"}

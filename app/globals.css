@@ -151,6 +151,12 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .concept-options-panel fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .concept-options-panel fieldset + fieldset { margin-top: 9px; padding-top: 8px; border-top: 1px solid #e3ebe6; }
 .concept-options-panel legend { margin: 0 0 6px; padding: 0; color: #65736c; font-size: 8px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.concept-entry-select { width: 100%; min-width: 0; height: 30px; border: 1px solid #cbdad2; border-radius: 7px; padding: 0 8px; background: #fff; color: #34483e; font-size: 9px; outline: 0; }
+.concept-entry-select:focus { border-color: #6d9c84; box-shadow: 0 0 0 2px rgba(109,156,132,.13); }
+.concept-entry-select:disabled { cursor: wait; opacity: .6; }
+.concept-entry-message { margin-top: 5px; color: #667c70; font-size: 7px; line-height: 1.35; }
+.concept-entry-message.error { color: #985e53; }
+.concept-entry-message button { border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; font-weight: 900; text-decoration: underline; }
 .concept-option-grid { display: grid; gap: 5px; }
 .relation-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .polarity-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
