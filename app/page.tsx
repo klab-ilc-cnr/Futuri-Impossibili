@@ -33,6 +33,7 @@ type Annotation = {
   start: number;
   end: number;
   locusIri: string;
+  attestationIris: string[];
   label: string;
   concepts: AnnotationConcept[];
 };
@@ -517,6 +518,7 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
     start: number;
     end: number;
     locusIri: string;
+    attestationIris: Set<string>;
     labels: Set<string>;
     concepts: Map<string, AnnotationConcept>;
   }>();
@@ -563,6 +565,7 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
           ?? attestation.locusIri
           ?? attestation.locusIRI,
         ).trim(),
+        attestationIris: new Set<string>(),
         labels: new Set<string>(),
         concepts: new Map<string, AnnotationConcept>(),
       };
@@ -579,6 +582,10 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
           ?? attestation.locusIRI,
         ).trim();
       }
+      const attestationIri = readResourceIdentifier(
+        occurrence.attestation ?? attestation.attestation ?? occurrence.attestationIri ?? attestation.attestationIri,
+      ).trim();
+      if (attestationIri) current.attestationIris.add(attestationIri);
       const occurrenceObservableLabels = collectObservableLabels(occurrence.observableLabel);
       const observableLabels = [...attestationObservableLabels, ...occurrenceObservableLabels];
       const labels = observableLabels.length
@@ -644,9 +651,7 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
           ...collectMetadataValues(attestation.metadata, skosNoteProperty),
         ][0] ?? "";
         current.concepts.set(effectiveConceptIri, {
-          attestationIri: readResourceIdentifier(
-            occurrence.attestation ?? attestation.attestation ?? occurrence.attestationIri ?? attestation.attestationIri,
-          ).trim(),
+          attestationIri,
           observableIri: observable,
           lexicalConcept: effectiveConceptIri,
           label: displayLabels[0] ?? effectiveConceptLabel ?? conceptLabel ?? effectiveConceptIri,
@@ -669,6 +674,7 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
       start: annotation.start,
       end: annotation.end,
       locusIri: annotation.locusIri,
+      attestationIris: [...annotation.attestationIris],
       label: [...annotation.labels].join("\n") || "Attestazione",
       concepts: [...annotation.concepts.values()],
     }))
@@ -1940,7 +1946,7 @@ export default function Home() {
     void loadLexicalEntries();
   }
 
-  function toggleLocusEditing() {
+  async function toggleLocusEditing() {
     if (!selection || selection.mode !== "edit" || attestationSaving) return;
     if (!locusEditing) {
       window.getSelection()?.removeAllRanges();
@@ -1948,20 +1954,63 @@ export default function Home() {
       return;
     }
 
+    if (!activeInterview || activeInterview.source !== "server") {
+      showError("Non è possibile modificare il locus: mancano i dati del testo su LexO-server.");
+      return;
+    }
+
     const sourceStart = selection.sourceStart ?? selection.start;
     const sourceEnd = selection.sourceEnd ?? selection.end;
-    setInterviews((current) => current.map((interview) => interview.id === activeInterview?.id
-      ? {
-          ...interview,
-          annotations: interview.annotations.map((annotation) =>
-            annotation.start === sourceStart && annotation.end === sourceEnd
-              ? { ...annotation, start: selection.start, end: selection.end }
-              : annotation,
-          ),
-        }
-      : interview));
-    resetSelectionFlow();
-    showNotice(`Nuovo locus salvato localmente: start ${selection.start}, end ${selection.end}.`);
+    const originalAnnotation = annotations.find((annotation) =>
+      annotation.start === sourceStart
+      && annotation.end === sourceEnd
+      && (!selection.locusIri || annotation.locusIri === selection.locusIri),
+    );
+    const attestationIris = originalAnnotation?.attestationIris ?? [];
+    if (attestationIris.length === 0) {
+      showError("Non è possibile modificare il locus: mancano gli IRI delle attestazioni selezionate.");
+      return;
+    }
+
+    setAttestationSaving(true);
+    setGrowlMessage("");
+    try {
+      const results = await Promise.allSettled(attestationIris.map(async (attestation) => {
+        const response = await fetch(
+          `${attestationsEndpoint}/${encodeURIComponent(activeInterview.id)}/locus`,
+          {
+            method: "PATCH",
+            headers: { Accept: "application/json", "Content-Type": "application/json" },
+            body: JSON.stringify({
+              attestation,
+              start: selection.start,
+              end: selection.end,
+              updateGloss: true,
+            }),
+          },
+        );
+        if (!response.ok) throw new Error(await readErrorDetail(response));
+      }));
+      const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+
+      const loadedAnnotations = await fetchAttestations(activeInterview.id, concepts);
+      setInterviews((current) => current.map((interview) => interview.id === activeInterview.id
+        ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
+        : interview));
+      resetSelectionFlow();
+
+      if (failures.length > 0) {
+        const firstFailure = failures[0].reason;
+        throw new Error(`${failures.length} di ${attestationIris.length} aggiornamenti non riusciti: ${
+          firstFailure instanceof Error ? firstFailure.message : "errore sconosciuto"
+        }`);
+      }
+      showNotice(`Nuovo locus salvato: start ${selection.start}, end ${selection.end}.`);
+    } catch (error) {
+      showError(`Errore durante la modifica del locus: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+    } finally {
+      setAttestationSaving(false);
+    }
   }
 
   function nudgeLocusEndpoint(endpoint: "start" | "end", delta: number) {
@@ -2945,7 +2994,7 @@ export default function Home() {
             <>
               <button
                 className={`annotation-locus ${locusEditing ? "active" : ""}`}
-                onClick={toggleLocusEditing}
+                onClick={() => void toggleLocusEditing()}
                 disabled={attestationSaving || editDirty}
                 aria-pressed={locusEditing}
                 aria-label={locusEditing ? "Salva i nuovi limiti dell’evidenziazione" : "Modifica i limiti dell’evidenziazione"}
