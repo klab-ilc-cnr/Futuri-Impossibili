@@ -3,6 +3,7 @@ const lexoServerUrl = (process.env.LEXO_SERVER_URL ?? "http://localhost:8080/Lex
 type DeleteByLocusPayload = {
   locus?: unknown;
   all?: unknown;
+  attestations?: unknown;
 };
 
 export async function DELETE(
@@ -18,9 +19,15 @@ export async function DELETE(
 
     const payload = await request.json() as DeleteByLocusPayload;
     const locus = typeof payload.locus === "string" ? payload.locus.trim() : "";
-    if (!locus || payload.all !== true) {
+    const attestations = Array.isArray(payload.attestations)
+      ? payload.attestations
+          .map((item) => typeof item === "string" ? item.trim() : "")
+          .filter(Boolean)
+      : [];
+    const deleteAll = payload.all === true;
+    if (!locus || deleteAll === (attestations.length > 0)) {
       return Response.json(
-        { error: "Il body deve contenere l’IRI del locus e all=true" },
+        { error: "Il body deve contenere locus e una sola modalità tra all=true o attestations" },
         { status: 400 },
       );
     }
@@ -41,7 +48,7 @@ export async function DELETE(
     const response = await fetch(serviceUrl, {
       method: "DELETE",
       headers,
-      body: JSON.stringify({ locus, all: true }),
+      body: JSON.stringify(deleteAll ? { locus, all: true } : { locus, attestations }),
       cache: "no-store",
     });
     const responseBody = await response.text();
