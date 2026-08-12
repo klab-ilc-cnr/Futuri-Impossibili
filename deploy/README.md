@@ -8,12 +8,7 @@ sulla VM `10.10.0.14`, raggiunta dal proxy klab tramite DNAT sul server host.
 Dalla macchina di sviluppo (dal checkout del branch `feat/base-path`):
 
 ```bash
-tar -czf futuri-impossibili.tgz \
-  --exclude=node_modules --exclude=.git --exclude=.serena \
-  --exclude=.wrangler --exclude=dist --exclude=.next --exclude=.vinext \
-  --exclude=examples --exclude=tests --exclude='tsconfig.tsbuildinfo' \
-  app public db worker build .openai next.config.ts vite.config.ts \
-  package.json package-lock.json tsconfig.json postcss.config.mjs drizzle.config.ts README.md
+tar -czf futuri-impossibili.tgz --exclude=node_modules --exclude=.git --exclude=.serena --exclude=.wrangler --exclude=dist --exclude=.next --exclude=.vinext --exclude=examples --exclude=tests --exclude='tsconfig.tsbuildinfo' app public db worker build .openai next.config.ts vite.config.ts package.json package-lock.json tsconfig.json postcss.config.mjs drizzle.config.ts README.md
 ```
 
 Copiare il tgz sulla VM (es. `scp`) in un percorso temporaneo.
