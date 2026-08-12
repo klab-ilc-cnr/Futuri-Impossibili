@@ -50,7 +50,9 @@ rc-service futuri-impossibili status
 rc-update add futuri-impossibili default
 ```
 
-Il servizio ascolta su `0.0.0.0:3001`; log su `/var/log/futuri-impossibili.log`.
+Il servizio ascolta su `0.0.0.0:3001`; log su `/opt/futuri-impossibili/futuri-impossibili.log`
+(directory di proprietà `futuri`: openrc apre il log come utente del servizio, quindi
+`/var/log` non è scrivibile per default).
 
 ## 3. Server host (NAT)
 

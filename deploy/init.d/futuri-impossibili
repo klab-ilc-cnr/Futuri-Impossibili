@@ -9,8 +9,8 @@ command_args="run start -- -H 0.0.0.0 -p 3001"
 command_user="futuri"
 command_background="yes"
 pidfile="/run/${RC_SVCNAME}.pid"
-output_log="/var/log/futuri-impossibili.log"
-error_log="/var/log/futuri-impossibili.log"
+output_log="/opt/futuri-impossibili/futuri-impossibili.log"
+error_log="/opt/futuri-impossibili/futuri-impossibili.log"
 
 start_stop_daemon_args="--wait 10"
 
