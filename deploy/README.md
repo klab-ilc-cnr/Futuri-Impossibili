@@ -11,7 +11,17 @@ Dalla macchina di sviluppo (dal checkout del branch `feat/base-path`):
 tar -czf futuri-impossibili.tgz --exclude=node_modules --exclude=.git --exclude=.serena --exclude=.wrangler --exclude=dist --exclude=.next --exclude=.vinext --exclude=examples --exclude=tests --exclude='tsconfig.tsbuildinfo' app public db worker build deploy .openai next.config.ts vite.config.ts package.json package-lock.json tsconfig.json postcss.config.mjs drizzle.config.ts README.md
 ```
 
-Copiare il tgz sulla VM (es. `scp`) in un percorso temporaneo.
+Verifica che il tgz contenga `deploy/` (serve per `post-build.sh` e `init.d/`) e i sorgenti:
+
+```bash
+tar -tzf futuri-impossibili.tgz | grep -E '^(deploy|app|next.config)' | head
+```
+
+Copia sulla VM (sostituisci l'utente se non sei root):
+
+```bash
+scp futuri-impossibili.tgz root@10.10.0.14:/tmp/
+```
 
 ## 2. VM target (Alpine, 10.10.0.14)
 
@@ -92,3 +102,33 @@ curl -sI https://klab.ilc.cnr.it/futuri-impossibili/ | head -1
 curl -sI https://klab.ilc.cnr.it/futuri-impossibili/_next/static/chunks/framework-*.js | head -1
 curl -s https://klab.ilc.cnr.it/futuri-impossibili/api/lexo/lexical-concepts | head -c 200
 ```
+
+## 5. Aggiornare un deploy già esistente
+
+Dalla macchina di sviluppo: crea il tgz (punto 1) e copialo sulla VM.
+
+```bash
+scp futuri-impossibili.tgz root@10.10.0.14:/tmp/
+```
+
+Sulla VM: estrai sopra la directory esistente. `node_modules`, `.env.local`, log e
+`dist/` NON vengono toccati (non sono nel tgz); vengono sovrascritti solo i sorgenti.
+
+```bash
+tar -xzf /tmp/futuri-impossibili.tgz -C /opt/futuri-impossibili
+chown -R futuri /opt/futuri-impossibili
+chgrp -R futuri /opt/futuri-impossibili
+
+su futuri -s /bin/sh -c 'cd /opt/futuri-impossibili && npm ci && npm run build:deploy'
+
+rc-service futuri-impossibili restart
+rc-service futuri-impossibili status
+```
+
+Note:
+- Se è cambiato `deploy/init.d/futuri-impossibili`, ricopialo in `/etc/init.d/` prima del restart:
+  `cp /opt/futuri-impossibili/deploy/init.d/futuri-impossibili /etc/init.d/futuri-impossibili`.
+- Se è cambiata la config klab (punto 4), aggiorna il VirtualHost su klab e ricarica Apache
+  (es. `apachectl graceful`).
+- `npm ci` ripristina `node_modules` dal lockfile (rimuove anche eventuali residui di
+  versioni precedenti), quindi riduce il rischio di dist/build incoerenti.
