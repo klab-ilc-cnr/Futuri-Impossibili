@@ -27,6 +27,14 @@ contattato SOLO tramite i proxy API in `app/api/lexo/*` (mai direttamente dal cl
 - `npm run build:deploy` — build + `deploy/post-build.sh` (sposta gli asset hashed da
   `dist/client/futuri-impossibili/_next` a `dist/client/_next`). **Da usare SEMPRE per i deploy**.
 - `npm run start` — server di produzione locale (porta 3000, `-p`/`-H` per cambiarla; serve `dist/`).
+  **Nota**: in `vinext start` gli asset `_next/static` sono serviti solo alla root, quindi il sito
+  va visto tramite il proxy locale (sotto), non direttamente sulla 3000.
+- `npm run start:proxy` — reverse-proxy locale (Node, `deploy/local-proxy.mjs`, porta 3001): riscrive
+  `/futuri-impossibili/_next/static/*` → `/_next/static/*` e inoltra tutto il resto a `vinext start`.
+  Replica le 2 regole Apache di klab. **Flusso per testare in locale**: `npm run build:deploy`,
+  `npm run start`, poi in un’altra shell `npm run start:proxy` e aprire
+  `http://localhost:3001/futuri-impossibili/`. Per usare il backend remoto su questa macchina:
+  `LEXO_SERVER_URL=http://192.168.92.24:14808/LexO-server npm run start`.
 - `npm run lint` — eslint: 0 errori; i 3 warning `<img>` in `page.tsx` sono accettati.
 - `npm test` — **si rompe per design**: i test del template puntano ad `app/_sites-preview/`
   (mai esistito in questo repo). Non "sistemarli".

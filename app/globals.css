@@ -534,3 +534,30 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
   .publication-content h3 { font-size: 19px; }
   .publication-venue { align-items: flex-start; }
 }
+
+.confirm-modal-overlay {
+  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center;
+  background: rgba(15, 36, 27, .42); padding: 20px; animation: fade-in .15s ease-out;
+}
+.confirm-modal {
+  width: min(420px, 100%); padding: 22px 24px; border-radius: 16px;
+  background: #fff; box-shadow: 0 24px 60px rgba(15, 43, 33, .28);
+  animation: rise .18s ease-out;
+}
+.confirm-modal-kicker {
+  margin: 0 0 6px; font-size: 9px; color: #a12f25; font-weight: 900; letter-spacing: .16em;
+}
+.confirm-modal h3 { margin: 0 0 10px; font: 21px Georgia, serif; }
+.confirm-modal > p { margin: 0; font-size: 11px; line-height: 1.55; color: var(--muted); }
+.confirm-modal-actions {
+  margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;
+}
+.confirm-modal-actions button {
+  border: 1px solid #dfe3dc; background: #fff; border-radius: 10px; padding: 9px 18px;
+  font-size: 11px; font-weight: 800; cursor: pointer;
+}
+.confirm-modal-actions button:hover:not(:disabled) { border-color: #97bda9; background: #f6faf8; }
+.confirm-modal-actions .confirm-modal-danger { border-color: #e0a89e; background: #a12f25; color: #fff; }
+.confirm-modal-actions .confirm-modal-danger:hover:not(:disabled) { border-color: #87271e; background: #8a281f; }
+.confirm-modal-actions button:disabled { opacity: .55; cursor: wait; }
+@keyframes fade-in { from { opacity: 0; } }

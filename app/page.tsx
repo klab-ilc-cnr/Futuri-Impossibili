@@ -959,9 +959,11 @@ export default function Home() {
   const [attestationSaving, setAttestationSaving] = useState(false);
   const [textLoading, setTextLoading] = useState(false);
   const [textError, setTextError] = useState("");
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
   const conceptSidebarRef = useRef<HTMLElement>(null);
   const annotationActionsRef = useRef<HTMLDivElement>(null);
+  const confirmDeleteRef = useRef<HTMLDivElement>(null);
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
@@ -1027,6 +1029,7 @@ export default function Home() {
   const resetSelectionFlow = useCallback(() => {
     window.getSelection()?.removeAllRanges();
     setSelection(null);
+    setConfirmDeleteOpen(false);
     setLexicalEntries([]);
     setLexicalEntriesError("");
     lexicalSenseTypesRequestIds.current = {};
@@ -1274,6 +1277,24 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [loadArchive]);
 
+  useEffect(() => {
+    if (!confirmDeleteOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    confirmDeleteRef.current
+      ?.querySelector<HTMLButtonElement>("[data-confirm-cancel]")
+      ?.focus();
+    return () => previousFocus?.focus();
+  }, [confirmDeleteOpen]);
+
+  useEffect(() => {
+    if (!confirmDeleteOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setConfirmDeleteOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [confirmDeleteOpen]);
+
   useEffect(() => () => {
     if (growlTimer.current) clearTimeout(growlTimer.current);
   }, []);
@@ -1347,6 +1368,7 @@ export default function Home() {
       }
       if (textRef.current?.contains(target) || annotationActionsRef.current?.contains(target)) return;
       if (conceptSelectionActive && conceptSidebarRef.current?.contains(target)) return;
+      if (confirmDeleteRef.current?.contains(target)) return;
       resetSelectionFlow();
     }
 
@@ -3009,7 +3031,7 @@ export default function Home() {
               </button>
               <button
                 className="annotation-eraser"
-                onClick={() => void requestAnnotationDeletion()}
+                onClick={() => setConfirmDeleteOpen(true)}
                 disabled={attestationSaving || editDirty}
                 aria-label="Elimina l’intera attestazione"
                 title="Elimina attestazione e concetti associati"
@@ -3018,6 +3040,45 @@ export default function Home() {
               </button>
             </>
           )}
+        </div>
+      )}
+      {confirmDeleteOpen && (
+        <div
+          ref={confirmDeleteRef}
+          className="confirm-modal-overlay"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setConfirmDeleteOpen(false);
+          }}
+        >
+          <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-delete-title">
+            <p className="confirm-modal-kicker">ELIMINAZIONE</p>
+            <h3 id="confirm-delete-title">Eliminare l’attestazione?</h3>
+            <p>
+              Verranno eliminate l’attestazione &quot;{selection?.text}&quot; e i concetti ad essa associati.
+              L’operazione non può essere annullata.
+            </p>
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                data-confirm-cancel
+                onClick={() => setConfirmDeleteOpen(false)}
+                disabled={attestationSaving}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="confirm-modal-danger"
+                onClick={() => {
+                  setConfirmDeleteOpen(false);
+                  void requestAnnotationDeletion();
+                }}
+                disabled={attestationSaving}
+              >
+                Elimina
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {growlMessage && (
