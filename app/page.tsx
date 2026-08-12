@@ -2674,7 +2674,6 @@ export default function Home() {
                         className={`concept-item ${isSelected ? "selected" : ""} ${!conceptSelectionActive ? "selection-disabled" : ""}`}
                       >
                         <div className="concept-main-row">
-                          <span className="concept-check">{isSelected ? "✓" : ""}</span>
                           {isEditing ? (
                             <input
                               className="concept-edit-input"
@@ -2700,6 +2699,7 @@ export default function Home() {
                               aria-disabled={!conceptSelectionActive || attestationSaving}
                               title="Doppio clic per modificare la label"
                             >
+                              <span className="concept-check" aria-hidden="true">{isSelected ? "✓" : ""}</span>
                               <span className="concept-label-copy">
                                 <strong>{concept.defaultLabel}</strong>
                                 <small className="concept-attestation">({concept.attestation})</small>
