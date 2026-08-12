@@ -17,10 +17,10 @@ Verifica che il tgz contenga `deploy/` (serve per `post-build.sh` e `init.d/`) e
 tar -tzf futuri-impossibili.tgz | grep -E '^(deploy|app|next.config)' | head
 ```
 
-Copia sulla VM (sostituisci l'utente se non sei root):
+Copia sulla VM (SSH mappato dal klabsrv, porta 14022 → 10.10.0.14:22):
 
 ```bash
-scp futuri-impossibili.tgz root@10.10.0.14:/tmp/
+scp -P 14022 futuri-impossibili.tgz 192.168.92.24:/tmp
 ```
 
 ## 2. VM target (Alpine, 10.10.0.14)
@@ -108,7 +108,7 @@ curl -s https://klab.ilc.cnr.it/futuri-impossibili/api/lexo/lexical-concepts | h
 Dalla macchina di sviluppo: crea il tgz (punto 1) e copialo sulla VM.
 
 ```bash
-scp futuri-impossibili.tgz root@10.10.0.14:/tmp/
+scp -P 14022 futuri-impossibili.tgz 192.168.92.24:/tmp
 ```
 
 Sulla VM: estrai sopra la directory esistente. `node_modules`, `.env.local`, log e
