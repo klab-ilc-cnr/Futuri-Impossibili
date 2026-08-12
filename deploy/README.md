@@ -17,12 +17,13 @@ Copiare il tgz sulla VM (es. `scp`) in un percorso temporaneo.
 
 ```bash
 apk add nodejs npm            # verificare: node --version (>= 22.13)
-adduser -S -D -s /bin/sh futuri
+addgroup -S futuri
+adduser -S -D -s /bin/sh -G futuri futuri
 mkdir -p /opt/futuri-impossibili
 tar -xzf /tmp/futuri-impossibili.tgz -C /opt/futuri-impossibili
-chown -R futuri:futuri /opt/futuri-impossibili
+chown -R futuri.futuri /opt/futuri-impossibili
 mkdir -p /opt/futuri-impossibili/.wrangler
-chown futuri:futuri /opt/futuri-impossibili/.wrangler
+chown futuri.futuri /opt/futuri-impossibili/.wrangler
 ```
 
 ### Env
