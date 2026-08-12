@@ -23,6 +23,9 @@ contattato SOLO tramite i proxy API in `app/api/lexo/*` (mai direttamente dal cl
   `node node_modules/esbuild/install.js`.
 - `npm run dev` — dev server (porta 3000, vedi output); l'app è su
   `http://localhost:3000/futuri-impossibili` (il basePath è attivo anche in dev).
+  **Nota**: `vinext dev` gira dentro workerd/miniflare, che NON riesce a raggiungere
+  IP privati come il LexO di test (`192.168.92.24:14808` — "Network connection lost").
+  Per testare le API contro il backend remoto usare `npm run start` + `start:proxy` (sotto).
 - `npm run build` — build di produzione (`vinext build` → `dist/`).
 - `npm run build:deploy` — build + `deploy/post-build.sh` (sposta gli asset hashed da
   `dist/client/futuri-impossibili/_next` a `dist/client/_next`). **Da usare SEMPRE per i deploy**.
