@@ -2226,136 +2226,195 @@ export default function Home() {
   }
 
   function renderAnnotatedRange(rangeStart: number, rangeEnd: number, keyPrefix: string) {
-    const chunks: React.ReactNode[] = [];
-    let cursor = rangeStart;
-    annotations.forEach((annotation, index) => {
+    const jobs = annotations.map((annotation, index) => {
       const isEditingAnnotation = selection?.mode === "edit"
         && annotation.start === (selection.sourceStart ?? selection.start)
         && annotation.end === (selection.sourceEnd ?? selection.end);
       const displayStart = isEditingAnnotation && locusEditing ? selection!.start : annotation.start;
       const displayEnd = isEditingAnnotation && locusEditing ? selection!.end : annotation.end;
-      const annotationStart = Math.max(rangeStart, displayStart);
-      const annotationEnd = Math.min(rangeEnd, displayEnd);
-      if (annotationStart >= annotationEnd) return;
-      if (annotationStart > cursor) {
-        chunks.push(
-          <span key={`${keyPrefix}-text-${cursor}`}>{text.slice(cursor, annotationStart)}</span>,
-        );
+      return {
+        annotation,
+        index,
+        isEditingAnnotation,
+        displayStart,
+        displayEnd,
+        s: Math.max(rangeStart, displayStart),
+        e: Math.min(rangeEnd, displayEnd),
+      };
+    }).filter((job) => job.s < job.e).sort((a, b) => a.s - b.s || a.e - b.e);
+
+    const bounds = Array.from(new Set(
+      jobs.flatMap((job) => [job.s, job.e]).concat([rangeStart, rangeEnd]),
+    )).sort((a, b) => a - b);
+
+    const chunks: React.ReactNode[] = [];
+    let cursor = rangeStart;
+    for (let i = 0; i < bounds.length - 1; i += 1) {
+      const segStart = bounds[i];
+      const segEnd = bounds[i + 1];
+      if (segStart >= segEnd) continue;
+      if (segStart > cursor) {
+        chunks.push(<span key={`${keyPrefix}-text-${cursor}`}>{text.slice(cursor, segStart)}</span>);
       }
-      chunks.push(
-        <mark
-          key={`${keyPrefix}-annotation-${annotationStart}-${index}`}
-          data-labels={annotation.label}
-          className={isEditingAnnotation
-            ? locusEditing ? "editing locus-editing" : "editing"
-            : undefined}
-          role="button"
-          tabIndex={0}
-          onMouseDown={(event) => {
-            if (!locusEditing) event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (locusEditing) return;
-            editAnnotation(annotation, event.currentTarget);
-          }}
-          onKeyDown={(event) => {
-            if (locusEditing) return;
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              editAnnotation(annotation, event.currentTarget);
-            }
-          }}
-          aria-label={`Modifica attestazione: ${annotation.label.replace(/\n/g, ", ")}`}
-          title="Modifica attestazione"
-        >
-          {isEditingAnnotation && locusEditing && annotationStart === displayStart && (
-            <span
-              className="locus-handle locus-handle-start"
-              role="slider"
-              tabIndex={0}
-              aria-label="Sposta l’inizio dell’evidenziazione"
-              aria-valuemin={0}
-              aria-valuemax={selection!.end - 1}
-              aria-valuenow={selection!.start}
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                locusDragEndpoint.current = "start";
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-                event.preventDefault();
-                event.stopPropagation();
-                nudgeLocusEndpoint("start", event.key === "ArrowLeft" ? -1 : 1);
-              }}
-            />
-          )}
-          {text.slice(annotationStart, annotationEnd)}
-          {isEditingAnnotation && locusEditing && annotationEnd === displayEnd && (
-            <span
-              className="locus-handle locus-handle-end"
-              role="slider"
-              tabIndex={0}
-              aria-label="Sposta la fine dell’evidenziazione"
-              aria-valuemin={selection!.start + 1}
-              aria-valuemax={text.length}
-              aria-valuenow={selection!.end}
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                locusDragEndpoint.current = "end";
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-                event.preventDefault();
-                event.stopPropagation();
-                nudgeLocusEndpoint("end", event.key === "ArrowLeft" ? -1 : 1);
-              }}
-            />
-          )}
-          <span className="attestation-tooltip" aria-hidden="true">
-            {(annotation.concepts.length
-              ? annotation.concepts
-              : annotation.label.split("\n").map((label, labelIndex) => ({
-                  attestationIri: "",
-                  observableIri: "",
-                  lexicalConcept: `fallback-${labelIndex}`,
-                  label,
-                  options: {
-                    relationType: "",
-                    polarity: "",
-                    definitionType: "",
-                    evidenceStatus: "nessuno",
-                    pragmaticUsage: "nessuno",
-                    note: "",
-                  } as ConceptAnnotationOptions,
-                }))).map((concept) => (
-              <span className="attestation-tooltip-row" key={concept.lexicalConcept}>
-                <span className="attestation-tooltip-label" data-label={concept.label} />
-                <span className="attestation-tooltip-icons">
-                  {concept.options.polarity && (
-                    <span className={`tooltip-polarity polarity-${concept.options.polarity}`}>
-                      <span className="sentiment-face tooltip-sentiment" />
-                    </span>
-                  )}
-                  {concept.options.definitionType && (
-                    <span className="tooltip-definition-icon">
-                      <DefinitionTypeIcon type={concept.options.definitionType} />
-                    </span>
-                  )}
-                </span>
-              </span>
-            ))}
-          </span>
-        </mark>,
-      );
-      cursor = annotationEnd;
-    });
+      const active = jobs.filter((job) => job.s <= segStart && job.e >= segEnd);
+      if (active.length === 0) {
+        chunks.push(<span key={`${keyPrefix}-text-${segStart}`}>{text.slice(segStart, segEnd)}</span>);
+      } else if (active.length === 1) {
+        chunks.push(renderAnnotationMark(active[0], segStart, segEnd, keyPrefix));
+      } else {
+        chunks.push(renderOverlapTrack(active, segStart, segEnd, keyPrefix));
+      }
+      cursor = segEnd;
+    }
     if (cursor < rangeEnd) {
       chunks.push(<span key={`${keyPrefix}-text-${cursor}`}>{text.slice(cursor, rangeEnd)}</span>);
     }
     return chunks;
+  }
+
+  function renderAnnotationMark(
+    job: { annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number },
+    segStart: number,
+    segEnd: number,
+    keyPrefix: string,
+  ) {
+    const { annotation, index, isEditingAnnotation, displayStart, displayEnd } = job;
+    const showStartHandle = isEditingAnnotation && segStart === displayStart;
+    const showEndHandle = isEditingAnnotation && segEnd === displayEnd;
+    return (
+      <mark
+        key={`${keyPrefix}-annotation-${segStart}-${index}`}
+        data-labels={annotation.label}
+        className={isEditingAnnotation
+          ? locusEditing ? "editing locus-editing" : "editing"
+          : undefined}
+        role="button"
+        tabIndex={0}
+        onMouseDown={(event) => {
+          if (!locusEditing) event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (locusEditing) return;
+          editAnnotation(annotation, event.currentTarget);
+        }}
+        onKeyDown={(event) => {
+          if (locusEditing) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            editAnnotation(annotation, event.currentTarget);
+          }
+        }}
+        aria-label={`Modifica attestazione: ${annotation.label.replace(/\n/g, ", ")}`}
+        title="Modifica attestazione"
+      >
+        {showStartHandle && renderLocusHandle("start")}
+        {text.slice(segStart, segEnd)}
+        {showEndHandle && renderLocusHandle("end")}
+        {renderAnnotationTooltip(annotation)}
+      </mark>
+    );
+  }
+
+  function renderOverlapTrack(
+    active: Array<{ annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number }>,
+    segStart: number,
+    segEnd: number,
+    keyPrefix: string,
+  ) {
+    const sorted = [...active].sort((a, b) => a.s - b.s || a.e - b.e);
+    const editingStart = sorted.some((job) => job.isEditingAnnotation && segStart === job.displayStart);
+    const editingEnd = sorted.some((job) => job.isEditingAnnotation && segEnd === job.displayEnd);
+    return (
+      <span key={`${keyPrefix}-overlap-${segStart}`} className="overlap-track">
+        <span className="overlap-text">
+          {editingStart && renderLocusHandle("start")}
+          {text.slice(segStart, segEnd)}
+          {editingEnd && renderLocusHandle("end")}
+        </span>
+        <span className="overlap-bars" aria-hidden="true">
+          {sorted.map((job) => (
+            <button
+              key={`${keyPrefix}-bar-${segStart}-${job.index}`}
+              type="button"
+              className="overlap-bar"
+              onClick={(event) => {
+                event.stopPropagation();
+                event.preventDefault();
+                editAnnotation(job.annotation, event.currentTarget);
+              }}
+              aria-label={`Modifica attestazione: ${job.annotation.label.replace(/\n/g, ", ")}`}
+              title={job.annotation.label}
+            />
+          ))}
+        </span>
+      </span>
+    );
+  }
+
+  function renderLocusHandle(kind: "start" | "end") {
+    const isStart = kind === "start";
+    return (
+      <span
+        className={`locus-handle ${isStart ? "locus-handle-start" : "locus-handle-end"}`}
+        role="slider"
+        tabIndex={0}
+        aria-label={isStart ? "Sposta l’inizio dell’evidenziazione" : "Sposta la fine dell’evidenziazione"}
+        aria-valuemin={isStart ? 0 : selection!.start + 1}
+        aria-valuemax={isStart ? selection!.end - 1 : text.length}
+        aria-valuenow={isStart ? selection!.start : selection!.end}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          locusDragEndpoint.current = isStart ? "start" : "end";
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          event.stopPropagation();
+          nudgeLocusEndpoint(isStart ? "start" : "end", event.key === "ArrowLeft" ? -1 : 1);
+        }}
+      />
+    );
+  }
+
+  function renderAnnotationTooltip(annotation: Annotation) {
+    return (
+      <span className="attestation-tooltip" aria-hidden="true">
+        {(annotation.concepts.length
+          ? annotation.concepts
+          : annotation.label.split("\n").map((label, labelIndex) => ({
+              attestationIri: "",
+              observableIri: "",
+              lexicalConcept: `fallback-${labelIndex}`,
+              label,
+              options: {
+                relationType: "",
+                polarity: "",
+                definitionType: "",
+                evidenceStatus: "nessuno",
+                pragmaticUsage: "nessuno",
+                note: "",
+              } as ConceptAnnotationOptions,
+            }))).map((concept) => (
+          <span className="attestation-tooltip-row" key={concept.lexicalConcept}>
+            <span className="attestation-tooltip-label" data-label={concept.label} />
+            <span className="attestation-tooltip-icons">
+              {concept.options.polarity && (
+                <span className={`tooltip-polarity polarity-${concept.options.polarity}`}>
+                  <span className="sentiment-face tooltip-sentiment" />
+                </span>
+              )}
+              {concept.options.definitionType && (
+                <span className="tooltip-definition-icon">
+                  <DefinitionTypeIcon type={concept.options.definitionType} />
+                </span>
+              )}
+            </span>
+          </span>
+        ))}
+      </span>
+    );
   }
 
   function renderAnnotatedText() {
