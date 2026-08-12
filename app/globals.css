@@ -187,7 +187,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .concept-option.active { border-color: #558b70; background: #e0f0e8; color: #234c39; box-shadow: inset 0 0 0 1px rgba(85,139,112,.12); }
 .polarity-options .concept-option { display: grid; min-height: 33px; place-items: center; padding: 3px; background: rgba(255,255,255,.56); }
 .polarity-options .concept-option.active { background: #e0f0e8; box-shadow: inset 0 0 0 1px rgba(85,139,112,.18), 0 2px 7px rgba(44,91,68,.12); }
-.sentiment-face { display: block; width: 26px; height: 26px; background-image: url("/sentiment.webp"); background-repeat: no-repeat; background-size: 137px 79px; }
+.sentiment-face { display: block; width: 26px; height: 26px; background-image: url("/futuri-impossibili/sentiment.webp"); background-repeat: no-repeat; background-size: 137px 79px; }
 .polarity-negative .sentiment-face { background-position: -14px -21px; }
 .polarity-neutral .sentiment-face { background-position: -56px -21px; }
 .polarity-positive .sentiment-face { background-position: -97px -21px; }

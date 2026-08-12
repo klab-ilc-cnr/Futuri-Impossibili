@@ -19,7 +19,9 @@ npm install
 npm run dev
 ```
 
-Poi visita <http://localhost:3000> nel browser.
+Poi visita <http://localhost:3000/futuri-impossibili> nel browser.
+
+L'app è servita sotto il base path `/futuri-impossibili` (configurabile override con `NEXT_PUBLIC_BASE_PATH` in `.env.local`).
 
 ## Requisiti
 

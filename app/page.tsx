@@ -125,14 +125,16 @@ const menuItems = [
   "Contatti",
 ];
 
-const textsEndpoint = "/api/lexo/texts";
-const textUploadEndpoint = "/api/lexo/texts/upload";
-const textBulkUploadEndpoint = "/api/lexo/texts/bulk";
-const conceptsEndpoint = "/api/lexo/lexical-concepts";
-const lexicalEntriesEndpoint = "/api/lexo/lexical-entries";
-const metadataEndpoint = "/api/lexo/metadata";
-const lexicalConceptEndpoint = "/api/lexo/lexical-concept";
-const attestationsEndpoint = "/api/lexo/attestations";
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
+
+const textsEndpoint = `${basePath}/api/lexo/texts`;
+const textUploadEndpoint = `${basePath}/api/lexo/texts/upload`;
+const textBulkUploadEndpoint = `${basePath}/api/lexo/texts/bulk`;
+const conceptsEndpoint = `${basePath}/api/lexo/lexical-concepts`;
+const lexicalEntriesEndpoint = `${basePath}/api/lexo/lexical-entries`;
+const metadataEndpoint = `${basePath}/api/lexo/metadata`;
+const lexicalConceptEndpoint = `${basePath}/api/lexo/lexical-concept`;
+const attestationsEndpoint = `${basePath}/api/lexo/attestations`;
 const dctTypeProperty = "http://purl.org/dc/terms/type";
 const legacyDctTypeProperty = "http://purl.org/dc/terms/";
 const conceptLabelProperty = "https://lexo.ilc.cnr.it#conceptLabel";
@@ -1045,7 +1047,7 @@ export default function Home() {
       const [canonicalResult, attestationsResult] = await Promise.allSettled([
         (async () => {
           const response = await fetch(
-            `/api/lexo/texts/${encodeURIComponent(interviewId)}/canonical`,
+            `${basePath}/api/lexo/texts/${encodeURIComponent(interviewId)}/canonical`,
             { headers: { Accept: "text/plain" }, cache: "no-store" },
           );
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -2363,7 +2365,7 @@ export default function Home() {
       <header className="site-header">
         <div className="brand">
           <div className="brand-image" aria-hidden="true">
-            <img src="/donCalabria-logo.png" alt="" />
+            <img src={`${basePath}/donCalabria-logo.png`} alt="" />
           </div>
           <div>
             <p className="eyebrow">Ricerca Linguistica e Innovazione Sociale</p>
@@ -2373,13 +2375,13 @@ export default function Home() {
         <div className="partner-logos" aria-label="Partner del progetto">
           <img
             className="partner-logo foundation-logo"
-            src="/logo-fondazione-rut.png"
+            src={`${basePath}/logo-fondazione-rut.png`}
             alt="Fondazione RUT"
           />
           <span className="partner-divider" aria-hidden="true" />
           <img
             className="partner-logo ilc-logo"
-            src="/logo-ilc.png"
+            src={`${basePath}/logo-ilc.png`}
             alt="Istituto di Linguistica Computazionale Antonio Zampolli"
           />
         </div>
