@@ -8,7 +8,7 @@ sulla VM `10.10.0.14`, raggiunta dal proxy klab tramite DNAT sul server host.
 Dalla macchina di sviluppo (dal checkout del branch `feat/base-path`):
 
 ```bash
-tar -czf futuri-impossibili.tgz --exclude=node_modules --exclude=.git --exclude=.serena --exclude=.wrangler --exclude=dist --exclude=.next --exclude=.vinext --exclude=examples --exclude=tests --exclude='tsconfig.tsbuildinfo' app public db worker build .openai next.config.ts vite.config.ts package.json package-lock.json tsconfig.json postcss.config.mjs drizzle.config.ts README.md
+tar -czf futuri-impossibili.tgz --exclude=node_modules --exclude=.git --exclude=.serena --exclude=.wrangler --exclude=dist --exclude=.next --exclude=.vinext --exclude=examples --exclude=tests --exclude='tsconfig.tsbuildinfo' app public db worker build deploy .openai next.config.ts vite.config.ts package.json package-lock.json tsconfig.json postcss.config.mjs drizzle.config.ts README.md
 ```
 
 Copiare il tgz sulla VM (es. `scp`) in un percorso temporaneo.
@@ -38,8 +38,13 @@ NEXT_PUBLIC_BASE_PATH=/futuri-impossibili
 
 ### Build (come utente futuri)
 ```bash
-su futuri -s /bin/sh -c 'cd /opt/futuri-impossibili && npm ci && npm run build'
+su futuri -s /bin/sh -c 'cd /opt/futuri-impossibili && npm ci && npm run build:deploy'
 ```
+
+`npm run build:deploy` = build + `deploy/post-build.sh`, che sposta gli asset hashed
+da `dist/client/futuri-impossibili/_next` a `dist/client/_next`. Necessario perché
+`vinext start` serve `/_next/static/*` solo alla root (non sotto il basePath); il
+proxy klab riscrive poi `/futuri-impossibili/_next/static/*` → `/_next/static/*`.
 
 ### Servizio openrc
 ```bash
@@ -76,4 +81,14 @@ Aggiungere `deploy/klab-futuri-impossibili.conf` nel VirtualHost HTTPS di
 del server host raggiungibile da klab. Richiede `mod_proxy` e `mod_proxy_http`
 (`a2enmod proxy proxy_http`).
 
-Tutto (pagina, API `/api/lexo/*`, asset, favicon) vive sotto `/futuri-impossibili/`.
+La config contiene due regole (entrambe sotto `/futuri-impossibili/`, nessun path
+esposto alla root di klab):
+- `/${futuri_deploy}/_next/static` → `/_next/static` (asset hashed: JS/CSS/fonts);
+- `/${futuri_deploy}/` → `${futuri_deploy}/` in passthrough (pagina, API `/api/lexo/*`, file pubblici).
+
+Verifica rapida dopo il deploy:
+```bash
+curl -sI https://klab.ilc.cnr.it/futuri-impossibili/ | head -1
+curl -sI https://klab.ilc.cnr.it/futuri-impossibili/_next/static/chunks/framework-*.js | head -1
+curl -s https://klab.ilc.cnr.it/futuri-impossibili/api/lexo/lexical-concepts | head -c 200
+```
