@@ -36,7 +36,11 @@ yarn-error.log*
 
 # typescript
 next-env.d.ts
+*.tsbuildinfo
 /dist/
 /.wrangler/
 /outputs/
 /work/
+
+# pacchetto di deploy generato
+/futuri-impossibili.tgz

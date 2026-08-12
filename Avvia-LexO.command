@@ -18,10 +18,10 @@ if [[ ! -d node_modules ]]; then
 fi
 
 echo ""
-echo "LexO sarà disponibile su http://localhost:3000"
+echo "LexO sarà disponibile su http://localhost:3000/futuri-impossibili"
 echo "Il browser si aprirà automaticamente."
 echo "Per arrestare il progetto, torna qui e premi Ctrl+C."
 echo ""
 
-(sleep 2 && open "http://localhost:3000") &
+(sleep 2 && open "http://localhost:3000/futuri-impossibili") &
 npm run dev

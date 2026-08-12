@@ -6,7 +6,7 @@ L'accesso alle interviste è basato su un dizionario narrativo creato sulla base
 ## Avvio rapido su macOS
 
 1. Fai doppio clic su `Avvia-LexO.command`.
-2. Attendi l’apertura automatica del browser su <http://localhost:3000>.
+2. Attendi l’apertura automatica del browser su <http://localhost:3000/futuri-impossibili>.
 3. Per arrestare l’applicazione, torna alla finestra Terminale e premi `Ctrl+C`.
 
 
