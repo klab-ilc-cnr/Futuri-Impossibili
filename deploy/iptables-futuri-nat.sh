@@ -1,11 +1,11 @@
 #!/bin/sh
 # NAT verso la VM Futuri (im)possibili - eseguire come root sul server host
-# Le variabili vanno adattate: KLAB_IP e' l'IP dal quale il proxy klab raggiunge il server.
+# Le variabili vanno adattate: KLAB_IP e' l'IP dal quale il proxy raggiunge il server.
 
-KLAB_IP=10.10.0.1
-VM_IP=10.10.0.14
+KLAB_IP=IP-DAL-PROXY
+VM_IP=IP-DELLA-VM
 VM_PORT=3001
-HOST_PORT=14301
+HOST_PORT=PORTA-NAT-HOST
 
 iptables -t nat -A PREROUTING -p tcp --dport "${HOST_PORT}" -s "${KLAB_IP}" -j DNAT --to-destination "${VM_IP}:${VM_PORT}"
 iptables -t nat -A POSTROUTING -p tcp -d "${VM_IP}" --dport "${VM_PORT}" -j MASQUERADE

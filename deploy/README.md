@@ -1,7 +1,7 @@
 # Deploy Futuri (im)possibili
 
 App servita sotto `/futuri-impossibili` (basePath) da un processo Node (`vinext start`)
-sulla VM `10.10.0.14`, raggiunta dal proxy klab tramite DNAT sul server host.
+sulla VM `{{VM_IP}}`, raggiunta dal proxy klab tramite DNAT sul server host.
 
 ## 1. Pacchetto sorgente
 
@@ -17,13 +17,13 @@ Verifica che il tgz contenga `deploy/` (serve per `post-build.sh` e `init.d/`) e
 tar -tzf futuri-impossibili.tgz | grep -E '^(deploy|app|next.config)' | head
 ```
 
-Copia sulla VM (SSH mappato dal klabsrv, porta 14022 → 10.10.0.14:22):
+Copia sulla VM (SSH mappato dal bastion, porta {{SSH_PORT}} → {{VM_IP}}:22):
 
 ```bash
-scp -P 14022 futuri-impossibili.tgz 192.168.92.24:/tmp
+scp -P {{SSH_PORT}} futuri-impossibili.tgz {{BASTION_IP}}:/tmp
 ```
 
-## 2. VM target (Alpine, 10.10.0.14)
+## 2. VM target (Alpine, {{VM_IP}})
 
 ```bash
 apk add nodejs npm            # verificare: node --version (>= 22.13)
@@ -87,7 +87,7 @@ rc-update add iptables default
 ## 4. Proxy klab (Apache)
 
 Aggiungere `deploy/klab-futuri-impossibili.conf` nel VirtualHost HTTPS di
-`klab.ilc.cnr.it`, sostituendo `IP-DEL-SERVER-RAGGIUNGIBILE-DA-KLAB` con l'indirizzo
+`{{PUBLIC_HOST}}`, sostituendo `IP-DEL-SERVER-RAGGIUNGIBILE-DA-PROXY` con l'indirizzo
 del server host raggiungibile da klab. Richiede `mod_proxy` e `mod_proxy_http`
 (`a2enmod proxy proxy_http`).
 
@@ -98,9 +98,9 @@ esposto alla root di klab):
 
 Verifica rapida dopo il deploy:
 ```bash
-curl -sI https://klab.ilc.cnr.it/futuri-impossibili/ | head -1
-curl -sI https://klab.ilc.cnr.it/futuri-impossibili/_next/static/chunks/framework-*.js | head -1
-curl -s https://klab.ilc.cnr.it/futuri-impossibili/api/lexo/lexical-concepts | head -c 200
+curl -sI https://{{PUBLIC_HOST}}/futuri-impossibili/ | head -1
+curl -sI https://{{PUBLIC_HOST}}/futuri-impossibili/_next/static/chunks/framework-*.js | head -1
+curl -s https://{{PUBLIC_HOST}}/futuri-impossibili/api/lexo/lexical-concepts | head -c 200
 ```
 
 ## 5. Aggiornare un deploy già esistente
@@ -108,7 +108,7 @@ curl -s https://klab.ilc.cnr.it/futuri-impossibili/api/lexo/lexical-concepts | h
 Dalla macchina di sviluppo: crea il tgz (punto 1) e copialo sulla VM.
 
 ```bash
-scp -P 14022 futuri-impossibili.tgz 192.168.92.24:/tmp
+scp -P {{SSH_PORT}} futuri-impossibili.tgz {{BASTION_IP}}:/tmp
 ```
 
 Sulla VM: estrai sopra la directory esistente. `node_modules`, `.env.local`, log e

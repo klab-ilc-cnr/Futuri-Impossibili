@@ -45,5 +45,8 @@ next-env.d.ts
 # pacchetto di deploy generato
 /futuri-impossibili.tgz
 
+# installazione istanziata con dati di rete reali (solo locale)
+/INSTALL.local.md
+
 # config locale dell'agente Serena (memories/config, mai nel repo)
 /.serena/

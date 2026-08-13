@@ -18,13 +18,16 @@ contattato SOLO tramite i proxy API in `app/api/lexo/*` (mai direttamente dal cl
 
 ## Comandi
 
+Guida operativa completa (installazione locale, build, proxy, deploy VM e Apache) in
+`INSTALL.md`; i dettagli della prima installazione sulla VM in `deploy/README.md`.
+
 - `npm ci` — installa (Node >= 22.13). Su macchine con npm 11 che blocca i postinstall,
   se mancano i binari nativi: `node node_modules/workerd/install.js` e
   `node node_modules/esbuild/install.js`.
 - `npm run dev` — dev server (porta 3000, vedi output); l'app è su
   `http://localhost:3000/futuri-impossibili` (il basePath è attivo anche in dev).
   **Nota**: `vinext dev` gira dentro workerd/miniflare, che NON riesce a raggiungere
-  IP privati come il LexO di test (`192.168.92.24:14808` — "Network connection lost").
+  IP privati come il LexO di test (`{{LEXO_TEST_URL}}` — "Network connection lost").
   Per testare le API contro il backend remoto usare `npm run start` + `start:proxy` (sotto).
 - `npm run build` — build di produzione (`vinext build` → `dist/`).
 - `npm run build:deploy` — build + `deploy/post-build.sh` (sposta gli asset hashed da
@@ -37,7 +40,7 @@ contattato SOLO tramite i proxy API in `app/api/lexo/*` (mai direttamente dal cl
   Replica le 2 regole Apache di klab. **Flusso per testare in locale**: `npm run build:deploy`,
   `npm run start`, poi in un’altra shell `npm run start:proxy` e aprire
   `http://localhost:3001/futuri-impossibili/`. Per usare il backend remoto su questa macchina:
-  `LEXO_SERVER_URL=http://192.168.92.24:14808/LexO-server npm run start`.
+  `LEXO_SERVER_URL={{LEXO_TEST_URL}} npm run start`.
 - `npm run lint` — eslint: 0 errori; i 3 warning `<img>` in `page.tsx` sono accettati.
 - `npm test` — **si rompe per design**: i test del template puntano ad `app/_sites-preview/`
   (mai esistito in questo repo). Non "sistemarli".
@@ -52,7 +55,7 @@ contattato SOLO tramite i proxy API in `app/api/lexo/*` (mai direttamente dal cl
   `LEXO_SERVER_URL` (default `http://localhost:8080/LexO-server`, senza slash finale) e, in
   alcune route, `LEXO_SERVER_AUTHORIZATION`. Client sempre con `cache: "no-store"`.
 - Backend di test raggiungibile dalla macchina di sviluppo:
-  `http://192.168.92.24:14808/LexO-server`. Sulla VM di produzione è su
+  `{{LEXO_TEST_URL}}`. Sulla VM di produzione è su
   `http://localhost:8080/LexO-server` (stessa macchina).
 
 ## basePath — regole obbligatorie
@@ -82,14 +85,14 @@ Il workaround è già in place (post-build move + rewrite del proxy klab). **Non
 
 ## Deploy (sintesi; runbook completo in `deploy/README.md`)
 
-- VM Alpine `10.10.0.14`: progetto in `/opt/futuri-impossibili`, utente `futuri`,
+- VM Alpine `{{VM_IP}}`: progetto in `/opt/futuri-impossibili`, utente `futuri`,
   servizio openrc `/etc/init.d/futuri-impossibili`, porta `3001` su `0.0.0.0`,
   log in `/opt/futuri-impossibili/futuri-impossibili.log`.
 - `.env.local` sulla VM: `LEXO_SERVER_URL=http://localhost:8080/LexO-server` e
   `NEXT_PUBLIC_BASE_PATH=/futuri-impossibili` (default comunque coperto).
-- NAT: klabsrv (`192.168.92.24`) con iptables `14301 → 10.10.0.14:3001` (source limitato
-  a klab); ssh/scp verso la VM via porta `14022` (es. `scp -P 14022 ... 192.168.92.24:/tmp`).
-- URL pubblica: `https://klab.ilc.cnr.it/futuri-impossibili` — Apache con 2 regole:
+- NAT: bastion (`{{BASTION_IP}}`) con iptables `{{NAT_PORT}} → {{VM_IP}}:3001` (source limitato
+  a klab); ssh/scp verso la VM via porta `{{SSH_PORT}}` (es. `scp -P {{SSH_PORT}} ... {{BASTION_IP}}:/tmp`).
+- URL pubblica: `https://{{PUBLIC_HOST}}/futuri-impossibili` — Apache con 2 regole:
   `/futuri-impossibili/_next/static` → `/_next/static` (asset) e `/futuri-impossibili/`
   in passthrough (pagina, API, file pubblici).
 - Aggiornamento: la VM NON ha git → tgz dei sorgenti (comando nel `deploy/README.md`),
