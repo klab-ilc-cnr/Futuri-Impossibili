@@ -973,6 +973,7 @@ export default function Home() {
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
   const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
+  const annotationPointerDown = useRef<{ x: number; y: number } | null>(null);
 
   const activeInterview = interviews.find((item) => item.id === activeInterviewId) ?? interviews[0];
   const text = activeInterview?.text ?? "";
@@ -1389,6 +1390,11 @@ export default function Home() {
         barEl.setAttribute("data-level", String(level));
         barEl.setAttribute("data-left", String(bar.left));
         barEl.setAttribute("data-right", String(bar.right));
+        barEl.setAttribute("role", "button");
+        barEl.setAttribute("tabindex", "0");
+        const label = annotations[index]?.label ?? "";
+        barEl.setAttribute("aria-label", label ? `Modifica attestazione: ${label}` : "Modifica attestazione");
+        barEl.title = label || "Modifica attestazione";
         barEl.style.left = `${bar.left}px`;
         barEl.style.top = `${bar.top + level * (barHeight + barGap)}px`;
         barEl.style.width = `${bar.right - bar.left}px`;
@@ -1396,7 +1402,7 @@ export default function Home() {
         placed.push({ left: bar.left, right: bar.right, level });
       }
     }
-  }, [textError, textLoading]);
+  }, [annotations, textError, textLoading]);
 
   useLayoutEffect(() => {
     drawOverlayBars();
@@ -1794,6 +1800,7 @@ export default function Home() {
       setDragging(false);
       return;
     }
+    annotationPointerDown.current = null;
     if (!dragging) return;
     setDragging(false);
     const root = textRef.current;
@@ -2427,11 +2434,16 @@ export default function Home() {
         role="button"
         tabIndex={0}
         onMouseDown={(event) => {
-          if (!locusEditing) event.stopPropagation();
+          annotationPointerDown.current = { x: event.clientX, y: event.clientY };
         }}
         onClick={(event) => {
           event.stopPropagation();
           if (locusEditing) return;
+          const pointerDown = annotationPointerDown.current;
+          annotationPointerDown.current = null;
+          if (pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5) {
+            return;
+          }
           editAnnotation(annotation, event.currentTarget);
         }}
         onKeyDown={(event) => {
@@ -2753,7 +2765,33 @@ export default function Home() {
                       ) : (
                         renderAnnotatedText()
                       )}
-                      <div className="annotation-layer" ref={annotationLayerRef} aria-hidden="true" />
+                      <div
+                        className="annotation-layer"
+                        ref={annotationLayerRef}
+                        onMouseDown={(event) => {
+                          if ((event.target as HTMLElement).closest(".bar")) event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          const barEl = (event.target as HTMLElement).closest(".bar");
+                          if (!barEl) return;
+                          event.stopPropagation();
+                          const index = Number((barEl as HTMLElement).getAttribute("data-annotation"));
+                          const annotation = annotations[index];
+                          if (!annotation) return;
+                          editAnnotation(annotation, barEl as HTMLElement);
+                        }}
+                        onKeyDown={(event) => {
+                          const barEl = (event.target as HTMLElement).closest(".bar");
+                          if (!barEl) return;
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const index = Number((barEl as HTMLElement).getAttribute("data-annotation"));
+                          const annotation = annotations[index];
+                          if (!annotation) return;
+                          editAnnotation(annotation, barEl as HTMLElement);
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
