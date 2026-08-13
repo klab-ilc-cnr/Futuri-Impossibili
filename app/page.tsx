@@ -1958,6 +1958,8 @@ export default function Home() {
         showError(`Attestazione creata, ma non è stato possibile aggiornare ${failedUpdates.length} concetti narrativi (${failedUpdates.join(" · ")}).`);
       } else if (annotationsReloadError) {
         showError(`Attestazione creata, ma non è stato possibile ricaricare l’elenco (${annotationsReloadError}).`);
+      } else {
+        showNotice("Annotazione salvata.");
       }
     } catch (error) {
       showError(`Errore durante il salvataggio dell’annotazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
@@ -3126,22 +3128,49 @@ export default function Home() {
                   )}
                 </div>
                 {conceptSelectionActive && (
-                  <div className={`concept-status ${annotationActionReady ? "ready" : ""}`}>
-                    <strong>{selectedConcepts.length}</strong>
-                    <span>{selectedConcepts.length === 1 ? "concetto selezionato" : "concetti selezionati"}</span>
-                    <small>
-                      {editingAttestation
-                        ? editDirty
-                          ? addedConceptsConfigured
-                            ? "Premi la penna per applicare le modifiche"
-                            : "Completa i dati obbligatori dei nuovi concetti"
-                          : "Modifica concetti o attributi"
-                        : selectedConceptsConfigured
-                          ? "Premi la penna per confermare"
-                        : selectedConcepts.length
-                          ? "Completa entrata, relazione e attributi di ogni concetto"
-                          : "Scegli almeno un concetto"}
-                    </small>
+                  <div
+                    className={`concept-status ${annotationActionReady ? "ready" : ""} ${attestationSaving ? "saving" : ""}`}
+                    role="button"
+                    tabIndex={annotationActionReady && !attestationSaving ? 0 : -1}
+                    aria-disabled={!annotationActionReady || attestationSaving}
+                    onClick={() => {
+                      if (!annotationActionReady || attestationSaving) return;
+                      if (editingAttestation) void requestAnnotationUpdate();
+                      else void addAnnotation();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      if (!annotationActionReady || attestationSaving) return;
+                      if (editingAttestation) void requestAnnotationUpdate();
+                      else void addAnnotation();
+                    }}
+                  >
+                    {attestationSaving ? (
+                      <span className="concept-status-spinner" role="status" aria-label="Salvataggio in corso" />
+                    ) : annotationActionReady ? (
+                      <span className="concept-status-save">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                          <path d="M17 21v-8H7v8M7 3v5h8" />
+                        </svg>
+                        <strong>{editingAttestation ? "Conferma modifiche" : "Salva annotazione"}</strong>
+                      </span>
+                    ) : (
+                      <>
+                        <strong>{selectedConcepts.length}</strong>
+                        <span>{selectedConcepts.length === 1 ? "concetto selezionato" : "concetti selezionati"}</span>
+                        <small>
+                          {editingAttestation
+                            ? editDirty
+                              ? "Completa i dati obbligatori dei nuovi concetti"
+                              : "Modifica concetti o attributi"
+                            : selectedConcepts.length
+                              ? "Completa entrata, relazione e attributi di ogni concetto"
+                              : "Scegli almeno un concetto"}
+                        </small>
+                      </>
+                    )}
                   </div>
                 )}
               </aside>
@@ -3231,26 +3260,12 @@ export default function Home() {
         )}
       </main>
 
-      {selection && activePage === 4 && (
+      {selection && editingAttestation && activePage === 4 && (
         <div
           ref={annotationActionsRef}
           className="annotation-actions"
           style={{ left: selection.actionX ?? selection.x, top: selection.y }}
         >
-          <button
-            className="annotation-trigger"
-            data-ready={annotationActionReady}
-            onClick={editingAttestation ? requestAnnotationUpdate : addAnnotation}
-            disabled={attestationSaving || !annotationActionReady}
-            aria-label={editingAttestation
-              ? annotationActionReady ? "Conferma modifiche all’attestazione" : "Modifica i concetti per attivare la penna"
-              : creationPayloadReady ? "Conferma l’annotazione" : "Completa entrata, relazione e attributi per ogni concetto"}
-            title={editingAttestation
-              ? annotationActionReady ? "Conferma modifiche" : "Modifica concetti o attributi"
-              : creationPayloadReady ? "Conferma l’annotazione" : "Seleziona i concetti e completa i relativi attributi"}
-          >
-            ✎
-          </button>
           {editingAttestation && (
             <>
               <button
