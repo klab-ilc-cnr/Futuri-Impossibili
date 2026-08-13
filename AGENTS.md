@@ -37,7 +37,7 @@ Guida operativa completa (installazione locale, build, proxy, deploy VM e Apache
   va visto tramite il proxy locale (sotto), non direttamente sulla 3000.
 - `npm run start:proxy` — reverse-proxy locale (Node, `deploy/local-proxy.mjs`, porta 3001): riscrive
   `/futuri-impossibili/_next/static/*` → `/_next/static/*` e inoltra tutto il resto a `vinext start`.
-  Replica le 2 regole Apache di klab. **Flusso per testare in locale**: `npm run build:deploy`,
+  Replica le 2 regole Apache del reverse proxy. **Flusso per testare in locale**: `npm run build:deploy`,
   `npm run start`, poi in un’altra shell `npm run start:proxy` e aprire
   `http://localhost:3001/futuri-impossibili/`. Per usare il backend remoto su questa macchina:
   `LEXO_SERVER_URL={{LEXO_TEST_URL}} npm run start`.
@@ -63,7 +63,7 @@ Guida operativa completa (installazione locale, build, proxy, deploy VM e Apache
 L'app gira sotto `/futuri-impossibili` (`next.config.ts`, default da `NEXT_PUBLIC_BASE_PATH`).
 **Bug upstream noto**: vinext (0.0.50 e 1.0.0-beta.5) NON serve gli asset sotto il basePath in
 `vinext start` — gli export `__basePath`/`__assetPrefix` non vengono emessi nel bundle.
-Il workaround è già in place (post-build move + rewrite del proxy klab). **Non cercare di
+Il workaround è già in place (post-build move + rewrite del reverse proxy). **Non cercare di
 "fixare" vinext**: aggiungere una regola nel proxy o nel post-build, non toccare i node_modules.
 
 - In `app/page.tsx` ogni URL client root-relative DEVE usare il prefisso `basePath`
@@ -91,7 +91,7 @@ Il workaround è già in place (post-build move + rewrite del proxy klab). **Non
 - `.env.local` sulla VM: `LEXO_SERVER_URL=http://localhost:8080/LexO-server` e
   `NEXT_PUBLIC_BASE_PATH=/futuri-impossibili` (default comunque coperto).
 - NAT: bastion (`{{BASTION_IP}}`) con iptables `{{NAT_PORT}} → {{VM_IP}}:3001` (source limitato
-  a klab); ssh/scp verso la VM via porta `{{SSH_PORT}}` (es. `scp -P {{SSH_PORT}} ... {{BASTION_IP}}:/tmp`).
+  al reverse proxy); ssh/scp verso la VM via porta `{{SSH_PORT}}` (es. `scp -P {{SSH_PORT}} ... {{BASTION_IP}}:/tmp`).
 - URL pubblica: `https://{{PUBLIC_HOST}}/futuri-impossibili` — Apache con 2 regole:
   `/futuri-impossibili/_next/static` → `/_next/static` (asset) e `/futuri-impossibili/`
   in passthrough (pagina, API, file pubblici).

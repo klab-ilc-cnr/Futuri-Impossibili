@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Proxy locale che replica le regole Apache di klab per il basePath.
+// Proxy locale che replica le regole Apache del reverse proxy per il basePath.
 // vinext serve /_next/static/* solo alla root: il proxy riscrive
 // /futuri-impossibili/_next/static/* -> /_next/static/* e inoltra tutto a
 // vinext start (upstream). Nessuna dipendenza esterna.

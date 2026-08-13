@@ -1,7 +1,7 @@
 # Deploy Futuri (im)possibili
 
 App servita sotto `/futuri-impossibili` (basePath) da un processo Node (`vinext start`)
-sulla VM `{{VM_IP}}`, raggiunta dal proxy klab tramite DNAT sul server host.
+sulla VM `{{VM_IP}}`, raggiunta dal reverse proxy tramite DNAT sul server host.
 
 ## 1. Pacchetto sorgente
 
@@ -54,7 +54,7 @@ su futuri -s /bin/sh -c 'cd /opt/futuri-impossibili && npm ci && npm run build:d
 `npm run build:deploy` = build + `deploy/post-build.sh`, che sposta gli asset hashed
 da `dist/client/futuri-impossibili/_next` a `dist/client/_next`. Necessario perché
 `vinext start` serve `/_next/static/*` solo alla root (non sotto il basePath); il
-proxy klab riscrive poi `/futuri-impossibili/_next/static/*` → `/_next/static/*`.
+reverse proxy riscrive poi `/futuri-impossibili/_next/static/*` → `/_next/static/*`.
 
 ### Servizio openrc
 ```bash
@@ -84,15 +84,15 @@ iptables-save > /etc/iptables/rules.v4
 rc-update add iptables default
 ```
 
-## 4. Proxy klab (Apache)
+## 4. Reverse proxy (Apache)
 
-Aggiungere `deploy/klab-futuri-impossibili.conf` nel VirtualHost HTTPS di
+Aggiungere `deploy/reverse-proxy-futuri-impossibili.conf` nel VirtualHost HTTPS di
 `{{PUBLIC_HOST}}`, sostituendo `IP-DEL-SERVER-RAGGIUNGIBILE-DA-PROXY` con l'indirizzo
-del server host raggiungibile da klab. Richiede `mod_proxy` e `mod_proxy_http`
+del server host raggiungibile dal reverse proxy. Richiede `mod_proxy` e `mod_proxy_http`
 (`a2enmod proxy proxy_http`).
 
 La config contiene due regole (entrambe sotto `/futuri-impossibili/`, nessun path
-esposto alla root di klab):
+esposto alla root del reverse proxy):
 - `/${futuri_deploy}/_next/static` → `/_next/static` (asset hashed: JS/CSS/fonts);
 - `/${futuri_deploy}/` → `${futuri_deploy}/` in passthrough (pagina, API `/api/lexo/*`, file pubblici).
 
@@ -128,7 +128,7 @@ rc-service futuri-impossibili status
 Note:
 - Se è cambiato `deploy/init.d/futuri-impossibili`, ricopialo in `/etc/init.d/` prima del restart:
   `cp /opt/futuri-impossibili/deploy/init.d/futuri-impossibili /etc/init.d/futuri-impossibili`.
-- Se è cambiata la config klab (punto 4), aggiorna il VirtualHost su klab e ricarica Apache
+- Se è cambiata la config del reverse proxy (punto 4), aggiorna il VirtualHost sul reverse proxy e ricarica Apache
   (es. `apachectl graceful`).
 - `npm ci` ripristina `node_modules` dal lockfile (rimuove anche eventuali residui di
   versioni precedenti), quindi riduce il rischio di dist/build incoerenti.

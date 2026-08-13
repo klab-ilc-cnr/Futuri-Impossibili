@@ -2,7 +2,7 @@
 # Post-build per il deploy: sposta gli asset hashed alla root di dist/client.
 # vinext serve /_next/static/* solo alla root (non sotto il basePath), quindi
 # i file vanno spostati da dist/client/<basePath>/_next a dist/client/_next.
-# Il proxy (klab) riscrive /futuri-impossibili/_next/static/* -> /_next/static/*.
+# Il proxy (reverse proxy) riscrive /futuri-impossibili/_next/static/* -> /_next/static/*.
 set -e
 
 SRC="dist/client/futuri-impossibili/_next"

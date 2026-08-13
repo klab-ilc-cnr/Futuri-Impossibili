@@ -8,6 +8,32 @@ sulla VM. Dettagli di prima installazione e configurazioni del server host in
 > concreti della propria rete è `INSTALL.local.md` (non tracciata in git — vedi sezione
 > "Variabili da istanziare").
 
+## Topologia di riferimento
+
+```
+[Browser] ──HTTPS──▶ [Reverse proxy (Apache)]
+                        │  ProxyPass /futuri-impossibili/*
+                        ▼
+                 [Server host (NAT)]
+                        │  DNAT: {{NAT_PORT}} → {{VM_IP}}:3001
+                        ▼
+                  [VM (vinext start :3001)]
+                        ▲
+                        │  scp via bastion (SSH {{SSH_PORT}})
+              [Macchina di sviluppo]
+```
+
+Ruoli (senza riferimenti alla rete specifica, vedi "Variabili da istanziare"):
+
+- **Reverse proxy (Apache)** — espone il sito in HTTPS su `https://{{PUBLIC_HOST}}/futuri-impossibili/`;
+  riscrive gli asset `/futuri-impossibili/_next/static/*` → `/_next/static/*` e inoltra il resto
+  (pagina, API `/api/lexo/*`, file pubblici) in passthrough.
+- **Server host (NAT)** — DNAT della porta host `{{NAT_PORT}}` verso `{{VM_IP}}:3001`
+  (source limitato al reverse proxy).
+- **VM (Alpine)** — servizio openrc, `vinext start` su `0.0.0.0:3001`, log in
+  `/opt/futuri-impossibili/futuri-impossibili.log`.
+- **Bastion (SSH)** — porta `{{SSH_PORT}}` verso la VM per `scp` del pacchetto di deploy.
+
 Stack: **Next.js 16 App Router eseguito su Vite** tramite **vinext** (`vinext build`/`vinext start`,
 NON `next build`). L'app gira sotto il basePath `/futuri-impossibili`. Il backend **LexO-server**
 è contattato SOLO tramite i proxy API in `app/api/lexo/*`.
@@ -154,7 +180,7 @@ Servizio: `rc-service futuri-impossibili start` + `rc-update add futuri-impossib
 
 Configurazione proxy del VirtualHost HTTPS del dominio pubblico; richiede `mod_proxy`,
 `mod_proxy_http` e `mod_rewrite` (`a2enmod proxy proxy_http rewrite`). Template pronto in
-`deploy/klab-futuri-impossibili.conf` da includere nel VirtualHost, sostituendo
+`deploy/reverse-proxy-futuri-impossibili.conf` da includere nel VirtualHost, sostituendo
 l'host del server raggiungibile dal proxy con la propria rete.
 
 Il file definisce (pagina + API in passthrough, asset riscritti alla root):
