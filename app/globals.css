@@ -258,11 +258,13 @@ main { height: calc(100vh - 176px); min-height: 520px; }
   pointer-events: auto; cursor: pointer;
 }
 .text-area .annotation-layer .bar:hover { background: rgba(138, 93, 18, .95); }
+.text-area .annotation-layer .bar.selected {
+  background: var(--green); height: 5px;
+}
 .text-area .overlap-text {
   position: relative; background: rgba(214, 158, 20, .55); color: inherit; padding: 2px 0;
   border-radius: 2px;
 }
-.text-area mark.editing { outline: 2px solid #4d876b; outline-offset: 3px; }
 .text-area mark.locus-editing {
   background: #b9dfca; box-shadow: 2px 0 #b9dfca, -2px 0 #b9dfca;
   cursor: text; touch-action: none;

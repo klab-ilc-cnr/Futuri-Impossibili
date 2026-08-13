@@ -960,6 +960,7 @@ export default function Home() {
   const [textLoading, setTextLoading] = useState(false);
   const [textError, setTextError] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [locusDragging, setLocusDragging] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
   const annotatedWrapRef = useRef<HTMLDivElement>(null);
   const annotationLayerRef = useRef<HTMLDivElement>(null);
@@ -1003,6 +1004,14 @@ export default function Home() {
     ));
   });
   const editingAttestation = selection?.mode === "edit";
+  const editingAnnotationIndex = useMemo(() => {
+    if (selection?.mode !== "edit") return -1;
+    const sourceStart = selection.sourceStart ?? selection.start;
+    const sourceEnd = selection.sourceEnd ?? selection.end;
+    return annotations.findIndex((annotation) =>
+      annotation.start === sourceStart && annotation.end === sourceEnd,
+    );
+  }, [annotations, selection]);
   const editDirty = removedList.length > 0 || addedList.length > 0 || Object.keys(updatedList).length > 0;
   const addedConceptsConfigured = addedList.every((lexicalConcept) => {
     const conceptSelection = conceptSelections[lexicalConcept];
@@ -1046,6 +1055,7 @@ export default function Home() {
     setAddedList([]);
     setUpdatedList({});
     setLocusEditing(false);
+    setLocusDragging(false);
   }, []);
 
   const loadCanonicalText = useCallback(async (interviewId: string) => {
@@ -1307,7 +1317,7 @@ export default function Home() {
 
   const [layerTick, setLayerTick] = useState(0);
 
-  const drawOverlayBars = useCallback((onlyIndex?: number) => {
+  const drawOverlayBars = useCallback((onlyIndex?: number, selectedIndex = -1) => {
     const wrap = annotatedWrapRef.current;
     const layer = annotationLayerRef.current;
     if (!wrap || !layer) return;
@@ -1384,7 +1394,7 @@ export default function Home() {
         let level = 0;
         while (placed.some((p) => p.level === level && p.left < bar.right && bar.left < p.right)) level++;
         const barEl = document.createElement("div");
-        barEl.className = "bar";
+        barEl.className = `bar${index === selectedIndex ? " selected" : ""}`;
         barEl.setAttribute("data-annotation", String(index));
         barEl.setAttribute("data-band", String(band));
         barEl.setAttribute("data-level", String(level));
@@ -1405,8 +1415,8 @@ export default function Home() {
   }, [annotations, textError, textLoading]);
 
   useLayoutEffect(() => {
-    drawOverlayBars();
-  }, [annotations, drawOverlayBars, layerTick, locusEditing, selection?.mode, text, textError, textLoading]);
+    drawOverlayBars(undefined, editingAnnotationIndex);
+  }, [annotations, drawOverlayBars, editingAnnotationIndex, layerTick, locusEditing, selection?.mode, text, textError, textLoading]);
 
   useEffect(() => {
     if (!locusEditing || selection?.mode !== "edit") return;
@@ -1418,7 +1428,7 @@ export default function Home() {
     let frame = 0;
     const schedule = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => drawOverlayBars(editingIndex));
+      frame = requestAnimationFrame(() => drawOverlayBars(editingIndex, editingIndex));
     };
     schedule();
     return () => cancelAnimationFrame(frame);
@@ -1484,6 +1494,7 @@ export default function Home() {
 
     function stopLocusDrag() {
       locusDragEndpoint.current = null;
+      setLocusDragging(false);
     }
 
     document.addEventListener("pointermove", moveLocusEndpoint);
@@ -2108,7 +2119,8 @@ export default function Home() {
     setRemovedList([]);
     setAddedList([]);
     setUpdatedList({});
-    setLocusEditing(false);
+    setLocusEditing(true);
+    setLocusDragging(false);
     setSelection({
       start: annotation.start,
       end: annotation.end,
@@ -2440,7 +2452,7 @@ export default function Home() {
         data-labels={annotation.label}
         data-annotation-index={index}
         className={isEditingAnnotation
-          ? locusEditing ? "editing locus-editing" : "editing"
+          ? locusDragging ? "editing locus-editing" : "editing"
           : undefined}
         role="button"
         tabIndex={0}
@@ -2515,6 +2527,7 @@ export default function Home() {
         onPointerDown={(event) => {
           event.preventDefault();
           event.stopPropagation();
+          setLocusDragging(true);
           locusDragEndpoint.current = isStart ? "start" : "end";
         }}
         onKeyDown={(event) => {
