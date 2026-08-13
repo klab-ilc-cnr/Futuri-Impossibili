@@ -240,7 +240,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
   position: absolute; inset: 0; overflow: visible; pointer-events: none;
 }
 .text-area .annotation-layer .bar {
-  position: absolute; height: 4px; border-radius: 2px; background: rgba(184, 138, 46, .85);
+  position: absolute; height: 3px; border-radius: 2px; background: rgba(184, 138, 46, .85);
 }
 .text-area .overlap-text {
   position: relative; background: rgba(214, 158, 20, .55); color: inherit; padding: 2px 0;

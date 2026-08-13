@@ -1306,74 +1306,117 @@ export default function Home() {
 
   const [layerTick, setLayerTick] = useState(0);
 
-  useLayoutEffect(() => {
+  const drawOverlayBars = useCallback((onlyIndex?: number) => {
     const wrap = annotatedWrapRef.current;
     const layer = annotationLayerRef.current;
-    if (!wrap || !layer || textLoading || textError) {
-      layer?.replaceChildren();
+    if (!wrap || !layer) return;
+    if (textLoading || textError) {
+      layer.replaceChildren();
       return;
     }
-
-    function findNodeAndOffset(root: Node, target: number): { node: Node; offset: number } | null {
-      if (target <= 0) return { node: root, offset: 0 };
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-      let node: Node | null = walker.nextNode();
-      let accumulated = 0;
-      while (node) {
-        const len = node.textContent?.length ?? 0;
-        if (accumulated + len >= target) {
-          return { node, offset: target - accumulated };
-        }
-        accumulated += len;
-        node = walker.nextNode();
-      }
-      return null;
-    }
-
-    const intervals = annotations.flatMap((annotation) => {
-      const isEditingAnnotation = selection?.mode === "edit"
-        && annotation.start === (selection.sourceStart ?? selection.start)
-        && annotation.end === (selection.sourceEnd ?? selection.end);
-      const start = isEditingAnnotation && locusEditing ? selection!.start : annotation.start;
-      const end = isEditingAnnotation && locusEditing ? selection!.end : annotation.end;
-      return end > start ? [{ start, end }] : [];
-    });
-
     const wrapRect = wrap.getBoundingClientRect();
-    const bars: Array<{ top: number; left: number; width: number }> = [];
-    for (const interval of intervals) {
-      const startPos = findNodeAndOffset(wrap, interval.start);
-      const endPos = findNodeAndOffset(wrap, interval.end);
-      if (!startPos || !endPos || !wrap.contains(startPos.node) || !wrap.contains(endPos.node)) continue;
-      const range = document.createRange();
-      range.setStart(startPos.node, Math.min(startPos.offset, startPos.node.textContent?.length ?? 0));
-      range.setEnd(endPos.node, Math.min(endPos.offset, endPos.node.textContent?.length ?? 0));
-      for (const rect of Array.from(range.getClientRects())) {
+    const barHeight = 3;
+    const barGap = 1;
+    const targetIndices = onlyIndex === undefined ? null : new Set([onlyIndex]);
+    if (targetIndices) {
+      for (const existing of Array.from(layer.children)) {
+        if (existing.getAttribute("data-annotation") === String(onlyIndex)) existing.remove();
+      }
+    } else {
+      layer.replaceChildren();
+    }
+
+    const pending = new Map<string, { left: number; right: number; top: number }[]>();
+    for (const el of wrap.querySelectorAll<HTMLElement>(
+      "mark[data-annotation-index], .overlap-text[data-annotations]",
+    )) {
+      const single = el.getAttribute("data-annotation-index");
+      const many = el.getAttribute("data-annotations");
+      const indices = single !== null
+        ? [Number(single)]
+        : many ? many.split(",").map(Number) : [];
+      if (indices.length === 0) continue;
+      for (const rect of Array.from(el.getClientRects())) {
         if (!rect || rect.width <= 0 || rect.height <= 0) continue;
-        bars.push({
-          top: rect.bottom - wrapRect.top,
-          left: rect.left - wrapRect.left,
-          width: rect.width,
-        });
+        for (const index of indices) {
+          if (targetIndices && !targetIndices.has(index)) continue;
+          const band = Math.round((rect.bottom - wrapRect.top) / 4);
+          const key = `${band}:${index}`;
+          const list = pending.get(key) ?? [];
+          list.push({
+            left: rect.left - wrapRect.left,
+            right: rect.right - wrapRect.left,
+            top: rect.bottom - wrapRect.top,
+          });
+          pending.set(key, list);
+        }
       }
     }
 
-    const barHeight = 4;
-    const barGap = 2;
-    const topLevels = new Map<number, number>();
-    layer.replaceChildren();
-    for (const bar of bars) {
-      const bandKey = Math.round(bar.top / 4);
-      const level = topLevels.get(bandKey) ?? 0;
-      topLevels.set(bandKey, level + 1);
-      const barEl = document.createElement("div");
-      barEl.className = "bar";
-      barEl.style.left = `${bar.left}px`;
-      barEl.style.top = `${bar.top + level * (barHeight + barGap)}px`;
-      barEl.style.width = `${bar.width}px`;
-      layer.appendChild(barEl);
+    const byBand = new Map<number, Map<number, { left: number; right: number; top: number }>>();
+    for (const [key, list] of pending) {
+      const separator = key.indexOf(":");
+      const band = Number(key.slice(0, separator));
+      const index = Number(key.slice(separator + 1));
+      const merged = list.reduce<{ left: number; right: number; top: number }>((acc, rect) => ({
+        left: Math.min(acc.left, rect.left),
+        right: Math.max(acc.right, rect.right),
+        top: acc.top,
+      }), { left: Infinity, right: -Infinity, top: list[0].top });
+      let indexMap = byBand.get(band);
+      if (!indexMap) {
+        indexMap = new Map();
+        byBand.set(band, indexMap);
+      }
+      indexMap.set(index, merged);
     }
-  }, [annotations, locusEditing, selection, text, textError, textLoading, layerTick]);
+
+    for (const [band, indexMap] of byBand) {
+      const existing = Array.from(layer.children).filter((el) => el.getAttribute("data-band") === String(band));
+      const placed = existing.map((el) => ({
+        left: Number(el.getAttribute("data-left") ?? 0),
+        right: Number(el.getAttribute("data-right") ?? 0),
+        level: Number(el.getAttribute("data-level") ?? 0),
+      }));
+      const entries = Array.from(indexMap.entries()).sort((a, b) => a[1].left - b[1].left);
+      for (const [index, bar] of entries) {
+        let level = 0;
+        while (placed.some((p) => p.level === level && p.left < bar.right && bar.left < p.right)) level++;
+        const barEl = document.createElement("div");
+        barEl.className = "bar";
+        barEl.setAttribute("data-annotation", String(index));
+        barEl.setAttribute("data-band", String(band));
+        barEl.setAttribute("data-level", String(level));
+        barEl.setAttribute("data-left", String(bar.left));
+        barEl.setAttribute("data-right", String(bar.right));
+        barEl.style.left = `${bar.left}px`;
+        barEl.style.top = `${bar.top + level * (barHeight + barGap)}px`;
+        barEl.style.width = `${bar.right - bar.left}px`;
+        layer.appendChild(barEl);
+        placed.push({ left: bar.left, right: bar.right, level });
+      }
+    }
+  }, [textError, textLoading]);
+
+  useLayoutEffect(() => {
+    drawOverlayBars();
+  }, [annotations, drawOverlayBars, layerTick, locusEditing, selection?.mode, text, textError, textLoading]);
+
+  useEffect(() => {
+    if (!locusEditing || selection?.mode !== "edit") return;
+    const editingIndex = annotations.findIndex((annotation) =>
+      annotation.start === (selection.sourceStart ?? selection.start)
+      && annotation.end === (selection.sourceEnd ?? selection.end),
+    );
+    if (editingIndex < 0) return;
+    let frame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => drawOverlayBars(editingIndex));
+    };
+    schedule();
+    return () => cancelAnimationFrame(frame);
+  }, [annotations, drawOverlayBars, locusEditing, selection]);
 
   useEffect(() => {
     const wrap = annotatedWrapRef.current;
@@ -1382,6 +1425,14 @@ export default function Home() {
     observer.observe(wrap);
     return () => observer.disconnect();
   }, [textLoading, textError]);
+
+  useEffect(() => {
+    let alive = true;
+    void document.fonts?.ready.then(() => {
+      if (alive) setLayerTick((tick) => tick + 1);
+    });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     function textOffsetAtPoint(clientX: number, clientY: number) {
@@ -2369,6 +2420,7 @@ export default function Home() {
       <mark
         key={`${keyPrefix}-annotation-${segStart}-${index}`}
         data-labels={annotation.label}
+        data-annotation-index={index}
         className={isEditingAnnotation
           ? locusEditing ? "editing locus-editing" : "editing"
           : undefined}
@@ -2409,7 +2461,11 @@ export default function Home() {
     const editingStart = active.some((job) => job.isEditingAnnotation && segStart === job.displayStart);
     const editingEnd = active.some((job) => job.isEditingAnnotation && segEnd === job.displayEnd);
     return (
-      <span key={`${keyPrefix}-overlap-${segStart}`} className="overlap-text">
+      <span
+        key={`${keyPrefix}-overlap-${segStart}`}
+        className="overlap-text"
+        data-annotations={active.map((job) => job.index).join(",")}
+      >
         {editingStart && renderLocusHandle("start")}
         {text.slice(segStart, segEnd)}
         {editingEnd && renderLocusHandle("end")}
