@@ -2073,6 +2073,16 @@ export default function Home() {
       : { relationType });
   }
 
+  function findAnnotationSegmentElement(index: number): HTMLElement | null {
+    const wrap = annotatedWrapRef.current;
+    if (!wrap) return null;
+    const mark = wrap.querySelector<HTMLElement>(`mark[data-annotation-index="${index}"]`);
+    if (mark) return mark;
+    const overlap = Array.from(wrap.querySelectorAll<HTMLElement>(".overlap-text"))
+      .find((el) => (el.getAttribute("data-annotations") ?? "").split(",").map(Number).includes(index));
+    return overlap ?? null;
+  }
+
   function editAnnotation(annotation: Annotation, target: HTMLElement) {
     if (attestationSaving) return;
     const rect = target.getBoundingClientRect();
@@ -2782,7 +2792,8 @@ export default function Home() {
                           const index = Number((barEl as HTMLElement).getAttribute("data-annotation"));
                           const annotation = annotations[index];
                           if (!annotation) return;
-                          editAnnotation(annotation, barEl as HTMLElement);
+                          const segmentEl = findAnnotationSegmentElement(index);
+                          editAnnotation(annotation, segmentEl ?? barEl as HTMLElement);
                         }}
                         onKeyDown={(event) => {
                           const barEl = (event.target as HTMLElement).closest(".bar");
@@ -2793,7 +2804,8 @@ export default function Home() {
                           const index = Number((barEl as HTMLElement).getAttribute("data-annotation"));
                           const annotation = annotations[index];
                           if (!annotation) return;
-                          editAnnotation(annotation, barEl as HTMLElement);
+                          const segmentEl = findAnnotationSegmentElement(index);
+                          editAnnotation(annotation, segmentEl ?? barEl as HTMLElement);
                         }}
                       />
                     </div>
