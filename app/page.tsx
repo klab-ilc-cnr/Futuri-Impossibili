@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 type SelectionInfo = {
   start: number;
@@ -145,7 +145,6 @@ const definitionTypeProperty = "https://lexo.ilc.cnr.it#definitionType";
 const evidenceStatusProperty = "https://lexo.ilc.cnr.it#evidenceStatus";
 const pragmaticUsageProperty = "https://lexo.ilc.cnr.it#pragmaticUsage";
 const skosNoteProperty = "http://www.w3.org/2004/02/skos/core#note";
-const overlapClusterMaxLength = 100;
 
 const polarityOptions: Array<{ value: ConceptPolarity; label: string }> = [
   { value: "negative", label: "Negative" },
@@ -962,6 +961,8 @@ export default function Home() {
   const [textError, setTextError] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
+  const annotatedWrapRef = useRef<HTMLDivElement>(null);
+  const annotationLayerRef = useRef<HTMLDivElement>(null);
   const conceptSidebarRef = useRef<HTMLElement>(null);
   const annotationActionsRef = useRef<HTMLDivElement>(null);
   const confirmDeleteRef = useRef<HTMLDivElement>(null);
@@ -976,7 +977,10 @@ export default function Home() {
   const activeInterview = interviews.find((item) => item.id === activeInterviewId) ?? interviews[0];
   const text = activeInterview?.text ?? "";
   const fileName = activeInterview?.name ?? "Nessuna intervista";
-  const annotations = activeInterview?.annotations ?? [];
+  const annotations = useMemo(
+    () => activeInterview?.annotations ?? [],
+    [activeInterview],
+  );
   const description = activeInterview?.description?.trim() ?? "";
   const normalizedInterviewQuery = searchQuery.trim().toLocaleLowerCase("it-IT");
   const filteredInterviews = normalizedInterviewQuery
@@ -1289,7 +1293,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!confirmDeleteOpen) return;
-    function onKeyDown(event: KeyboardEvent) {
+    function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") setConfirmDeleteOpen(false);
     }
     document.addEventListener("keydown", onKeyDown);
@@ -1299,6 +1303,85 @@ export default function Home() {
   useEffect(() => () => {
     if (growlTimer.current) clearTimeout(growlTimer.current);
   }, []);
+
+  const [layerTick, setLayerTick] = useState(0);
+
+  useLayoutEffect(() => {
+    const wrap = annotatedWrapRef.current;
+    const layer = annotationLayerRef.current;
+    if (!wrap || !layer || textLoading || textError) {
+      layer?.replaceChildren();
+      return;
+    }
+
+    function findNodeAndOffset(root: Node, target: number): { node: Node; offset: number } | null {
+      if (target <= 0) return { node: root, offset: 0 };
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node: Node | null = walker.nextNode();
+      let accumulated = 0;
+      while (node) {
+        const len = node.textContent?.length ?? 0;
+        if (accumulated + len >= target) {
+          return { node, offset: target - accumulated };
+        }
+        accumulated += len;
+        node = walker.nextNode();
+      }
+      return null;
+    }
+
+    const intervals = annotations.flatMap((annotation) => {
+      const isEditingAnnotation = selection?.mode === "edit"
+        && annotation.start === (selection.sourceStart ?? selection.start)
+        && annotation.end === (selection.sourceEnd ?? selection.end);
+      const start = isEditingAnnotation && locusEditing ? selection!.start : annotation.start;
+      const end = isEditingAnnotation && locusEditing ? selection!.end : annotation.end;
+      return end > start ? [{ start, end }] : [];
+    });
+
+    const wrapRect = wrap.getBoundingClientRect();
+    const bars: Array<{ top: number; left: number; width: number }> = [];
+    for (const interval of intervals) {
+      const startPos = findNodeAndOffset(wrap, interval.start);
+      const endPos = findNodeAndOffset(wrap, interval.end);
+      if (!startPos || !endPos || !wrap.contains(startPos.node) || !wrap.contains(endPos.node)) continue;
+      const range = document.createRange();
+      range.setStart(startPos.node, Math.min(startPos.offset, startPos.node.textContent?.length ?? 0));
+      range.setEnd(endPos.node, Math.min(endPos.offset, endPos.node.textContent?.length ?? 0));
+      for (const rect of Array.from(range.getClientRects())) {
+        if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+        bars.push({
+          top: rect.bottom - wrapRect.top,
+          left: rect.left - wrapRect.left,
+          width: rect.width,
+        });
+      }
+    }
+
+    const barHeight = 4;
+    const barGap = 2;
+    const topLevels = new Map<number, number>();
+    layer.replaceChildren();
+    for (const bar of bars) {
+      const bandKey = Math.round(bar.top / 4);
+      const level = topLevels.get(bandKey) ?? 0;
+      topLevels.set(bandKey, level + 1);
+      const barEl = document.createElement("div");
+      barEl.className = "bar";
+      barEl.style.left = `${bar.left}px`;
+      barEl.style.top = `${bar.top + level * (barHeight + barGap)}px`;
+      barEl.style.width = `${bar.width}px`;
+      layer.appendChild(barEl);
+    }
+  }, [annotations, locusEditing, selection, text, textError, textLoading, layerTick]);
+
+  useEffect(() => {
+    const wrap = annotatedWrapRef.current;
+    if (!wrap) return;
+    const observer = new ResizeObserver(() => setLayerTick((tick) => tick + 1));
+    observer.observe(wrap);
+    return () => observer.disconnect();
+  }, [textLoading, textError]);
 
   useEffect(() => {
     function textOffsetAtPoint(clientX: number, clientY: number) {
@@ -2244,26 +2327,6 @@ export default function Home() {
       };
     }).filter((job) => job.s < job.e).sort((a, b) => a.s - b.s || a.e - b.e);
 
-    const clusters: Array<{
-      start: number;
-      end: number;
-      jobs: Array<{ annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number; s: number; e: number }>;
-    }> = [];
-    for (const job of jobs) {
-      const last = clusters[clusters.length - 1];
-      if (last && job.s < last.end) {
-        last.end = Math.max(last.end, job.e);
-        last.jobs.push(job);
-      } else {
-        clusters.push({ start: job.s, end: job.e, jobs: [job] });
-      }
-    }
-    const clusterByStart = new Map(
-      clusters
-        .filter((cluster) => cluster.jobs.length > 1)
-        .map((cluster) => [cluster.start, cluster]),
-    );
-
     const bounds = Array.from(new Set(
       jobs.flatMap((job) => [job.s, job.e]).concat([rangeStart, rangeEnd]),
     )).sort((a, b) => a - b);
@@ -2274,27 +2337,18 @@ export default function Home() {
       const segStart = bounds[i];
       const segEnd = bounds[i + 1];
       if (segStart >= segEnd) continue;
-      if (segStart < cursor) continue;
       if (segStart > cursor) {
         chunks.push(<span key={`${keyPrefix}-text-${cursor}`}>{text.slice(cursor, segStart)}</span>);
-      }
-      const cluster = clusterByStart.get(segStart);
-      if (cluster && cluster.end - cluster.start <= overlapClusterMaxLength) {
-        chunks.push(renderOverlapCluster(cluster, keyPrefix));
-        cursor = cluster.end;
-        continue;
       }
       const active = jobs.filter((job) => job.s <= segStart && job.e >= segEnd);
       if (active.length === 0) {
         chunks.push(<span key={`${keyPrefix}-text-${segStart}`}>{text.slice(segStart, segEnd)}</span>);
-        cursor = segEnd;
       } else if (active.length === 1) {
         chunks.push(renderAnnotationMark(active[0], segStart, segEnd, keyPrefix));
-        cursor = segEnd;
       } else {
         chunks.push(renderOverlapTextSeg(active, segStart, segEnd, keyPrefix));
-        cursor = segEnd;
       }
+      cursor = segEnd;
     }
     if (cursor < rangeEnd) {
       chunks.push(<span key={`${keyPrefix}-text-${cursor}`}>{text.slice(cursor, rangeEnd)}</span>);
@@ -2343,69 +2397,6 @@ export default function Home() {
         {showEndHandle && renderLocusHandle("end")}
         {renderAnnotationTooltip(annotation)}
       </mark>
-    );
-  }
-
-  function renderClusterContents(
-    jobs: Array<{ annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number; s: number; e: number }>,
-    keyPrefix: string,
-  ): React.ReactNode[] {
-    const clusterBounds = Array.from(new Set(
-      jobs.flatMap((job) => [job.s, job.e]),
-    )).sort((a, b) => a - b);
-    const contents: React.ReactNode[] = [];
-    for (let i = 0; i < clusterBounds.length - 1; i += 1) {
-      const segStart = clusterBounds[i];
-      const segEnd = clusterBounds[i + 1];
-      if (segStart >= segEnd) continue;
-      const active = jobs.filter((job) => job.s <= segStart && job.e >= segEnd);
-      if (active.length === 1) {
-        contents.push(renderAnnotationMark(active[0], segStart, segEnd, keyPrefix));
-      } else {
-        contents.push(renderOverlapTextSeg(active, segStart, segEnd, keyPrefix));
-      }
-    }
-    return contents;
-  }
-
-  function renderOverlapCluster(
-    cluster: {
-      start: number;
-      end: number;
-      jobs: Array<{ annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number; s: number; e: number }>;
-    },
-    keyPrefix: string,
-  ) {
-    const { start, end, jobs } = cluster;
-    const contents = renderClusterContents(jobs, keyPrefix);
-    const totalLength = end - start;
-    const sortedJobs = [...jobs].sort((a, b) => a.s - b.s || a.e - b.e);
-    return (
-      <span key={`${keyPrefix}-cluster-${start}`} className="overlap-cluster">
-        <span className="overlap-cluster-text">{contents}</span>
-        <span className="overlap-track" role="list">
-          {sortedJobs.map((job) => {
-            const leftPercent = ((job.s - start) / totalLength) * 100;
-            const widthPercent = ((job.e - job.s) / totalLength) * 100;
-            return (
-              <span key={`${keyPrefix}-track-${job.index}`} className="overlap-track-row" role="listitem">
-                <button
-                  type="button"
-                  className="overlap-track-seg"
-                  style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    event.preventDefault();
-                    editAnnotation(job.annotation, event.currentTarget);
-                  }}
-                  aria-label={`Riga di annotazione: ${job.annotation.label.replace(/\n/g, ", ")}`}
-                  title={job.annotation.label}
-                />
-              </span>
-            );
-          })}
-        </span>
-      </span>
     );
   }
 
@@ -2689,22 +2680,25 @@ export default function Home() {
                     onMouseDown={() => setDragging(true)}
                     onMouseUp={captureSelection}
                   >
-                    {textLoading ? (
-                      <div className="text-loading" role="status" aria-live="polite">
-                        <span className="text-loading-spinner" aria-hidden="true" />
-                        <small>Caricamento intervista…</small>
-                      </div>
-                    ) : textError ? (
-                      <div className="text-error" role="alert">
-                        <strong>Testo non disponibile</strong>
-                        <span>{textError}</span>
-                        {activeInterview && (
-                          <button onClick={() => void selectInterview(activeInterview)}>Riprova</button>
-                        )}
-                      </div>
-                    ) : (
-                      renderAnnotatedText()
-                    )}
+                    <div className="annotated-text-wrap" ref={annotatedWrapRef}>
+                      {textLoading ? (
+                        <div className="text-loading" role="status" aria-live="polite">
+                          <span className="text-loading-spinner" aria-hidden="true" />
+                          <small>Caricamento intervista…</small>
+                        </div>
+                      ) : textError ? (
+                        <div className="text-error" role="alert">
+                          <strong>Testo non disponibile</strong>
+                          <span>{textError}</span>
+                          {activeInterview && (
+                            <button onClick={() => void selectInterview(activeInterview)}>Riprova</button>
+                          )}
+                        </div>
+                      ) : (
+                        renderAnnotatedText()
+                      )}
+                      <div className="annotation-layer" ref={annotationLayerRef} aria-hidden="true" />
+                    </div>
                   </div>
                 </div>
                 <div className="document-foot">
