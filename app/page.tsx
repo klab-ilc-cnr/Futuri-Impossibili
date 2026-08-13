@@ -145,6 +145,7 @@ const definitionTypeProperty = "https://lexo.ilc.cnr.it#definitionType";
 const evidenceStatusProperty = "https://lexo.ilc.cnr.it#evidenceStatus";
 const pragmaticUsageProperty = "https://lexo.ilc.cnr.it#pragmaticUsage";
 const skosNoteProperty = "http://www.w3.org/2004/02/skos/core#note";
+const overlapClusterMaxLength = 100;
 
 const polarityOptions: Array<{ value: ConceptPolarity; label: string }> = [
   { value: "negative", label: "Negative" },
@@ -2243,6 +2244,26 @@ export default function Home() {
       };
     }).filter((job) => job.s < job.e).sort((a, b) => a.s - b.s || a.e - b.e);
 
+    const clusters: Array<{
+      start: number;
+      end: number;
+      jobs: Array<{ annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number; s: number; e: number }>;
+    }> = [];
+    for (const job of jobs) {
+      const last = clusters[clusters.length - 1];
+      if (last && job.s < last.end) {
+        last.end = Math.max(last.end, job.e);
+        last.jobs.push(job);
+      } else {
+        clusters.push({ start: job.s, end: job.e, jobs: [job] });
+      }
+    }
+    const clusterByStart = new Map(
+      clusters
+        .filter((cluster) => cluster.jobs.length > 1)
+        .map((cluster) => [cluster.start, cluster]),
+    );
+
     const bounds = Array.from(new Set(
       jobs.flatMap((job) => [job.s, job.e]).concat([rangeStart, rangeEnd]),
     )).sort((a, b) => a - b);
@@ -2253,18 +2274,27 @@ export default function Home() {
       const segStart = bounds[i];
       const segEnd = bounds[i + 1];
       if (segStart >= segEnd) continue;
+      if (segStart < cursor) continue;
       if (segStart > cursor) {
         chunks.push(<span key={`${keyPrefix}-text-${cursor}`}>{text.slice(cursor, segStart)}</span>);
+      }
+      const cluster = clusterByStart.get(segStart);
+      if (cluster && cluster.end - cluster.start <= overlapClusterMaxLength) {
+        chunks.push(renderOverlapCluster(cluster, keyPrefix));
+        cursor = cluster.end;
+        continue;
       }
       const active = jobs.filter((job) => job.s <= segStart && job.e >= segEnd);
       if (active.length === 0) {
         chunks.push(<span key={`${keyPrefix}-text-${segStart}`}>{text.slice(segStart, segEnd)}</span>);
+        cursor = segEnd;
       } else if (active.length === 1) {
         chunks.push(renderAnnotationMark(active[0], segStart, segEnd, keyPrefix));
+        cursor = segEnd;
       } else {
-        chunks.push(renderOverlapTrack(active, segStart, segEnd, keyPrefix));
+        chunks.push(renderOverlapTextSeg(active, segStart, segEnd, keyPrefix));
+        cursor = segEnd;
       }
-      cursor = segEnd;
     }
     if (cursor < rangeEnd) {
       chunks.push(<span key={`${keyPrefix}-text-${cursor}`}>{text.slice(cursor, rangeEnd)}</span>);
@@ -2316,38 +2346,82 @@ export default function Home() {
     );
   }
 
-  function renderOverlapTrack(
-    active: Array<{ annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number }>,
+  function renderClusterContents(
+    jobs: Array<{ annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number; s: number; e: number }>,
+    keyPrefix: string,
+  ): React.ReactNode[] {
+    const clusterBounds = Array.from(new Set(
+      jobs.flatMap((job) => [job.s, job.e]),
+    )).sort((a, b) => a - b);
+    const contents: React.ReactNode[] = [];
+    for (let i = 0; i < clusterBounds.length - 1; i += 1) {
+      const segStart = clusterBounds[i];
+      const segEnd = clusterBounds[i + 1];
+      if (segStart >= segEnd) continue;
+      const active = jobs.filter((job) => job.s <= segStart && job.e >= segEnd);
+      if (active.length === 1) {
+        contents.push(renderAnnotationMark(active[0], segStart, segEnd, keyPrefix));
+      } else {
+        contents.push(renderOverlapTextSeg(active, segStart, segEnd, keyPrefix));
+      }
+    }
+    return contents;
+  }
+
+  function renderOverlapCluster(
+    cluster: {
+      start: number;
+      end: number;
+      jobs: Array<{ annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number; s: number; e: number }>;
+    },
+    keyPrefix: string,
+  ) {
+    const { start, end, jobs } = cluster;
+    const contents = renderClusterContents(jobs, keyPrefix);
+    const totalLength = end - start;
+    const sortedJobs = [...jobs].sort((a, b) => a.s - b.s || a.e - b.e);
+    return (
+      <span key={`${keyPrefix}-cluster-${start}`} className="overlap-cluster">
+        <span className="overlap-cluster-text">{contents}</span>
+        <span className="overlap-track" role="list">
+          {sortedJobs.map((job) => {
+            const leftPercent = ((job.s - start) / totalLength) * 100;
+            const widthPercent = ((job.e - job.s) / totalLength) * 100;
+            return (
+              <span key={`${keyPrefix}-track-${job.index}`} className="overlap-track-row" role="listitem">
+                <button
+                  type="button"
+                  className="overlap-track-seg"
+                  style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    editAnnotation(job.annotation, event.currentTarget);
+                  }}
+                  aria-label={`Riga di annotazione: ${job.annotation.label.replace(/\n/g, ", ")}`}
+                  title={job.annotation.label}
+                />
+              </span>
+            );
+          })}
+        </span>
+      </span>
+    );
+  }
+
+  function renderOverlapTextSeg(
+    active: Array<{ annotation: Annotation; index: number; isEditingAnnotation: boolean; displayStart: number; displayEnd: number; s: number; e: number }>,
     segStart: number,
     segEnd: number,
     keyPrefix: string,
   ) {
-    const sorted = [...active].sort((a, b) => a.s - b.s || a.e - b.e);
-    const editingStart = sorted.some((job) => job.isEditingAnnotation && segStart === job.displayStart);
-    const editingEnd = sorted.some((job) => job.isEditingAnnotation && segEnd === job.displayEnd);
+    const editingStart = active.some((job) => job.isEditingAnnotation && segStart === job.displayStart);
+    const editingEnd = active.some((job) => job.isEditingAnnotation && segEnd === job.displayEnd);
     return (
-      <span key={`${keyPrefix}-overlap-${segStart}`} className="overlap-track">
-        <span className="overlap-text">
-          {editingStart && renderLocusHandle("start")}
-          {text.slice(segStart, segEnd)}
-          {editingEnd && renderLocusHandle("end")}
-        </span>
-        <span className="overlap-bars" aria-hidden="true">
-          {sorted.map((job) => (
-            <button
-              key={`${keyPrefix}-bar-${segStart}-${job.index}`}
-              type="button"
-              className="overlap-bar"
-              onClick={(event) => {
-                event.stopPropagation();
-                event.preventDefault();
-                editAnnotation(job.annotation, event.currentTarget);
-              }}
-              aria-label={`Modifica attestazione: ${job.annotation.label.replace(/\n/g, ", ")}`}
-              title={job.annotation.label}
-            />
-          ))}
-        </span>
+      <span key={`${keyPrefix}-overlap-${segStart}`} className="overlap-text">
+        {editingStart && renderLocusHandle("start")}
+        {text.slice(segStart, segEnd)}
+        {editingEnd && renderLocusHandle("end")}
       </span>
     );
   }
