@@ -1800,7 +1800,6 @@ export default function Home() {
       setDragging(false);
       return;
     }
-    annotationPointerDown.current = null;
     if (!dragging) return;
     setDragging(false);
     const root = textRef.current;
@@ -2439,9 +2438,14 @@ export default function Home() {
         onClick={(event) => {
           event.stopPropagation();
           if (locusEditing) return;
+          const browserSelection = window.getSelection();
+          const hasActiveSelection = Boolean(
+            browserSelection && !browserSelection.isCollapsed && browserSelection.rangeCount > 0,
+          );
           const pointerDown = annotationPointerDown.current;
           annotationPointerDown.current = null;
-          if (pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5) {
+          if (hasActiveSelection
+            || (pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5)) {
             return;
           }
           editAnnotation(annotation, event.currentTarget);
