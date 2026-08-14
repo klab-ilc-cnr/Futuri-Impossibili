@@ -101,6 +101,37 @@ export async function POST(request: Request) {
   }
 }
 
+export async function DELETE(request: Request) {
+  try {
+    const requestUrl = new URL(request.url);
+    const id = requestUrl.searchParams.get("id")?.trim();
+    if (!id) {
+      return Response.json({ error: "Il parametro id è obbligatorio" }, { status: 400 });
+    }
+
+    const parameters = new URLSearchParams({ id: encodeURIComponent(id), recursive: "false" });
+    const response = await fetch(
+      `${lexoServerUrl}/service/delete/lexicalConcept?${parameters.toString()}`,
+      { headers: requestHeaders(request), cache: "no-store" },
+    );
+    const hasResponseBody = ![204, 205, 304].includes(response.status);
+    const responseBody = await response.text();
+
+    return new Response(hasResponseBody ? responseBody : null, {
+      status: response.status,
+      headers: { "Content-Type": response.headers.get("Content-Type") ?? "application/json" },
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        error: "LexO-server non raggiungibile",
+        detail: error instanceof Error ? error.message : "Errore sconosciuto",
+      },
+      { status: 502 },
+    );
+  }
+}
+
 export async function PATCH(request: Request) {
   try {
     const payload = await request.json() as LexicalConceptPayload;

@@ -125,6 +125,8 @@ const menuItems = [
   "Contatti",
 ];
 
+const appVersion = "0.5.0";
+
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
 const textsEndpoint = `${basePath}/api/lexo/texts`;
@@ -961,12 +963,19 @@ export default function Home() {
   const [textError, setTextError] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [locusDragging, setLocusDragging] = useState(false);
+  const [conceptFilter, setConceptFilter] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; concept: LexicalConcept } | null>(null);
+  const [conceptToDelete, setConceptToDelete] = useState<LexicalConcept | null>(null);
+  const [conceptDeleting, setConceptDeleting] = useState(false);
+  const conceptFilterClickTimer = useRef<number | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const annotatedWrapRef = useRef<HTMLDivElement>(null);
   const annotationLayerRef = useRef<HTMLDivElement>(null);
   const conceptSidebarRef = useRef<HTMLElement>(null);
   const annotationActionsRef = useRef<HTMLDivElement>(null);
   const confirmDeleteRef = useRef<HTMLDivElement>(null);
+  const conceptConfirmRef = useRef<HTMLDivElement>(null);
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
@@ -983,6 +992,17 @@ export default function Home() {
     () => activeInterview?.annotations ?? [],
     [activeInterview],
   );
+  const filteredAnnotations = useMemo(
+    () => conceptFilter
+      ? annotations.filter((annotation) =>
+          annotation.concepts.some((c) => c.lexicalConcept === conceptFilter),
+        )
+      : annotations,
+    [annotations, conceptFilter],
+  );
+  const filteredConceptLabel = conceptFilter
+    ? concepts.find((c) => c.lexicalConcept === conceptFilter)?.defaultLabel ?? ""
+    : "";
   const description = activeInterview?.description?.trim() ?? "";
   const normalizedInterviewQuery = searchQuery.trim().toLocaleLowerCase("it-IT");
   const filteredInterviews = normalizedInterviewQuery
@@ -1311,6 +1331,24 @@ export default function Home() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [confirmDeleteOpen]);
 
+  useEffect(() => {
+    if (!conceptToDelete) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    conceptConfirmRef.current
+      ?.querySelector<HTMLButtonElement>("[data-concept-confirm-cancel]")
+      ?.focus();
+    return () => previousFocus?.focus();
+  }, [conceptToDelete]);
+
+  useEffect(() => {
+    if (!conceptToDelete) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") setConceptToDelete(null);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [conceptToDelete]);
+
   useEffect(() => () => {
     if (growlTimer.current) clearTimeout(growlTimer.current);
   }, []);
@@ -1412,7 +1450,7 @@ export default function Home() {
         placed.push({ left: bar.left, right: bar.right, level });
       }
     }
-  }, [annotations, textError, textLoading]);
+  }, [annotations, conceptFilter, textError, textLoading]);
 
   useLayoutEffect(() => {
     drawOverlayBars(undefined, editingAnnotationIndex);
@@ -1548,6 +1586,37 @@ export default function Home() {
     };
   }, [attestationSaving, conceptSelectionActive, locusEditing, resetSelectionFlow, selection]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    function closeOnInteraction(event: Event) {
+      const target = event.target;
+      if (target instanceof Node && contextMenuRef.current?.contains(target)) return;
+      closeConceptContextMenu();
+    }
+    function closeOnKey(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") closeConceptContextMenu();
+    }
+    function closeOnScroll() {
+      closeConceptContextMenu();
+    }
+    document.addEventListener("pointerdown", closeOnInteraction);
+    document.addEventListener("scroll", closeOnScroll, true);
+    document.addEventListener("keydown", closeOnKey);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnInteraction);
+      document.removeEventListener("scroll", closeOnScroll, true);
+      document.removeEventListener("keydown", closeOnKey);
+    };
+  }, [contextMenu]);
+
+  function findConceptLabelConflict(label: string, excludeIri?: string) {
+    const normalized = label.trim().toLocaleLowerCase("it");
+    return concepts.find((c) =>
+      c.lexicalConcept !== excludeIri
+      && c.defaultLabel.trim().toLocaleLowerCase("it") === normalized,
+    );
+  }
+
   function cancelConceptCreation() {
     if (conceptCreating) return;
     setCreatingConcept(false);
@@ -1564,6 +1633,10 @@ export default function Home() {
   async function createConcept() {
     const label = newConceptLabel.trim();
     if (!label || conceptCreating) return;
+    if (findConceptLabelConflict(label)) {
+      showError(`Esiste già un concetto chiamato “${label}”.`);
+      return;
+    }
 
     setConceptCreating(true);
     try {
@@ -1608,6 +1681,10 @@ export default function Home() {
     if (!target || target === concept.defaultLabel) {
       setEditingConceptUrl("");
       setEditedConceptLabel("");
+      return;
+    }
+    if (findConceptLabelConflict(target, concept.lexicalConcept)) {
+      showError(`Esiste già un concetto chiamato “${target}”.`);
       return;
     }
 
@@ -1691,12 +1768,98 @@ export default function Home() {
     }
   }
 
+  async function deleteConcept(concept: LexicalConcept) {
+    if (conceptDeleting) return;
+    const usedInAnnotations = interviews.some((interview) =>
+      interview.annotations.some((annotation) =>
+        annotation.concepts.some((c) => c.lexicalConcept === concept.lexicalConcept),
+      ),
+    );
+    if (concept.attestation > 0 || usedInAnnotations) {
+      setConceptToDelete(null);
+      showError(`Il concetto “${concept.defaultLabel}” è usato e non può essere eliminato.`);
+      return;
+    }
+
+    setConceptDeleting(true);
+    try {
+      const parameters = new URLSearchParams({ id: concept.lexicalConcept });
+      const response = await fetch(`${lexicalConceptEndpoint}?${parameters.toString()}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      const body = await response.text();
+      let payload: unknown = body;
+      try {
+        payload = JSON.parse(body) as unknown;
+      } catch {
+        // La validazione successiva gestisce anche eventuali timestamp testuali.
+      }
+      if (!response.ok || !containsTimestamp(payload)) {
+        throw new Error(response.ok
+          ? "LexO-server non ha restituito un timestamp"
+          : body.trim() || `HTTP ${response.status}`);
+      }
+
+      setConceptToDelete(null);
+      setConcepts((current) => current.filter((item) => item.lexicalConcept !== concept.lexicalConcept));
+      setConceptFilter((current) => current === concept.lexicalConcept ? null : current);
+      setSelectedConcepts((current) => current.filter((item) => item !== concept.lexicalConcept));
+      setConceptSelections((current) => {
+        const next = { ...current };
+        delete next[concept.lexicalConcept];
+        return next;
+      });
+      showNotice(`Concetto “${concept.defaultLabel}” eliminato.`);
+    } catch (error) {
+      setConceptToDelete(null);
+      showError(`Il concetto non è stato eliminato: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+    } finally {
+      setConceptDeleting(false);
+    }
+  }
+
+  function handleConceptLabelClick(concept: LexicalConcept) {
+    if (conceptSelectionActive) {
+      toggleConcept(concept.lexicalConcept);
+      return;
+    }
+    if (conceptFilterClickTimer.current) window.clearTimeout(conceptFilterClickTimer.current);
+    conceptFilterClickTimer.current = window.setTimeout(() => {
+      conceptFilterClickTimer.current = null;
+      setConceptFilter((current) => current === concept.lexicalConcept ? null : concept.lexicalConcept);
+    }, 250);
+  }
+
+  function handleConceptLabelDoubleClick(concept: LexicalConcept) {
+    if (conceptFilterClickTimer.current) {
+      window.clearTimeout(conceptFilterClickTimer.current);
+      conceptFilterClickTimer.current = null;
+    }
+    startEditingConcept(concept);
+  }
+
+  function openConceptContextMenu(event: React.MouseEvent, concept: LexicalConcept) {
+    if (conceptSelectionActive) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeConceptContextMenu();
+    setContextMenu({ x: event.clientX, y: event.clientY, concept });
+  }
+
+  function closeConceptContextMenu() {
+    setContextMenu(null);
+  }
+
   async function selectInterview(interview: Interview) {
     if (attestationSaving || uploadLoading) return;
     activeInterviewIdRef.current = interview.id;
     setActiveInterviewId(interview.id);
     resetSelectionFlow();
     setTextError("");
+    setConceptFilter(null);
+    closeConceptContextMenu();
 
     if (interview.source !== "server") {
       textRequestId.current += 1;
@@ -2411,7 +2574,9 @@ export default function Home() {
         s: Math.max(rangeStart, displayStart),
         e: Math.min(rangeEnd, displayEnd),
       };
-    }).filter((job) => job.s < job.e).sort((a, b) => a.s - b.s || a.e - b.e);
+    }).filter((job) => job.s < job.e && (
+      !conceptFilter || job.annotation.concepts.some((c) => c.lexicalConcept === conceptFilter)
+    )).sort((a, b) => a.s - b.s || a.e - b.e);
 
     const bounds = Array.from(new Set(
       jobs.flatMap((job) => [job.s, job.e]).concat([rangeStart, rangeEnd]),
@@ -2653,6 +2818,7 @@ export default function Home() {
             {index === 4 && <span className="nav-lock" aria-hidden="true">🔒</span>}
           </button>
         ))}
+        <span className="main-nav-version" title={`Versione dell’interfaccia ${appVersion}`}>v{appVersion}</span>
       </nav>
 
       <main>
@@ -2847,7 +3013,24 @@ export default function Home() {
                         ? "Modalità modifica attestazione"
                         : "Seleziona una porzione di testo con il mouse"}</span>
                   )}
-                  <div className="legend"><span /> {annotations.length} annotazioni</div>
+                  <div className="legend">
+                    <span />
+                    {conceptFilter
+                      ? `${filteredAnnotations.length} di ${annotations.length} annotazioni · Concetto`
+                      : `${annotations.length} annotazioni`}
+                    {conceptFilter && (
+                      <button
+                        type="button"
+                        className="concept-filter-chip"
+                        onClick={() => setConceptFilter(null)}
+                        title="Rimuovi il filtro concetto"
+                        aria-label="Rimuovi il filtro concetto"
+                      >
+                        <strong>{filteredConceptLabel}</strong>
+                        <span aria-hidden="true">✕</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2928,17 +3111,38 @@ export default function Home() {
                     <div className="concept-item concept-new-item">
                       <div className="concept-main-row">
                         <span className="concept-new-mark" aria-hidden="true">+</span>
-                        <input
-                          className="concept-create-input"
-                          value={newConceptLabel}
-                          onChange={(event) => setNewConceptLabel(event.target.value)}
-                          onKeyDown={handleConceptCreationKeyDown}
-                          onBlur={cancelConceptCreation}
-                          disabled={conceptCreating}
-                          placeholder="Scrivi il nome del concetto"
-                          aria-label="Nome del nuovo lexical concept"
-                          autoFocus
-                        />
+                        <div className="concept-edit-row">
+                          <input
+                            className="concept-create-input"
+                            value={newConceptLabel}
+                            onChange={(event) => setNewConceptLabel(event.target.value)}
+                            onKeyDown={handleConceptCreationKeyDown}
+                            disabled={conceptCreating}
+                            placeholder="Scrivi il nome del concetto"
+                            aria-label="Nome del nuovo lexical concept"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            className="concept-edit-confirm"
+                            onClick={() => void createConcept()}
+                            disabled={conceptCreating}
+                            aria-label="Conferma creazione"
+                            title="Conferma creazione"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            className="concept-edit-cancel"
+                            onClick={cancelConceptCreation}
+                            disabled={conceptCreating}
+                            aria-label="Annulla creazione"
+                            title="Annulla creazione"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2954,35 +3158,59 @@ export default function Home() {
                     return (
                       <div
                         key={concept.lexicalConcept}
-                        className={`concept-item ${isSelected ? "selected" : ""} ${!conceptSelectionActive ? "selection-disabled" : ""}`}
+                        className={`concept-item ${isSelected ? "selected" : ""} ${!conceptSelectionActive ? "selection-disabled" : ""} ${conceptFilter === concept.lexicalConcept ? "filter-active" : ""}`}
+                        onContextMenu={(event) => openConceptContextMenu(event, concept)}
                       >
                         <div className="concept-main-row">
                           {isEditing ? (
-                            <input
-                              className="concept-edit-input"
-                              value={editedConceptLabel}
-                              onChange={(event) => setEditedConceptLabel(event.target.value)}
-                              onKeyDown={(event) => handleConceptEditKeyDown(event, concept)}
-                              onBlur={() => {
-                                if (!isSaving) {
+                            <div className="concept-edit-row">
+                              <input
+                                className="concept-edit-input"
+                                value={editedConceptLabel}
+                                onChange={(event) => setEditedConceptLabel(event.target.value)}
+                                onKeyDown={(event) => handleConceptEditKeyDown(event, concept)}
+                                disabled={isSaving}
+                                aria-label={`Modifica ${concept.defaultLabel}`}
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                className="concept-edit-confirm"
+                                onClick={() => void saveConceptLabel(concept)}
+                                disabled={isSaving}
+                                aria-label="Conferma rinomina"
+                                title="Conferma rinomina"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                className="concept-edit-cancel"
+                                onClick={() => {
                                   setEditingConceptUrl("");
                                   setEditedConceptLabel("");
-                                }
-                              }}
-                              disabled={isSaving}
-                              aria-label={`Modifica ${concept.defaultLabel}`}
-                              autoFocus
-                            />
+                                }}
+                                disabled={isSaving}
+                                aria-label="Annulla rinomina"
+                                title="Annulla rinomina"
+                              >
+                                ✕
+                              </button>
+                            </div>
                           ) : (
                             <button
                               className="concept-label-button"
-                              onClick={() => toggleConcept(concept.lexicalConcept)}
-                              onDoubleClick={() => startEditingConcept(concept)}
+                              onClick={() => handleConceptLabelClick(concept)}
+                              onDoubleClick={() => handleConceptLabelDoubleClick(concept)}
                               aria-pressed={isSelected}
-                              aria-disabled={!conceptSelectionActive || attestationSaving}
-                              title="Doppio clic per modificare la label"
+                              aria-disabled={attestationSaving}
+                              title={conceptSelectionActive
+                                ? "Clic per selezionare il concetto"
+                                : "Clic per filtrare le annotazioni per concetto"}
                             >
-                              <span className="concept-check" aria-hidden="true">{isSelected ? "✓" : ""}</span>
+                              <span className="concept-check" aria-hidden="true">
+                                {isSelected ? "✓" : conceptFilter === concept.lexicalConcept ? "•" : ""}
+                              </span>
                               <span className="concept-label-copy">
                                 <strong>{concept.defaultLabel}</strong>
                                 <small className="concept-attestation">({concept.attestation})</small>
@@ -3348,6 +3576,62 @@ export default function Home() {
                   void requestAnnotationDeletion();
                 }}
                 disabled={attestationSaving}
+              >
+                Elimina
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="concept-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+          aria-label="Menu concetto"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const concept = contextMenu.concept;
+              closeConceptContextMenu();
+              setConceptToDelete(concept);
+            }}
+          >
+            Elimina
+          </button>
+        </div>
+      )}
+      {conceptToDelete && (
+        <div
+          ref={conceptConfirmRef}
+          className="confirm-modal-overlay"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target && !conceptDeleting) setConceptToDelete(null);
+          }}
+        >
+          <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="concept-delete-title">
+            <p className="confirm-modal-kicker">ELIMINAZIONE</p>
+            <h3 id="concept-delete-title">Eliminare il concetto &quot;{conceptToDelete.defaultLabel}&quot;?</h3>
+            <p>
+              Il concetto verrà rimosso dal repertorio. L’operazione non può essere annullata.
+            </p>
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                data-concept-confirm-cancel
+                onClick={() => setConceptToDelete(null)}
+                disabled={conceptDeleting}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="confirm-modal-danger"
+                onClick={() => void deleteConcept(conceptToDelete)}
+                disabled={conceptDeleting}
               >
                 Elimina
               </button>

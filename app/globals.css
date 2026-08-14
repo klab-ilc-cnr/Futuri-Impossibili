@@ -72,6 +72,7 @@ button { color: inherit; }
 .main-nav button:hover { color: #fff; background: rgba(255,255,255,.05); }
 .main-nav button.active { color: #fff; }
 .main-nav button.active::after { content: ""; position: absolute; left: 22px; right: 22px; bottom: 0; height: 3px; background: #86d2ae; border-radius: 5px 5px 0 0; }
+.main-nav-version { margin-left: auto; align-self: center; flex: none; color: rgba(255,255,255,.45); font-size: 11px; font-weight: 600; letter-spacing: .08em; white-space: nowrap; padding-right: 4px; }
 .nav-lock {
   display: inline-grid; place-items: center; width: 19px; height: 19px; margin-left: -3px;
   border: 1px solid rgba(255,255,255,.17); border-radius: 6px; background: rgba(255,255,255,.08);
@@ -155,6 +156,21 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .concept-create-input:disabled { cursor: wait; opacity: .65; }
 .concept-edit-input { flex: 1; min-width: 0; height: 30px; border: 1px solid #79a991; border-radius: 7px; outline: 0; padding: 0 8px; background: #fff; color: var(--ink); font-size: 10px; font-weight: 800; box-shadow: 0 0 0 3px rgba(121,169,145,.12); }
 .concept-edit-input:disabled { cursor: wait; opacity: .65; }
+.concept-edit-row { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.concept-edit-confirm, .concept-edit-cancel { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid #b9cbc2; border-radius: 7px; background: #fff; color: #2f654c; font-size: 13px; font-weight: 900; cursor: pointer; transition: background .15s, border-color .15s; }
+.concept-edit-confirm:hover { background: #e7f3ed; border-color: #8db9a3; }
+.concept-edit-cancel { color: #a76159; }
+.concept-edit-cancel:hover { background: #fbeae7; border-color: #dcb3ab; }
+.concept-edit-confirm:disabled, .concept-edit-cancel:disabled { cursor: wait; opacity: .55; }
+.concept-item.filter-active { border-color: #7aa88f; background: #eef7f2; box-shadow: inset 3px 0 0 var(--green); }
+.concept-item.filter-active .concept-check { border-color: var(--green); background: var(--green); color: #fff; }
+.concept-filter-chip { display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; padding: 2px 7px; border: 1px solid #9cbcab; border-radius: 999px; background: #eef7f2; color: #2f654c; cursor: pointer; font-size: 9px; font-weight: 700; vertical-align: 1px; }
+.concept-filter-chip:hover { background: #fbeae7; border-color: #dcb3ab; color: #8a3d33; }
+.concept-filter-chip strong { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.concept-filter-chip span { font-size: 10px; font-weight: 900; line-height: 1; }
+.concept-context-menu { position: fixed; z-index: 1200; min-width: 150px; padding: 5px; border: 1px solid #d5dfd9; border-radius: 10px; background: #fff; box-shadow: 0 10px 28px rgba(30,60,45,.18); }
+.concept-context-menu button { width: 100%; border: 0; border-radius: 7px; background: transparent; padding: 7px 10px; color: var(--ink); font-size: 11px; font-weight: 700; text-align: left; cursor: pointer; }
+.concept-context-menu button:hover { background: #eef7f2; color: #2f654c; }
 .concept-options-panel { margin: 8px -2px -1px; padding: 9px; border: 1px solid #cfe1d8; border-radius: 9px; background: rgba(255,255,255,.76); box-shadow: 0 5px 14px rgba(35,76,57,.06); animation: concept-options-open .18s ease-out; }
 @keyframes concept-options-open { from { transform: translateY(-4px); opacity: 0; } }
 .concept-options-panel fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
