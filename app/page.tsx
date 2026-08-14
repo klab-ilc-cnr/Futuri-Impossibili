@@ -1326,8 +1326,8 @@ export default function Home() {
       return;
     }
     const wrapRect = wrap.getBoundingClientRect();
-    const barHeight = 3;
-    const barGap = 1;
+    const barHeight = 5;
+    const barGap = 3;
     const targetIndices = onlyIndex === undefined ? null : new Set([onlyIndex]);
     if (targetIndices) {
       for (const existing of Array.from(layer.children)) {
@@ -2505,6 +2505,7 @@ export default function Home() {
         key={`${keyPrefix}-overlap-${segStart}`}
         className="overlap-text"
         data-annotations={active.map((job) => job.index).join(",")}
+        style={{ lineHeight: `calc(1.5em + var(--bar-step) * ${active.length})` }}
       >
         {editingStart && renderLocusHandle("start")}
         {text.slice(segStart, segEnd)}

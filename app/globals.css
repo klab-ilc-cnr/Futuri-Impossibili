@@ -9,6 +9,7 @@
   --cream: #f5f3ed;
   --line: #dfe3dc;
   --yellow: #ffdb58;
+  --bar-step: 8px;
 }
 
 * { box-sizing: border-box; }
@@ -254,15 +255,15 @@ main { height: calc(100vh - 176px); min-height: 520px; }
   position: absolute; inset: 0; overflow: visible; pointer-events: none;
 }
 .text-area .annotation-layer .bar {
-  position: absolute; height: 3px; border-radius: 2px; background: rgba(184, 138, 46, .85);
+  position: absolute; height: 5px; border-radius: 3px; background: rgba(184, 138, 46, .85);
   pointer-events: auto; cursor: pointer;
 }
 .text-area .annotation-layer .bar:hover { background: rgba(138, 93, 18, .95); }
 .text-area .annotation-layer .bar.selected {
-  background: var(--green); height: 5px;
+  background: var(--green); height: 7px;
 }
 .text-area .overlap-text {
-  position: relative; background: rgba(214, 158, 20, .55); color: inherit; padding: 2px 0;
+  position: relative; background: var(--yellow); color: inherit; padding: 2px 0;
   border-radius: 2px;
 }
 .text-area mark.locus-editing {
