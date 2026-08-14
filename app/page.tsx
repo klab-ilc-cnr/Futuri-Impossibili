@@ -2465,7 +2465,7 @@ export default function Home() {
         }}
         onClick={(event) => {
           event.stopPropagation();
-          if (locusEditing) return;
+          if (locusEditing && isEditingAnnotation) return;
           const browserSelection = window.getSelection();
           const hasActiveSelection = Boolean(
             browserSelection && !browserSelection.isCollapsed && browserSelection.rangeCount > 0,
@@ -2479,7 +2479,7 @@ export default function Home() {
           editAnnotation(annotation, event.currentTarget);
         }}
         onKeyDown={(event) => {
-          if (locusEditing) return;
+          if (locusEditing && isEditingAnnotation) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             editAnnotation(annotation, event.currentTarget);
