@@ -1514,7 +1514,10 @@ export default function Home() {
       if (!(target instanceof Node)) return;
       if (locusEditing) {
         const targetElement = target instanceof Element ? target : target.parentElement;
-        if (targetElement?.closest("mark.locus-editing") || annotationActionsRef.current?.contains(target)) return;
+        if (targetElement?.closest("mark.locus-editing")
+          || targetElement?.closest("mark[data-annotation-index], .overlap-text")
+          || targetElement?.closest(".bar")
+          || annotationActionsRef.current?.contains(target)) return;
         locusOutsidePointerStart.current = { x: event.clientX, y: event.clientY };
         return;
       }
@@ -2451,6 +2454,7 @@ export default function Home() {
         key={`${keyPrefix}-annotation-${segStart}-${index}`}
         data-labels={annotation.label}
         data-annotation-index={index}
+        style={{ lineHeight: "calc(1.5em + var(--bar-step))" }}
         className={isEditingAnnotation
           ? locusDragging ? "editing locus-editing" : "editing"
           : undefined}
@@ -2505,7 +2509,7 @@ export default function Home() {
         key={`${keyPrefix}-overlap-${segStart}`}
         className="overlap-text"
         data-annotations={active.map((job) => job.index).join(",")}
-        style={{ lineHeight: `calc(1.5em + var(--bar-step) * ${active.length * 2})` }}
+        style={{ lineHeight: `calc(1.5em + var(--bar-step) * ${active.length + 1})` }}
       >
         {editingStart && renderLocusHandle("start")}
         {text.slice(segStart, segEnd)}
