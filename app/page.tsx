@@ -2779,7 +2779,9 @@ export default function Home() {
                   <div
                     ref={textRef}
                     className="text-area"
-                    onMouseDown={() => setDragging(true)}
+                    onMouseDown={(event) => {
+                      if (event.detail <= 1) setDragging(true);
+                    }}
                     onMouseUp={captureSelection}
                   >
                     <div className="annotated-text-wrap" ref={annotatedWrapRef}>
