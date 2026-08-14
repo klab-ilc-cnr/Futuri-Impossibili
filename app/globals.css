@@ -260,7 +260,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 }
 .text-area .annotation-layer .bar:hover { background: rgba(138, 93, 18, .95); }
 .text-area .annotation-layer .bar.selected {
-  background: var(--green); height: 7px;
+  background: var(--green); height: 7px; z-index: 1;
 }
 .text-area .overlap-text {
   position: relative; background: var(--yellow); color: inherit; padding: 2px 0;

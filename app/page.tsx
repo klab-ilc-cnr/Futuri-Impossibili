@@ -2505,7 +2505,7 @@ export default function Home() {
         key={`${keyPrefix}-overlap-${segStart}`}
         className="overlap-text"
         data-annotations={active.map((job) => job.index).join(",")}
-        style={{ lineHeight: `calc(1.5em + var(--bar-step) * ${active.length})` }}
+        style={{ lineHeight: `calc(1.5em + var(--bar-step) * ${active.length * 2})` }}
       >
         {editingStart && renderLocusHandle("start")}
         {text.slice(segStart, segEnd)}
