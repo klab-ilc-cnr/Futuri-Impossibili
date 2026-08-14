@@ -41,7 +41,7 @@ Guida operativa completa (installazione locale, build, proxy, deploy VM e Apache
   `npm run start`, poi in un’altra shell `npm run start:proxy` e aprire
   `http://localhost:3001/futuri-impossibili/`. Per usare il backend remoto su questa macchina:
   `LEXO_SERVER_URL={{LEXO_TEST_URL}} npm run start`.
-- `npm run lint` — eslint: 0 errori; i 3 warning `<img>` in `page.tsx` sono accettati.
+- `npm run lint` — eslint: 0 errori; i 4 warning `<img>` in `page.tsx` sono accettati.
 - `npm test` — **si rompe per design**: i test del template puntano ad `app/_sites-preview/`
   (mai esistito in questo repo). Non "sistemarli".
 - Typecheck `npx tsc --noEmit`: gli errori in `worker/index.ts` e `db/index.ts`
@@ -57,6 +57,22 @@ Guida operativa completa (installazione locale, build, proxy, deploy VM e Apache
 - Backend di test raggiungibile dalla macchina di sviluppo:
   `{{LEXO_TEST_URL}}`. Sulla VM di produzione è su
   `http://localhost:8080/LexO-server` (stessa macchina).
+
+### Bug noto LexO-server sul delete concetto (issue upstream #17)
+
+`GET /service/delete/lexicalConcept` (usato dal proxy `DELETE` di `lexical-concept/route.ts`)
+**NON cancella davvero**: lo SPARQL update opera sul named graph `…/graphs/lexical/lexica`
+(vuoto), mentre i concetti nuovi sono in `…/graphs/lexical/lexicalConcept` → LexO risponde
+200+timestamp ma il concetto resta (riappare su refresh della lista). La GUI permette comunque
+"Elimina" dal menu contestuale; il concetto sembra sparire finché non si ricarica la pagina.
+**Fix in attesa upstream** (issue https://github.com/andreabellandi/LexO-server/issues/17).
+Non cercare workaround lato client; semmai il problema va risolto in LexO-server
+(`SKOSManager.deleteLexicalConcept` dovrebbe usare `LexiconCrudSupport.lexicalConceptGraphUri()`).
+
+Attenzione: gli IRI dei concetti contengono `+` (offset UTC, es. `…_416+02_00`). Il DELETE di
+LexO fa un `URLDecoder.decode` extra, quindi il proxy DEVE **doppio-encodare** `id`
+(`new URLSearchParams({ id: encodeURIComponent(id), ... })`) perché il `+` arrivi intatto
+(single-encode lo trasforma in spazio → "does not exist").
 
 ## basePath — regole obbligatorie
 
@@ -104,4 +120,8 @@ Il workaround è già in place (post-build move + rewrite del reverse proxy). **
 - Commit: messaggi in italiano, lowercase, stile "verbo passato"
   (es. "introdotto base path /futuri-impossibili per il deploy sotto directory").
 - Codice: non aggiungere commenti se non richiesti.
+- Versioning dell'interfaccia: semver `x.y.z` basta una costante `appVersion` in
+  `app/page.tsx` (renderizzata come `v…` a destra in `main-nav`, classe
+  `.main-nav-version`). Bump: `x`=cambi grossi/breaking, `y`=nuove feature,
+  `z`=bugfix. Agganciare il bump al commit che introduce la modifica.
 - Smoke test proxy: `curl http://<host>:<porta>/futuri-impossibili/api/lexo/lexical-concepts`.
