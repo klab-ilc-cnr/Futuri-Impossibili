@@ -1517,7 +1517,9 @@ export default function Home() {
         if (targetElement?.closest("mark.locus-editing")
           || targetElement?.closest("mark[data-annotation-index], .overlap-text")
           || targetElement?.closest(".bar")
-          || annotationActionsRef.current?.contains(target)) return;
+          || annotationActionsRef.current?.contains(target)
+          || (conceptSelectionActive && conceptSidebarRef.current?.contains(target))
+          || confirmDeleteRef.current?.contains(target)) return;
         locusOutsidePointerStart.current = { x: event.clientX, y: event.clientY };
         return;
       }
