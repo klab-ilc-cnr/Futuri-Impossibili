@@ -264,7 +264,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .text-area::selection, .text-area *::selection { background: #c9e8d8; color: var(--ink); }
 .text-area mark {
   position: relative; background: var(--yellow); color: inherit; padding: 2px 0;
-  box-shadow: 2px 0 var(--yellow), -2px 0 var(--yellow); border-radius: 2px; cursor: pointer;
+  box-shadow: 2px 0 var(--yellow); border-radius: 2px; cursor: pointer;
 }
 .text-area .annotated-text-wrap { position: relative; }
 .text-area .annotation-layer {
@@ -280,10 +280,10 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 }
 .text-area .overlap-text {
   position: relative; background: var(--yellow); color: inherit; padding: 2px 0;
-  border-radius: 2px;
+  box-shadow: 2px 0 var(--yellow); border-radius: 2px;
 }
 .text-area mark.locus-editing {
-  background: #b9dfca; box-shadow: 2px 0 #b9dfca, -2px 0 #b9dfca;
+  background: #b9dfca; box-shadow: 2px 0 #b9dfca;
   cursor: text; touch-action: none;
 }
 .locus-handle {
@@ -401,6 +401,7 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 }
 .annotation-locus svg { width: 23px; height: 23px; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .annotation-locus.active { background: var(--green-dark); box-shadow: 0 8px 22px rgba(15,48,36,.32), 0 0 0 5px rgba(89,167,127,.22); }
+.annotation-locus.idle { opacity: .4; }
 .annotation-eraser:disabled, .annotation-locus:disabled { cursor: default; opacity: .35; background: #789186; box-shadow: 0 5px 14px rgba(15,48,36,.16); }
 .annotation-eraser .trash-icon {
   position: relative; width: 14px; height: 16px; margin-top: 3px;

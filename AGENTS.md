@@ -41,7 +41,9 @@ Guida operativa completa (installazione locale, build, proxy, deploy VM e Apache
   `npm run start`, poi in un’altra shell `npm run start:proxy` e aprire
   `http://localhost:3001/futuri-impossibili/`. Per usare il backend remoto su questa macchina:
   `LEXO_SERVER_URL={{LEXO_TEST_URL}} npm run start`.
-- `npm run lint` — eslint: 0 errori; i 4 warning `<img>` in `page.tsx` sono accettati.
+- `npm run lint` — eslint: 0 errori; accettati i 3 warning `<img>` in `page.tsx` e il
+  warning `useCallback` per la dependency `conceptFilter` in `drawOverlayBars`
+  (voluta: il filtro concetti deve far ricalcolare le barre).
 - `npm test` — **si rompe per design**: i test del template puntano ad `app/_sites-preview/`
   (mai esistito in questo repo). Non "sistemarli".
 - Typecheck `npx tsc --noEmit`: gli errori in `worker/index.ts` e `db/index.ts`
@@ -73,6 +75,20 @@ Attenzione: gli IRI dei concetti contengono `+` (offset UTC, es. `…_416+02_00`
 LexO fa un `URLDecoder.decode` extra, quindi il proxy DEVE **doppio-encodare** `id`
 (`new URLSearchParams({ id: encodeURIComponent(id), ... })`) perché il `+` arrivi intatto
 (single-encode lo trasforma in spazio → "does not exist").
+
+## Rendering delle annotazioni nel testo
+
+- `drawOverlayBars` (`app/page.tsx`) disegna le barre sotto le annotazioni leggendo le
+  coordinate dei `mark[data-annotation-index]` e `.overlap-text[data-annotations]` dal DOM.
+  Il `useLayoutEffect` che lo chiama ha tra le deps `workspaceVisible` (cioè
+  `activePage === 4`): il testo e le attestazioni vengono caricati in background PRIMA di
+  entrare nella sezione "Costruisci Dizionario", quindi senza quella dep l'effetto non
+  riparte al mount e le barre mancano fino al primo click su un'annotazione. Non rimuovere
+  quella dipendenza.
+- La banda gialla è continua grazie al solo `box-shadow: 2px 0` (NON `-2px 0`) su
+  `.mark`/`.overlap-text`: un'ombra a sinistra dipinta dopo (ordine DOM, `position: relative`)
+  taglierebbe l'ultimo glifo del segmento precedente (es. la "o" di "sesso" dentro
+  "sesso, però").
 
 ## basePath — regole obbligatorie
 

@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.5.0";
+const appVersion = "0.5.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1024,6 +1024,7 @@ export default function Home() {
     ));
   });
   const editingAttestation = selection?.mode === "edit";
+  const workspaceVisible = activePage === 4;
   const editingAnnotationIndex = useMemo(() => {
     if (selection?.mode !== "edit") return -1;
     const sourceStart = selection.sourceStart ?? selection.start;
@@ -1033,6 +1034,9 @@ export default function Home() {
     );
   }, [annotations, selection]);
   const editDirty = removedList.length > 0 || addedList.length > 0 || Object.keys(updatedList).length > 0;
+  const locusDirty = locusEditing && selection?.mode === "edit"
+    && (selection.start !== (selection.sourceStart ?? selection.start)
+      || selection.end !== (selection.sourceEnd ?? selection.end));
   const addedConceptsConfigured = addedList.every((lexicalConcept) => {
     const conceptSelection = conceptSelections[lexicalConcept];
     return Boolean(conceptSelection?.lexicalEntry && conceptSelection.sensesReady && (
@@ -1454,7 +1458,11 @@ export default function Home() {
 
   useLayoutEffect(() => {
     drawOverlayBars(undefined, editingAnnotationIndex);
-  }, [annotations, drawOverlayBars, editingAnnotationIndex, layerTick, locusEditing, selection?.mode, text, textError, textLoading]);
+    if (!textLoading) {
+      const frame = requestAnimationFrame(() => drawOverlayBars(undefined, editingAnnotationIndex));
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [annotations, drawOverlayBars, editingAnnotationIndex, layerTick, locusEditing, selection?.mode, text, textError, textLoading, workspaceVisible]);
 
   useEffect(() => {
     if (!locusEditing || selection?.mode !== "edit") return;
@@ -2308,6 +2316,10 @@ export default function Home() {
     if (!locusEditing) {
       window.getSelection()?.removeAllRanges();
       setLocusEditing(true);
+      return;
+    }
+
+    if (!locusDirty) {
       return;
     }
 
@@ -3519,10 +3531,10 @@ export default function Home() {
           {editingAttestation && (
             <>
               <button
-                className={`annotation-locus ${locusEditing ? "active" : ""}`}
+                className={`annotation-locus ${locusDirty ? "active" : ""} ${locusEditing && !locusDirty ? "idle" : ""}`}
                 onClick={() => void toggleLocusEditing()}
                 disabled={attestationSaving || editDirty}
-                aria-pressed={locusEditing}
+                aria-pressed={locusDirty}
                 aria-label={locusEditing ? "Salva i nuovi limiti dell’evidenziazione" : "Modifica i limiti dell’evidenziazione"}
                 title={locusEditing ? "Salva nuovo start ed end" : "Modifica start ed end"}
               >
