@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.5.1";
+const appVersion = "0.5.2";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1503,16 +1503,26 @@ export default function Home() {
       const browserDocument = document as Document & {
         caretRangeFromPoint?: (x: number, y: number) => Range | null;
       };
-      const caretPosition = document.caretPositionFromPoint?.(clientX, clientY);
-      const caretRange = caretPosition ? null : browserDocument.caretRangeFromPoint?.(clientX, clientY);
-      const node = caretPosition?.offsetNode ?? caretRange?.startContainer;
-      const offset = caretPosition?.offset ?? caretRange?.startOffset;
-      if (!node || offset === undefined || !root.contains(node)) return null;
+      const layer = annotationLayerRef.current;
+      const handles = root.querySelectorAll<HTMLElement>(".locus-handle");
+      const layerDisplay = layer?.style.display ?? "";
+      if (layer) layer.style.display = "none";
+      for (const handle of Array.from(handles)) handle.style.display = "none";
+      try {
+        const caretPosition = document.caretPositionFromPoint?.(clientX, clientY);
+        const caretRange = caretPosition ? null : browserDocument.caretRangeFromPoint?.(clientX, clientY);
+        const node = caretPosition?.offsetNode ?? caretRange?.startContainer;
+        const offset = caretPosition?.offset ?? caretRange?.startOffset;
+        if (!node || offset === undefined || !root.contains(node)) return null;
 
-      const before = document.createRange();
-      before.selectNodeContents(root);
-      before.setEnd(node, offset);
-      return before.toString().length;
+        const before = document.createRange();
+        before.selectNodeContents(root);
+        before.setEnd(node, offset);
+        return before.toString().length;
+      } finally {
+        if (layer) layer.style.display = layerDisplay;
+        for (const handle of Array.from(handles)) handle.style.display = "";
+      }
     }
 
     function moveLocusEndpoint(event: PointerEvent) {
@@ -2633,7 +2643,6 @@ export default function Home() {
         key={`${keyPrefix}-annotation-${segStart}-${index}`}
         data-labels={annotation.label}
         data-annotation-index={index}
-        style={{ lineHeight: "calc(1.5em + var(--bar-step))" }}
         className={isEditingAnnotation
           ? locusDragging ? "editing locus-editing" : "editing"
           : undefined}

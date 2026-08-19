@@ -89,6 +89,23 @@ LexO fa un `URLDecoder.decode` extra, quindi il proxy DEVE **doppio-encodare** `
   `.mark`/`.overlap-text`: un'ombra a sinistra dipinta dopo (ordine DOM, `position: relative`)
   taglierebbe l'ultimo glifo del segmento precedente (es. la "o" di "sesso" dentro
   "sesso, però").
+- **Barre vs hit-testing del drag**: le `.bar` (figli assoluti di `.annotation-layer`) e le
+  `.locus-handle` (con i pseudo-elementi `::before`/`::after` che disegnano knob e asta a
+  cavallo del boundary) sono elementi vuoti/assoluti che `document.caretPositionFromPoint`
+  restituisce come `offsetNode` (elemento, non testo): `textOffsetAtPoint` calcolava allora un
+  offset sbagliato — le `.bar` facevano "saltare" il boundary a fine documento (es. offset
+  `2560`), le maniglie lo facevano **oscillare** tra "fine riga N / inizio riga N+1" sui
+  soft-wrap (impossibile fissare il boundary destro). `pointer-events: none` NON risolve
+  (l'hit-test del caret lo ignora), solo `display: none` funziona: per questo
+  `textOffsetAtPoint` nasconde temporaneamente sia `annotationLayerRef` sia le `.locus-handle`
+  durante il calcolo e li ripristina in `finally`. Non rimuovere.
+- **Line-height uniforme**: `.text-area` ha `line-height: calc(1.5em + var(--bar-step))`,
+  così OGNI riga (annotata o no) riserva gli 8px per le barre. Se le righe annotate fossero
+  più alte delle altre (com'era, con il solo `mark` a 33.5px e il testo a 25.5px), l'altezza
+  del documento cambierebbe al variare dei confini dell'annotazione e tutto il testo sotto
+  "salterebbe" di 8px a riga durante il drag del locus. Il `lineHeight` inline è stato tolto
+  dal `mark` perché ridondante (equivale alla base). `.overlap-text` conserva lo spazio extra
+  `* (N+1)` per le barre impilate.
 
 ## basePath — regole obbligatorie
 
