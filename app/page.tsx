@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.6.7";
+const appVersion = "0.6.8";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -2602,13 +2602,21 @@ export default function Home() {
 
     if (!selectedText.trim()) return;
     if (locusEditing && selection?.mode === "edit") {
+      const wrap = annotatedWrapRef.current;
+      const wrapRect = wrap?.getBoundingClientRect();
+      const relLeft = wrapRect ? rect.left - wrapRect.left : rect.left;
+      const relTop = wrapRect ? rect.top - wrapRect.top : rect.top;
+      const posX = Math.max(12, relLeft + rect.width / 2 - 45);
+      const posY = Math.max(0, relTop - 54);
+
       setSelection((current) => current && current.mode === "edit" ? {
         ...current,
         start,
         end: start + selectedText.length,
         text: selectedText,
-        x: Math.min(window.innerWidth - 154, Math.max(12, rect.left + rect.width / 2 - 71)),
-        y: Math.max(12, rect.top - 52),
+        x: posX,
+        y: posY,
+        actionX: posX,
       } : current);
       browserSelection.removeAllRanges();
       return;
