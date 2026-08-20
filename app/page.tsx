@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.6.3";
+const appVersion = "0.6.4";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -925,82 +925,6 @@ function describeBulkFailures(job: BulkTextJob) {
   return details.join(" · ");
 }
 
-function getDefinitionTypeSvg(type: DefinitionType): string {
-  const common = 'viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
-  if (type === "sinonimo") {
-    return `<svg ${common}><path d="M12.2 10.2 9.8 7.8a5 5 0 0 0-7.1 7.1l3.8 3.8a5 5 0 0 0 7.1 0l1.5-1.5" /><path d="m19.8 21.8 2.4 2.4a5 5 0 0 0 7.1-7.1l-3.8-3.8a5 5 0 0 0-7.1 0l-1.5 1.5" /><path d="m10.8 21.2 10.4-10.4" /></svg>`;
-  }
-  if (type === "parafrasi") {
-    return `<svg ${common}><path d="M4 6.5h15a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H10l-5 4v-4H4a3 3 0 0 1-3-3v-5a3 3 0 0 1 3-3Z" /><path d="M10 23.5h12l5 4v-4h1a3 3 0 0 0 3-3v-5a3 3 0 0 0-3-3h-2" /><path d="M7 11h9M7 14h6" /></svg>`;
-  }
-  if (type === "esempio-prototipo") {
-    return `<svg ${common}><path d="M11 23h10M12.5 27h7" /><path d="M9.2 18.5A9 9 0 1 1 22.8 18.5c-1.2 1-1.8 2-1.8 4.5H11c0-2.5-.6-3.5-1.8-4.5Z" /><path d="m16 7.5 1.2 2.5 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4L16 7.5Z" /></svg>`;
-  }
-  return `<svg ${common}><rect x="5" y="4" width="22" height="24" rx="3" /><path d="M9 10h14M9 15h14M9 20h8" /></svg>`;
-}
-
-function createTooltipElement(annotation: Annotation): HTMLElement {
-  const tooltip = document.createElement("span");
-  tooltip.className = "attestation-tooltip";
-  tooltip.setAttribute("aria-hidden", "true");
-
-  const conceptItems = annotation.concepts.length
-    ? annotation.concepts
-    : annotation.label.split("\n").map((label, i) => ({
-        attestationIri: "",
-        observableIri: "",
-        lexicalConcept: `fallback-${i}`,
-        label,
-        options: {
-          relationType: "",
-          polarity: "",
-          definitionType: "",
-          evidenceStatus: "nessuno",
-          pragmaticUsage: "nessuno",
-          note: "",
-        } as ConceptAnnotationOptions,
-      }));
-
-  for (const concept of conceptItems) {
-    const row = document.createElement("span");
-    row.className = "attestation-tooltip-row";
-
-    const labelEl = document.createElement("span");
-    labelEl.className = "attestation-tooltip-label";
-    labelEl.setAttribute("data-label", concept.label);
-    row.appendChild(labelEl);
-
-    const icons = document.createElement("span");
-    icons.className = "attestation-tooltip-icons";
-
-    if (concept.options.polarity) {
-      const pol = document.createElement("span");
-      pol.className = `tooltip-polarity polarity-${concept.options.polarity}`;
-      const sentiment = document.createElement("span");
-      sentiment.className = "sentiment-face tooltip-sentiment";
-      sentiment.setAttribute("role", "img");
-      sentiment.setAttribute("aria-label", `Polarità: ${concept.options.polarity}`);
-      pol.appendChild(sentiment);
-      icons.appendChild(pol);
-    }
-
-    if (concept.options.definitionType) {
-      const def = document.createElement("span");
-      def.className = "tooltip-definition-icon";
-      def.setAttribute("role", "img");
-      def.setAttribute("aria-label", `Tipo definizione: ${concept.options.definitionType}`);
-      def.title = `Tipo definizione: ${concept.options.definitionType}`;
-      def.innerHTML = getDefinitionTypeSvg(concept.options.definitionType);
-      icons.appendChild(def);
-    }
-
-    row.appendChild(icons);
-    tooltip.appendChild(row);
-  }
-
-  return tooltip;
-}
-
 function getTextNodeEntries(root: HTMLElement) {
   const entries: Array<{ node: Text; start: number; end: number }> = [];
   let offset = 0;
@@ -1349,6 +1273,7 @@ export default function Home() {
   const [textError, setTextError] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [locusDragging, setLocusDragging] = useState(false);
+  const [hoveredTooltip, setHoveredTooltip] = useState<{ annotation: Annotation; x: number; y: number } | null>(null);
   const [conceptFilter, setConceptFilter] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; concept: LexicalConcept } | null>(null);
   const [conceptToDelete, setConceptToDelete] = useState<LexicalConcept | null>(null);
@@ -1978,6 +1903,18 @@ export default function Home() {
         barEl.onmousedown = (event) => {
           event.stopPropagation();
         };
+        barEl.onmouseenter = () => {
+          const annotation = annotations[index];
+          if (!annotation || locusEditing || dragging) return;
+          setHoveredTooltip({
+            annotation,
+            x: bar.left + (bar.right - bar.left) / 2,
+            y: bar.top - 2,
+          });
+        };
+        barEl.onmouseleave = () => {
+          setHoveredTooltip(null);
+        };
         barEl.onclick = (event) => {
           event.stopPropagation();
           const annotation = annotations[index];
@@ -2066,7 +2003,7 @@ export default function Home() {
       };
       layer.appendChild(endHandle);
     }
-  }, [annotations, conceptFilter, editAnnotation, editingAnnotationIndex, locusDragging, locusEditing, nudgeLocusEndpoint, selection, text, textError, textLoading]);
+  }, [annotations, conceptFilter, dragging, editAnnotation, editingAnnotationIndex, locusDragging, locusEditing, nudgeLocusEndpoint, selection, text, textError, textLoading]);
 
   useLayoutEffect(() => {
     drawAnnotationsLayer();
@@ -3169,6 +3106,53 @@ export default function Home() {
     );
   }
 
+  function renderFloatingTooltip() {
+    if (!hoveredTooltip || locusEditing || dragging) return null;
+    const { annotation, x, y } = hoveredTooltip;
+    const conceptItems = annotation.concepts.length
+      ? annotation.concepts
+      : annotation.label.split("\n").map((label, i) => ({
+          attestationIri: "",
+          observableIri: "",
+          lexicalConcept: `fallback-${i}`,
+          label,
+          options: {
+            relationType: "",
+            polarity: "",
+            definitionType: "",
+            evidenceStatus: "nessuno",
+            pragmaticUsage: "nessuno",
+            note: "",
+          } as ConceptAnnotationOptions,
+        }));
+
+    return (
+      <div
+        className="attestation-tooltip"
+        style={{ left: `${x}px`, top: `${y}px` }}
+        aria-hidden="true"
+      >
+        {conceptItems.map((concept) => (
+          <span className="attestation-tooltip-row" key={concept.lexicalConcept}>
+            <span className="attestation-tooltip-label" data-label={concept.label} />
+            <span className="attestation-tooltip-icons">
+              {concept.options.polarity && (
+                <span className={`tooltip-polarity polarity-${concept.options.polarity}`}>
+                  <span className="sentiment-face tooltip-sentiment" />
+                </span>
+              )}
+              {concept.options.definitionType && (
+                <span className="tooltip-definition-icon">
+                  <DefinitionTypeIcon type={concept.options.definitionType} />
+                </span>
+              )}
+            </span>
+          </span>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <header className="site-header">
@@ -3352,6 +3336,36 @@ export default function Home() {
                       }
                       captureSelection(event);
                     }}
+                    onMouseMove={(event) => {
+                      if (locusEditing || dragging) {
+                        if (hoveredTooltip) setHoveredTooltip(null);
+                        return;
+                      }
+                      const wrap = annotatedWrapRef.current;
+                      if (!wrap) return;
+                      const offset = textOffsetAtPoint(wrap, event.clientX, event.clientY);
+                      if (offset === null) {
+                        if (hoveredTooltip) setHoveredTooltip(null);
+                        return;
+                      }
+                      const matching = annotations.filter((a) =>
+                        (!conceptFilter || a.concepts.some((c) => c.lexicalConcept === conceptFilter))
+                        && a.start <= offset && offset < a.end,
+                      );
+                      if (matching.length === 1) {
+                        const wrapRect = wrap.getBoundingClientRect();
+                        setHoveredTooltip({
+                          annotation: matching[0],
+                          x: event.clientX - wrapRect.left,
+                          y: event.clientY - wrapRect.top - 4,
+                        });
+                      } else {
+                        if (hoveredTooltip) setHoveredTooltip(null);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      if (hoveredTooltip) setHoveredTooltip(null);
+                    }}
                   >
                     <div className="annotated-text-wrap" ref={annotatedWrapRef}>
                       {textLoading ? (
@@ -3374,6 +3388,7 @@ export default function Home() {
                         className="annotation-layer"
                         ref={annotationLayerRef}
                       />
+                      {renderFloatingTooltip()}
                     </div>
                   </div>
                 </div>
@@ -3531,6 +3546,7 @@ export default function Home() {
                     const isExistingEditingConcept = Boolean(
                       editingAttestation && originalEditingConcepts[concept.lexicalConcept],
                     );
+
                     return (
                       <div
                         key={concept.lexicalConcept}

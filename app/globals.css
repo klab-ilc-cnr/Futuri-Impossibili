@@ -309,11 +309,12 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .locus-handle:focus-visible::before { outline: 2px solid #173f31; outline-offset: 2px; }
 .text-area .annotation-layer .annotation-highlight:focus-visible { outline: 2px solid #315f4a; outline-offset: 2px; }
 .attestation-tooltip {
-  position: absolute; z-index: 12; left: 50%; bottom: calc(100% + 8px); width: max-content;
+  position: absolute; z-index: 100; width: max-content;
   min-width: 190px; max-width: 330px; display: grid; gap: 5px; padding: 8px 10px;
   border: 1px solid #cfdad4; border-radius: 9px; background: #173f31; color: #fff;
-  box-shadow: 0 9px 24px rgba(16,58,44,.23); pointer-events: none; opacity: 0;
-  transform: translate(-50%, 5px); transition: opacity .16s, transform .16s;
+  box-shadow: 0 9px 24px rgba(16,58,44,.28); pointer-events: none;
+  transform: translate(-50%, -100%); margin-top: -8px;
+  transition: opacity .16s ease;
 }
 .attestation-tooltip-row {
   min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px;
@@ -330,11 +331,6 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .attestation-tooltip .polarity-positive .tooltip-sentiment { background-position: -66.27px -14.32px; }
 .tooltip-definition-icon { width: 18px; height: 18px; display: grid; place-items: center; color: #bfe3d1; flex: none; }
 .tooltip-definition-icon svg { width: 18px; height: 18px; }
-.text-area .annotation-layer .annotation-highlight:hover .attestation-tooltip,
-.text-area .annotation-layer .annotation-highlight:focus-visible .attestation-tooltip { opacity: 1; transform: translate(-50%, 0); }
-.text-area .annotation-layer .annotation-highlight.editing .attestation-tooltip,
-.text-area .annotation-layer .annotation-highlight.editing:hover .attestation-tooltip,
-.text-area .annotation-layer .annotation-highlight.editing:focus .attestation-tooltip { opacity: 0; transform: translate(-50%, 5px); }
 .interview-offset-prefix { display: none; }
 .transcript-heading { font-weight: 800; color: #1e2c26; }
 .paragraph-break { display: block; height: 12px; font-size: 0; line-height: 0; overflow: hidden; }
