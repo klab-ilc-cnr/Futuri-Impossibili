@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.6.6";
+const appVersion = "0.6.7";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1718,12 +1718,19 @@ export default function Home() {
     setUpdatedList({});
     setLocusEditing(true);
     setLocusDragging(false);
+    const wrapRect = wrap?.getBoundingClientRect();
+    const relLeft = wrapRect && targetRect ? targetRect.left - wrapRect.left : rect.left;
+    const relTop = wrapRect && targetRect ? targetRect.top - wrapRect.top : rect.top;
+    const posX = Math.max(12, relLeft + rect.width / 2 - 45);
+    const posY = Math.max(0, relTop - 54);
+
     setSelection({
       start: annotation.start,
       end: annotation.end,
       text: text.slice(annotation.start, annotation.end),
-      x: Math.min(window.innerWidth - 154, Math.max(12, rect.left + rect.width / 2 - 71)),
-      y: Math.max(12, rect.top - 58),
+      x: posX,
+      y: posY,
+      actionX: posX,
       mode: "edit",
       sourceStart: annotation.start,
       sourceEnd: annotation.end,
@@ -3419,6 +3426,36 @@ export default function Home() {
                         ref={annotationLayerRef}
                       />
                       {renderFloatingTooltip()}
+                      {selection && editingAttestation && activePage === 4 && (
+                        <div
+                          ref={annotationActionsRef}
+                          className="annotation-actions"
+                          style={{ left: `${selection.actionX ?? selection.x}px`, top: `${selection.y}px` }}
+                        >
+                          <button
+                            className={`annotation-locus ${locusDirty ? "active" : ""} ${locusEditing && !locusDirty ? "idle" : ""}`}
+                            onClick={() => void toggleLocusEditing()}
+                            disabled={attestationSaving || editDirty}
+                            aria-pressed={locusDirty}
+                            aria-label={locusEditing ? "Salva i nuovi limiti dell’evidenziazione" : "Modifica i limiti dell’evidenziazione"}
+                            title={locusEditing ? "Salva nuovo start ed end" : "Modifica start ed end"}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M8 4H5v16h3M16 4h3v16h-3" />
+                              <path d="M9 12h6M11 9l-3 3 3 3M13 9l3 3-3 3" />
+                            </svg>
+                          </button>
+                          <button
+                            className="annotation-eraser"
+                            onClick={() => setConfirmDeleteOpen(true)}
+                            disabled={attestationSaving || editDirty}
+                            aria-label="Elimina l’intera attestazione"
+                            title="Elimina attestazione e concetti associati"
+                          >
+                            <span className="trash-icon" aria-hidden="true" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3932,40 +3969,6 @@ export default function Home() {
         )}
       </main>
 
-      {selection && editingAttestation && activePage === 4 && (
-        <div
-          ref={annotationActionsRef}
-          className="annotation-actions"
-          style={{ left: selection.actionX ?? selection.x, top: selection.y }}
-        >
-          {editingAttestation && (
-            <>
-              <button
-                className={`annotation-locus ${locusDirty ? "active" : ""} ${locusEditing && !locusDirty ? "idle" : ""}`}
-                onClick={() => void toggleLocusEditing()}
-                disabled={attestationSaving || editDirty}
-                aria-pressed={locusDirty}
-                aria-label={locusEditing ? "Salva i nuovi limiti dell’evidenziazione" : "Modifica i limiti dell’evidenziazione"}
-                title={locusEditing ? "Salva nuovo start ed end" : "Modifica start ed end"}
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M8 4H5v16h3M16 4h3v16h-3" />
-                  <path d="M9 12h6M11 9l-3 3 3 3M13 9l3 3-3 3" />
-                </svg>
-              </button>
-              <button
-                className="annotation-eraser"
-                onClick={() => setConfirmDeleteOpen(true)}
-                disabled={attestationSaving || editDirty}
-                aria-label="Elimina l’intera attestazione"
-                title="Elimina attestazione e concetti associati"
-              >
-                <span className="trash-icon" aria-hidden="true" />
-              </button>
-            </>
-          )}
-        </div>
-      )}
       {confirmDeleteOpen && (
         <div
           ref={confirmDeleteRef}

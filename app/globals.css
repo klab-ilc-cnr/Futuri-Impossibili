@@ -366,7 +366,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; padding: 2px 5px; }
 
 .annotation-actions {
-  position: fixed; z-index: 20; display: flex; align-items: center; gap: 7px;
+  position: absolute; z-index: 20; display: flex; align-items: center; gap: 7px;
   animation: pop .18s ease-out;
 }
 .selection-category-menu {
