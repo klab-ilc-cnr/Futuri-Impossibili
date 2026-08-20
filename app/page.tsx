@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.6.2";
+const appVersion = "0.6.3";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -2581,7 +2581,7 @@ export default function Home() {
     }
   }
 
-  function captureSelection() {
+  function captureSelection(event?: React.MouseEvent) {
     if (attestationSaving) {
       setDragging(false);
       return;
@@ -2590,8 +2590,28 @@ export default function Home() {
     setDragging(false);
     const root = textRef.current;
     const browserSelection = window.getSelection();
-    if (!root || !browserSelection || browserSelection.isCollapsed || browserSelection.rangeCount === 0) {
+    if (!root || !browserSelection || browserSelection.rangeCount === 0) {
       if (locusEditing) return;
+      resetSelectionFlow();
+      return;
+    }
+
+    if (browserSelection.isCollapsed) {
+      if (locusEditing) return;
+      if (event) {
+        const offset = textOffsetAtPoint(annotatedWrapRef.current ?? root, event.clientX, event.clientY);
+        if (offset !== null) {
+          const matchingAnnotations = annotations.filter((a) =>
+            (!conceptFilter || a.concepts.some((c) => c.lexicalConcept === conceptFilter))
+            && a.start <= offset && offset < a.end,
+          );
+          if (matchingAnnotations.length === 1) {
+            const targetEl = (event.target as HTMLElement) ?? root;
+            editAnnotation(matchingAnnotations[0], targetEl);
+            return;
+          }
+        }
+      }
       resetSelectionFlow();
       return;
     }
@@ -3322,15 +3342,15 @@ export default function Home() {
                     ref={textRef}
                     className="text-area"
                     onMouseDown={(event) => {
-                      if ((event.target as HTMLElement).closest(".annotation-highlight, .bar, .locus-handle")) return;
+                      if ((event.target as HTMLElement).closest(".bar, .locus-handle")) return;
                       if (event.detail <= 1) setDragging(true);
                     }}
                     onMouseUp={(event) => {
-                      if ((event.target as HTMLElement).closest(".annotation-highlight, .bar, .locus-handle")) {
+                      if ((event.target as HTMLElement).closest(".bar, .locus-handle")) {
                         setDragging(false);
                         return;
                       }
-                      captureSelection();
+                      captureSelection(event);
                     }}
                   >
                     <div className="annotated-text-wrap" ref={annotatedWrapRef}>

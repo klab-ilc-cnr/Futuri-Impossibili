@@ -269,20 +269,17 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 }
 .text-area .annotation-layer .annotation-highlight {
   position: absolute; background: var(--yellow); mix-blend-mode: multiply;
-  border-radius: 2px; pointer-events: auto; cursor: pointer;
+  border-radius: 2px; pointer-events: none;
 }
 .text-area .annotation-layer .annotation-highlight.overlap {
   cursor: default;
-}
-.text-area .annotation-layer .annotation-highlight:hover {
-  background: #ffd54f;
 }
 .text-area .annotation-layer .annotation-highlight.editing {
   background: #b9dfca;
 }
 .text-area .annotation-layer .bar {
   position: absolute; height: 4px; border-radius: 2px; background: rgba(184, 138, 46, .85);
-  pointer-events: auto; cursor: pointer;
+  pointer-events: auto; cursor: pointer; z-index: 3;
 }
 .text-area .annotation-layer .bar:hover { background: rgba(138, 93, 18, .95); }
 .text-area .annotation-layer .bar.selected {
