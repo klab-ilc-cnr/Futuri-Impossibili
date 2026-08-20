@@ -3333,6 +3333,7 @@ export default function Home() {
                       captureSelection(event);
                     }}
                     onMouseMove={(event) => {
+                      if ((event.target as HTMLElement).closest(".bar")) return;
                       if (locusEditing || dragging) {
                         if (hoveredTooltip) setHoveredTooltip(null);
                         return;
