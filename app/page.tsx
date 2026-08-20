@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.6.5";
+const appVersion = "0.6.6";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -2114,13 +2114,24 @@ export default function Home() {
       if (!(target instanceof Node)) return;
       if (locusEditing) {
         const targetElement = target instanceof Element ? target : target.parentElement;
-        if (targetElement?.closest(".annotation-highlight")
-          || targetElement?.closest(".bar")
+        if (targetElement?.closest(".bar")
           || targetElement?.closest(".locus-editing-highlight")
           || targetElement?.closest(".locus-handle")
           || annotationActionsRef.current?.contains(target)
           || (conceptSelectionActive && conceptSidebarRef.current?.contains(target))
           || confirmDeleteRef.current?.contains(target)) return;
+
+        if (textRef.current?.contains(target)) {
+          const offset = textOffsetAtPoint(annotatedWrapRef.current ?? textRef.current, event.clientX, event.clientY);
+          if (offset !== null) {
+            const isOverAnnotation = annotations.some((a) =>
+              (!conceptFilter || a.concepts.some((c) => c.lexicalConcept === conceptFilter))
+              && a.start <= offset && offset < a.end,
+            );
+            if (isOverAnnotation) return;
+          }
+        }
+
         locusOutsidePointerStart.current = { x: event.clientX, y: event.clientY };
         return;
       }
@@ -2147,7 +2158,7 @@ export default function Home() {
       document.removeEventListener("pointerup", finishOutsideLocusPointer);
       document.removeEventListener("pointercancel", finishOutsideLocusPointer);
     };
-  }, [attestationSaving, conceptSelectionActive, locusEditing, resetSelectionFlow, selection]);
+  }, [annotations, attestationSaving, conceptFilter, conceptSelectionActive, locusEditing, resetSelectionFlow, selection]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -2553,7 +2564,6 @@ export default function Home() {
     }
 
     if (browserSelection.isCollapsed) {
-      if (locusEditing) return;
       if (event) {
         const offset = textOffsetAtPoint(annotatedWrapRef.current ?? root, event.clientX, event.clientY);
         if (offset !== null) {
@@ -2562,12 +2572,12 @@ export default function Home() {
             && a.start <= offset && offset < a.end,
           );
           if (matchingAnnotations.length === 1) {
-            const targetEl = (event.target as HTMLElement) ?? root;
-            editAnnotation(matchingAnnotations[0], targetEl);
+            editAnnotation(matchingAnnotations[0]);
             return;
           }
         }
       }
+      if (locusEditing) return;
       resetSelectionFlow();
       return;
     }
