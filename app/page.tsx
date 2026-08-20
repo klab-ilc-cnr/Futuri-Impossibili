@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.6.4";
+const appVersion = "0.6.5";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1670,9 +1670,32 @@ export default function Home() {
 
   const [layerTick, setLayerTick] = useState(0);
 
-  const editAnnotation = useCallback((annotation: Annotation, target: HTMLElement) => {
+  const editAnnotation = useCallback((annotation: Annotation, target?: HTMLElement) => {
     if (attestationSaving) return;
-    const rect = target.getBoundingClientRect();
+    const wrap = annotatedWrapRef.current;
+    let targetRect: DOMRect | null = null;
+    if (wrap) {
+      const entries = getTextNodeEntries(wrap);
+      if (entries.length > 0) {
+        const segs = getAnnotationTextSegments(text, annotation.start, annotation.end);
+        const firstSeg = segs.length > 0 ? segs[0] : { start: annotation.start, end: annotation.end };
+        const range = createRangeForOffsets(entries, firstSeg.start, firstSeg.end);
+        const rects = Array.from(range.getClientRects());
+        if (rects.length > 0) {
+          targetRect = rects[0];
+        }
+      }
+    }
+    if (!targetRect && target) {
+      targetRect = target.getBoundingClientRect();
+    }
+    const rect = targetRect ?? {
+      left: window.innerWidth / 2 - 70,
+      top: 160,
+      width: 140,
+      height: 24,
+    };
+
     const knownConcepts = annotation.concepts.filter((annotationConcept) =>
       concepts.some((concept) => concept.lexicalConcept === annotationConcept.lexicalConcept),
     );
@@ -1700,7 +1723,7 @@ export default function Home() {
       end: annotation.end,
       text: text.slice(annotation.start, annotation.end),
       x: Math.min(window.innerWidth - 154, Math.max(12, rect.left + rect.width / 2 - 71)),
-      y: Math.max(12, rect.top - 52),
+      y: Math.max(12, rect.top - 58),
       mode: "edit",
       sourceStart: annotation.start,
       sourceEnd: annotation.end,
