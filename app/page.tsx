@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.6.0";
+const appVersion = "0.6.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -3061,9 +3061,34 @@ export default function Home() {
     }
   }
 
+  function renderTextParagraphs(str: string, keyPrefix: string): React.ReactNode {
+    const parts: React.ReactNode[] = [];
+    const regex = /\n{2,}/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(str)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(str.slice(lastIndex, match.index));
+      }
+      parts.push(
+        <span key={`${keyPrefix}-pb-${match.index}`} className="paragraph-break">
+          {match[0]}
+        </span>,
+      );
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < str.length) {
+      parts.push(str.slice(lastIndex));
+    }
+
+    return parts;
+  }
+
   function renderAnnotatedText() {
     const headingMatch = /Trascrizione Intervista/i.exec(text);
-    if (!headingMatch) return <span>{text}</span>;
+    if (!headingMatch) return <>{renderTextParagraphs(text, "full")}</>;
 
     const headingStart = headingMatch.index;
     const headingEnd = headingStart + headingMatch[0].length;
@@ -3078,7 +3103,7 @@ export default function Home() {
         <span className="transcript-heading">
           {text.slice(headingStart, headingEnd)}
         </span>
-        {text.slice(headingEnd)}
+        {renderTextParagraphs(text.slice(headingEnd), "transcript")}
       </>
     );
   }

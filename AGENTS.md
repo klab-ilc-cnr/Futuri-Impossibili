@@ -84,7 +84,7 @@ Note: Concept IRIs contain `+` (UTC offset, e.g. `…_416+02_00`). LexO's DELETE
   2. Multi-level stacked underline bars (`.bar`) underneath each line.
   3. Green active locus editing highlights (`.locus-editing-highlight`) and start/end handles (`.locus-handle`).
 - **Deterministic Hit-Testing & Soft-Wrap Affinity**: `textOffsetAtPoint` (`app/page.tsx`) finds the closest line (`distY`) and character boundary (`distX`) via `Range.getClientRects()`.
-- **Uniform Line-Height**: `.text-area` has `line-height: calc(1.5em + var(--bar-step))` reserving space for underline bars.
+- **Uniform Line-Height & Paragraph Breaks**: `.text-area` has `line-height: calc(1.5em + var(--bar-step))` reserving space for underline bars. Multiple newlines (`\n\n+`) are wrapped in `.paragraph-break` (`line-height: 10px; font-size: 0;`) to provide natural, compact paragraph spacing while preserving 100% of the original string and exact NIF character indices.
 
 ## basePath — Mandatory Rules
 
