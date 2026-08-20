@@ -104,8 +104,23 @@ LexO fa un `URLDecoder.decode` extra, quindi il proxy DEVE **doppio-encodare** `
   più alte delle altre (com'era, con il solo `mark` a 33.5px e il testo a 25.5px), l'altezza
   del documento cambierebbe al variare dei confini dell'annotazione e tutto il testo sotto
   "salterebbe" di 8px a riga durante il drag del locus. Il `lineHeight` inline è stato tolto
-  dal `mark` perché ridondante (equivale alla base). `.overlap-text` conserva lo spazio extra
+dal `mark` perché ridondante (equivale alla base). `.overlap-text` conserva lo spazio extra
   `* (N+1)` per le barre impilate.
+
+## Locus editing drag & highlight wrapping (v0.5.5)
+
+**Status**: RESOLVED (v0.5.5).
+
+### Problem description & diagnosis
+- In previous versions (<= v0.5.3), dragging locus handles modified React state on every `pointermove`, causing continuous DOM re-mounting, sub-pixel kerning shifts of text fragments, and shaking/feedback loops.
+- In v0.5.4, the preview boxes had opaque solid backgrounds covering text, and post-drag commits split words across inline `<mark>` boundaries, causing words on line N+1 to reflow/jump to line N.
+- Multi-line highlights had a "broken ribbon" visual artifact across soft-wraps due to default `box-decoration-break: slice`.
+
+### Solution applied (Locus Overlay & Zero-Split DOM)
+- **Zero-split text DOM**: During the entire `locusEditing` session, text nodes in the DOM remain 100% intact and are never fragmented across word boundaries by inline marks. The active highlight and interactive start/end handles are rendered entirely in `.locus-drag-preview-layer`.
+- **Text visibility & highlight blend**: Overlay boxes use `mix-blend-mode: multiply` and `rgba(85, 175, 125, 0.38)` so the black text underneath remains 100% sharp and readable.
+- **Deterministic hit-testing**: `textOffsetAtPoint` (`app/page.tsx`) traverses visible text nodes with `TreeWalker`, finds the candidate visual line with minimal vertical distance (`distY`), and performs binary search on character bounds via `Range.getBoundingClientRect()`.
+- **Line fragment decoration**: Added `-webkit-box-decoration-break: clone; box-decoration-break: clone;` in `app/globals.css` to `.text-area mark`, `.text-area .overlap-text`, and `.text-area mark.locus-editing`.
 
 ## basePath — regole obbligatorie
 

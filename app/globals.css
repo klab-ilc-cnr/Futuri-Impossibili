@@ -266,6 +266,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .text-area mark {
   position: relative; background: var(--yellow); color: inherit; padding: 2px 0;
   box-shadow: 2px 0 var(--yellow); border-radius: 2px; cursor: pointer;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
 .text-area .annotated-text-wrap { position: relative; }
 .text-area .annotation-layer {
@@ -282,10 +283,22 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .text-area .overlap-text {
   position: relative; background: var(--yellow); color: inherit; padding: 2px 0;
   box-shadow: 2px 0 var(--yellow); border-radius: 2px;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
 .text-area mark.locus-editing {
   background: #b9dfca; box-shadow: 2px 0 #b9dfca;
   cursor: text; touch-action: none;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.text-area .locus-drag-preview-layer {
+  position: absolute; inset: 0; overflow: visible; pointer-events: none; z-index: 6;
+}
+.text-area .locus-drag-preview-box {
+  position: absolute; background: rgba(85, 175, 125, 0.38); mix-blend-mode: multiply;
+  border-radius: 2px; pointer-events: none;
+}
+.text-area .locus-drag-preview-handle {
+  position: absolute; pointer-events: auto; z-index: 7;
 }
 .locus-handle {
   position: relative; display: inline-block; width: 0; height: 1em; vertical-align: text-bottom;

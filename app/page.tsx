@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.5.2";
+const appVersion = "0.5.5";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -982,6 +982,8 @@ export default function Home() {
   const lexicalSenseTypesRequestIds = useRef<Record<string, number>>({});
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
+  const dragPreviewLayerRef = useRef<HTMLDivElement>(null);
+  const dragBoundsRef = useRef<{ start: number; end: number } | null>(null);
   const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
   const annotationPointerDown = useRef<{ x: number; y: number } | null>(null);
 
@@ -1496,61 +1498,387 @@ export default function Home() {
     return () => { alive = false; };
   }, []);
 
-  useEffect(() => {
-    function textOffsetAtPoint(clientX: number, clientY: number) {
-      const root = textRef.current;
-      if (!root) return null;
-      const browserDocument = document as Document & {
-        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  const nudgeLocusEndpoint = useCallback((endpoint: "start" | "end", delta: number) => {
+    setSelection((current) => {
+      if (!current || current.mode !== "edit") return current;
+      const nextStart = endpoint === "start"
+        ? Math.min(Math.max(0, current.start + delta), current.end - 1)
+        : current.start;
+      const nextEnd = endpoint === "end"
+        ? Math.max(Math.min(text.length, current.end + delta), current.start + 1)
+        : current.end;
+      return {
+        ...current,
+        start: nextStart,
+        end: nextEnd,
+        text: text.slice(nextStart, nextEnd),
       };
-      const layer = annotationLayerRef.current;
-      const handles = root.querySelectorAll<HTMLElement>(".locus-handle");
-      const layerDisplay = layer?.style.display ?? "";
-      if (layer) layer.style.display = "none";
-      for (const handle of Array.from(handles)) handle.style.display = "none";
-      try {
-        const caretPosition = document.caretPositionFromPoint?.(clientX, clientY);
-        const caretRange = caretPosition ? null : browserDocument.caretRangeFromPoint?.(clientX, clientY);
-        const node = caretPosition?.offsetNode ?? caretRange?.startContainer;
-        const offset = caretPosition?.offset ?? caretRange?.startOffset;
-        if (!node || offset === undefined || !root.contains(node)) return null;
+    });
+  }, [text]);
 
-        const before = document.createRange();
-        before.selectNodeContents(root);
-        before.setEnd(node, offset);
-        return before.toString().length;
-      } finally {
-        if (layer) layer.style.display = layerDisplay;
-        for (const handle of Array.from(handles)) handle.style.display = "";
+  useEffect(() => {
+    function getTextNodeEntries(root: HTMLElement) {
+      const entries: Array<{ node: Text; start: number; end: number }> = [];
+      let offset = 0;
+      const walker = document.createTreeWalker(
+        root,
+        NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+        {
+          acceptNode(n) {
+            if (n.nodeType === Node.ELEMENT_NODE) {
+              const el = n as HTMLElement;
+              if (
+                el.classList.contains("interview-offset-prefix")
+                || el.classList.contains("annotation-layer")
+                || el.classList.contains("attestation-tooltip")
+                || el.classList.contains("locus-handle")
+                || el.classList.contains("locus-drag-preview-layer")
+              ) {
+                if (el.classList.contains("interview-offset-prefix")) {
+                  offset += el.textContent?.length ?? 0;
+                }
+                return NodeFilter.FILTER_REJECT;
+              }
+              return NodeFilter.FILTER_SKIP;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+          },
+        },
+      );
+
+      let curr = walker.nextNode();
+      while (curr) {
+        if (curr.nodeType === Node.TEXT_NODE) {
+          const textNode = curr as Text;
+          const len = textNode.textContent?.length ?? 0;
+          if (len > 0) {
+            entries.push({
+              node: textNode,
+              start: offset,
+              end: offset + len,
+            });
+            offset += len;
+          }
+        }
+        curr = walker.nextNode();
       }
+      return entries;
+    }
+
+    function createRangeForOffsets(
+      entries: Array<{ node: Text; start: number; end: number }>,
+      start: number,
+      end: number,
+    ) {
+      const range = document.createRange();
+      if (entries.length === 0) return range;
+
+      let startEntry = entries[0];
+      for (const entry of entries) {
+        if (entry.start <= start && start <= entry.end) {
+          startEntry = entry;
+          break;
+        }
+        if (entry.end < start) startEntry = entry;
+      }
+
+      let endEntry = entries[entries.length - 1];
+      for (const entry of entries) {
+        if (entry.start <= end && end <= entry.end) {
+          endEntry = entry;
+          break;
+        }
+        if (entry.start > end) break;
+        endEntry = entry;
+      }
+
+      const startOffset = Math.max(0, Math.min(start - startEntry.start, startEntry.node.textContent?.length ?? 0));
+      const endOffset = Math.max(0, Math.min(end - endEntry.start, endEntry.node.textContent?.length ?? 0));
+
+      range.setStart(startEntry.node, startOffset);
+      range.setEnd(endEntry.node, endOffset);
+      return range;
+    }
+
+    function updateDragPreview(
+      start: number,
+      end: number,
+    ) {
+      const layer = dragPreviewLayerRef.current;
+      const wrap = annotatedWrapRef.current;
+      if (!layer || !wrap) return;
+
+      const entries = getTextNodeEntries(wrap);
+      if (entries.length === 0) {
+        layer.replaceChildren();
+        return;
+      }
+
+      const wrapRect = wrap.getBoundingClientRect();
+      const highlightRange = createRangeForOffsets(entries, start, end);
+      const rects = Array.from(highlightRange.getClientRects());
+
+      const startRange = createRangeForOffsets(entries, start, start);
+      const startCaret = startRange.getBoundingClientRect();
+
+      const endRange = createRangeForOffsets(entries, end, end);
+      const endCaret = endRange.getBoundingClientRect();
+
+      layer.replaceChildren();
+
+      for (const r of rects) {
+        if (r.width <= 0 && r.height <= 0) continue;
+        const box = document.createElement("div");
+        box.className = "locus-drag-preview-box";
+        box.style.left = `${r.left - wrapRect.left}px`;
+        box.style.top = `${r.top - wrapRect.top}px`;
+        box.style.width = `${r.width}px`;
+        box.style.height = `${r.height}px`;
+        layer.appendChild(box);
+      }
+
+      const startHandle = document.createElement("span");
+      startHandle.className = "locus-handle locus-handle-start locus-drag-preview-handle";
+      startHandle.setAttribute("role", "slider");
+      startHandle.setAttribute("tabindex", "0");
+      startHandle.setAttribute("aria-label", "Sposta l’inizio dell’evidenziazione");
+      startHandle.style.left = `${startCaret.left - wrapRect.left}px`;
+      startHandle.style.top = `${startCaret.top - wrapRect.top}px`;
+      startHandle.style.height = `${startCaret.height || 24}px`;
+      startHandle.onpointerdown = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setLocusDragging(true);
+        locusDragEndpoint.current = "start";
+        dragBoundsRef.current = { start, end };
+      };
+      startHandle.onkeydown = (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        event.stopPropagation();
+        nudgeLocusEndpoint("start", event.key === "ArrowLeft" ? -1 : 1);
+      };
+      layer.appendChild(startHandle);
+
+      const endHandle = document.createElement("span");
+      endHandle.className = "locus-handle locus-handle-end locus-drag-preview-handle";
+      endHandle.setAttribute("role", "slider");
+      endHandle.setAttribute("tabindex", "0");
+      endHandle.setAttribute("aria-label", "Sposta la fine dell’evidenziazione");
+      endHandle.style.left = `${endCaret.left - wrapRect.left}px`;
+      endHandle.style.top = `${endCaret.top - wrapRect.top}px`;
+      endHandle.style.height = `${endCaret.height || 24}px`;
+      endHandle.onpointerdown = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setLocusDragging(true);
+        locusDragEndpoint.current = "end";
+        dragBoundsRef.current = { start, end };
+      };
+      endHandle.onkeydown = (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        event.stopPropagation();
+        nudgeLocusEndpoint("end", event.key === "ArrowLeft" ? -1 : 1);
+      };
+      layer.appendChild(endHandle);
+    }
+
+    function findOffsetInNode(
+      range: Range,
+      entry: { node: Text; start: number; end: number },
+      targetRect: DOMRect,
+      clientX: number,
+    ): number {
+      const node = entry.node;
+      const len = node.textContent?.length ?? 0;
+      if (len === 0) return entry.start;
+
+      let lineStartChar = 0;
+      let lineEndChar = len;
+
+      range.selectNodeContents(node);
+      const allRects = range.getClientRects();
+      if (allRects.length > 1) {
+        let low = 0;
+        let high = len;
+        while (low < high) {
+          const mid = Math.floor((low + high) / 2);
+          range.setStart(node, mid);
+          range.setEnd(node, Math.min(mid + 1, len));
+          const r = range.getBoundingClientRect();
+          if (r.bottom < targetRect.top - 2) {
+            low = mid + 1;
+          } else {
+            high = mid;
+          }
+        }
+        lineStartChar = low;
+
+        low = lineStartChar;
+        high = len;
+        while (low < high) {
+          const mid = Math.floor((low + high) / 2);
+          range.setStart(node, mid);
+          range.setEnd(node, Math.min(mid + 1, len));
+          const r = range.getBoundingClientRect();
+          if (r.top > targetRect.bottom + 2) {
+            high = mid;
+          } else {
+            low = mid + 1;
+          }
+        }
+        lineEndChar = low;
+      }
+
+      if (lineStartChar >= lineEndChar) {
+        return entry.start + lineStartChar;
+      }
+
+      range.setStart(node, lineStartChar);
+      range.setEnd(node, lineStartChar);
+      const firstRect = range.getBoundingClientRect();
+      if (clientX <= firstRect.left) {
+        return entry.start + lineStartChar;
+      }
+
+      range.setStart(node, lineEndChar);
+      range.setEnd(node, lineEndChar);
+      const lastRect = range.getBoundingClientRect();
+      if (clientX >= lastRect.left) {
+        return entry.start + lineEndChar;
+      }
+
+      let low = lineStartChar;
+      let high = lineEndChar;
+      while (low < high) {
+        const mid = Math.floor((low + high) / 2);
+        range.setStart(node, mid);
+        range.setEnd(node, mid + 1);
+        const charRect = range.getBoundingClientRect();
+        const midX = charRect.left + charRect.width / 2;
+        if (clientX < midX) {
+          high = mid;
+        } else {
+          low = mid + 1;
+        }
+      }
+
+      return entry.start + low;
+    }
+
+    function textOffsetAtPoint(clientX: number, clientY: number) {
+      const root = annotatedWrapRef.current ?? textRef.current;
+      if (!root) return null;
+
+      const entries = getTextNodeEntries(root);
+      if (entries.length === 0) return 0;
+
+      const range = document.createRange();
+
+      interface Fragment {
+        entry: { node: Text; start: number; end: number };
+        rect: DOMRect;
+        distY: number;
+        distX: number;
+      }
+
+      const fragments: Fragment[] = [];
+      let minDistY = Infinity;
+
+      for (const entry of entries) {
+        range.selectNodeContents(entry.node);
+        const rects = range.getClientRects();
+        for (let i = 0; i < rects.length; i++) {
+          const rect = rects[i];
+          if (rect.width <= 0 && rect.height <= 0) continue;
+          const distY = clientY < rect.top
+            ? rect.top - clientY
+            : clientY > rect.bottom
+              ? clientY - rect.bottom
+              : 0;
+          const distX = clientX < rect.left
+            ? rect.left - clientX
+            : clientX > rect.right
+              ? clientX - rect.right
+              : 0;
+
+          if (distY < minDistY) {
+            minDistY = distY;
+          }
+          fragments.push({ entry, rect, distY, distX });
+        }
+      }
+
+      if (fragments.length === 0) return 0;
+
+      const lineCandidates = fragments.filter((f) => f.distY <= minDistY + 3);
+
+      let best = lineCandidates[0];
+      let minX = best.distX;
+      for (let i = 1; i < lineCandidates.length; i++) {
+        const c = lineCandidates[i];
+        if (c.distX < minX) {
+          minX = c.distX;
+          best = c;
+        }
+      }
+
+      return findOffsetInNode(range, best.entry, best.rect, clientX);
     }
 
     function moveLocusEndpoint(event: PointerEvent) {
       const endpoint = locusDragEndpoint.current;
-      if (!endpoint || !locusEditing) return;
+      if (!endpoint || !locusEditing || !selection) return;
       const offset = textOffsetAtPoint(event.clientX, event.clientY);
       if (offset === null) return;
       event.preventDefault();
-      setSelection((current) => {
-        if (!current || current.mode !== "edit") return current;
-        const nextStart = endpoint === "start"
-          ? Math.min(Math.max(0, offset), current.end - 1)
-          : current.start;
-        const nextEnd = endpoint === "end"
-          ? Math.max(Math.min(text.length, offset), current.start + 1)
-          : current.end;
-        return {
-          ...current,
-          start: nextStart,
-          end: nextEnd,
-          text: text.slice(nextStart, nextEnd),
-        };
-      });
+
+      const baseStart = selection.start;
+      const baseEnd = selection.end;
+      const nextStart = endpoint === "start"
+        ? Math.min(Math.max(0, offset), baseEnd - 1)
+        : baseStart;
+      const nextEnd = endpoint === "end"
+        ? Math.max(Math.min(text.length, offset), baseStart + 1)
+        : baseEnd;
+
+      const current = dragBoundsRef.current ?? { start: baseStart, end: baseEnd };
+      if (nextStart !== current.start || nextEnd !== current.end) {
+        dragBoundsRef.current = { start: nextStart, end: nextEnd };
+        updateDragPreview(nextStart, nextEnd);
+      }
     }
 
     function stopLocusDrag() {
+      const endpoint = locusDragEndpoint.current;
+      if (!endpoint || !locusEditing) {
+        locusDragEndpoint.current = null;
+        setLocusDragging(false);
+        return;
+      }
+
+      const finalBounds = dragBoundsRef.current;
       locusDragEndpoint.current = null;
       setLocusDragging(false);
+
+      if (finalBounds && selection) {
+        setSelection((current) => {
+          if (!current || current.mode !== "edit") return current;
+          return {
+            ...current,
+            start: finalBounds.start,
+            end: finalBounds.end,
+            text: text.slice(finalBounds.start, finalBounds.end),
+          };
+        });
+      }
+    }
+
+    if (locusEditing && selection?.mode === "edit" && !locusDragging) {
+      updateDragPreview(selection.start, selection.end);
+    } else if (!locusEditing) {
+      dragPreviewLayerRef.current?.replaceChildren();
     }
 
     document.addEventListener("pointermove", moveLocusEndpoint);
@@ -1561,7 +1889,7 @@ export default function Home() {
       document.removeEventListener("pointerup", stopLocusDrag);
       document.removeEventListener("pointercancel", stopLocusDrag);
     };
-  }, [locusEditing, text]);
+  }, [layerTick, locusDragging, locusEditing, nudgeLocusEndpoint, selection, text]);
 
   useEffect(() => {
     function leaveSelectionFlow(event: PointerEvent) {
@@ -1573,6 +1901,10 @@ export default function Home() {
         if (targetElement?.closest("mark.locus-editing")
           || targetElement?.closest("mark[data-annotation-index], .overlap-text")
           || targetElement?.closest(".bar")
+          || targetElement?.closest(".locus-drag-preview-layer")
+          || targetElement?.closest(".locus-drag-preview-box")
+          || targetElement?.closest(".locus-drag-preview-handle")
+          || targetElement?.closest(".locus-handle")
           || annotationActionsRef.current?.contains(target)
           || (conceptSelectionActive && conceptSidebarRef.current?.contains(target))
           || confirmDeleteRef.current?.contains(target)) return;
@@ -2392,24 +2724,6 @@ export default function Home() {
     }
   }
 
-  function nudgeLocusEndpoint(endpoint: "start" | "end", delta: number) {
-    setSelection((current) => {
-      if (!current || current.mode !== "edit") return current;
-      const nextStart = endpoint === "start"
-        ? Math.min(Math.max(0, current.start + delta), current.end - 1)
-        : current.start;
-      const nextEnd = endpoint === "end"
-        ? Math.max(Math.min(text.length, current.end + delta), current.start + 1)
-        : current.end;
-      return {
-        ...current,
-        start: nextStart,
-        end: nextEnd,
-        text: text.slice(nextStart, nextEnd),
-      };
-    });
-  }
-
   async function requestAnnotationUpdate() {
     if (!selection || !editingAttestation || !editDirty || attestationSaving) return;
     if (!addedConceptsConfigured) {
@@ -2585,16 +2899,14 @@ export default function Home() {
       const isEditingAnnotation = selection?.mode === "edit"
         && annotation.start === (selection.sourceStart ?? selection.start)
         && annotation.end === (selection.sourceEnd ?? selection.end);
-      const displayStart = isEditingAnnotation && locusEditing ? selection!.start : annotation.start;
-      const displayEnd = isEditingAnnotation && locusEditing ? selection!.end : annotation.end;
       return {
         annotation,
         index,
         isEditingAnnotation,
-        displayStart,
-        displayEnd,
-        s: Math.max(rangeStart, displayStart),
-        e: Math.min(rangeEnd, displayEnd),
+        displayStart: annotation.start,
+        displayEnd: annotation.end,
+        s: Math.max(rangeStart, annotation.start),
+        e: Math.min(rangeEnd, annotation.end),
       };
     }).filter((job) => job.s < job.e && (
       !conceptFilter || job.annotation.concepts.some((c) => c.lexicalConcept === conceptFilter)
@@ -2635,17 +2947,13 @@ export default function Home() {
     segEnd: number,
     keyPrefix: string,
   ) {
-    const { annotation, index, isEditingAnnotation, displayStart, displayEnd } = job;
-    const showStartHandle = isEditingAnnotation && segStart === displayStart;
-    const showEndHandle = isEditingAnnotation && segEnd === displayEnd;
+    const { annotation, index, isEditingAnnotation } = job;
     return (
       <mark
         key={`${keyPrefix}-annotation-${segStart}-${index}`}
         data-labels={annotation.label}
         data-annotation-index={index}
-        className={isEditingAnnotation
-          ? locusDragging ? "editing locus-editing" : "editing"
-          : undefined}
+        className={isEditingAnnotation ? "editing" : undefined}
         role="button"
         tabIndex={0}
         onMouseDown={(event) => {
@@ -2676,9 +2984,7 @@ export default function Home() {
         aria-label={`Modifica attestazione: ${annotation.label.replace(/\n/g, ", ")}`}
         title="Modifica attestazione"
       >
-        {showStartHandle && renderLocusHandle("start")}
         {text.slice(segStart, segEnd)}
-        {showEndHandle && renderLocusHandle("end")}
         {renderAnnotationTooltip(annotation)}
       </mark>
     );
@@ -2690,8 +2996,6 @@ export default function Home() {
     segEnd: number,
     keyPrefix: string,
   ) {
-    const editingStart = active.some((job) => job.isEditingAnnotation && segStart === job.displayStart);
-    const editingEnd = active.some((job) => job.isEditingAnnotation && segEnd === job.displayEnd);
     return (
       <span
         key={`${keyPrefix}-overlap-${segStart}`}
@@ -2699,37 +3003,8 @@ export default function Home() {
         data-annotations={active.map((job) => job.index).join(",")}
         style={{ lineHeight: `calc(1.5em + var(--bar-step) * ${active.length + 1})` }}
       >
-        {editingStart && renderLocusHandle("start")}
         {text.slice(segStart, segEnd)}
-        {editingEnd && renderLocusHandle("end")}
       </span>
-    );
-  }
-
-  function renderLocusHandle(kind: "start" | "end") {
-    const isStart = kind === "start";
-    return (
-      <span
-        className={`locus-handle ${isStart ? "locus-handle-start" : "locus-handle-end"}`}
-        role="slider"
-        tabIndex={0}
-        aria-label={isStart ? "Sposta l’inizio dell’evidenziazione" : "Sposta la fine dell’evidenziazione"}
-        aria-valuemin={isStart ? 0 : selection!.start + 1}
-        aria-valuemax={isStart ? selection!.end - 1 : text.length}
-        aria-valuenow={isStart ? selection!.start : selection!.end}
-        onPointerDown={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setLocusDragging(true);
-          locusDragEndpoint.current = isStart ? "start" : "end";
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-          event.preventDefault();
-          event.stopPropagation();
-          nudgeLocusEndpoint(isStart ? "start" : "end", event.key === "ArrowLeft" ? -1 : 1);
-        }}
-      />
     );
   }
 
@@ -3018,6 +3293,11 @@ export default function Home() {
                           const segmentEl = findAnnotationSegmentElement(index);
                           editAnnotation(annotation, segmentEl ?? barEl as HTMLElement);
                         }}
+                      />
+                      <div
+                        className="locus-drag-preview-layer"
+                        ref={dragPreviewLayerRef}
+                        aria-hidden="true"
                       />
                     </div>
                   </div>
