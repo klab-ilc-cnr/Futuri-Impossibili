@@ -1788,7 +1788,7 @@ export default function Home() {
       const isSingle = active.length === 1;
       const primaryJob = active[0];
 
-      rects.forEach((rect, rIndex) => {
+      rects.forEach((rect) => {
         if (rect.width <= 0 || rect.height <= 0) return;
         const highlightEl = document.createElement("div");
         highlightEl.className = `annotation-highlight${isSingle ? "" : " overlap"}${isSingle && primaryJob.index === editingAnnotationIndex ? " editing" : ""}`;
@@ -1819,10 +1819,6 @@ export default function Home() {
               editAnnotation(primaryJob.annotation, highlightEl);
             }
           };
-
-          if (rIndex === 0 && segStart === primaryJob.start) {
-            highlightEl.appendChild(createTooltipElement(primaryJob.annotation));
-          }
         } else {
           highlightEl.onclick = (event) => {
             event.stopPropagation();
