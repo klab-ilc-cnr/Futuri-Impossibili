@@ -9,7 +9,7 @@
   --cream: #f5f3ed;
   --line: #dfe3dc;
   --yellow: #ffdb58;
-  --bar-step: 8px;
+  --bar-step: 14px;
 }
 
 * { box-sizing: border-box; }
@@ -281,12 +281,12 @@ main { height: calc(100vh - 176px); min-height: 520px; }
   background: #b9dfca;
 }
 .text-area .annotation-layer .bar {
-  position: absolute; height: 5px; border-radius: 3px; background: rgba(184, 138, 46, .85);
+  position: absolute; height: 4px; border-radius: 2px; background: rgba(184, 138, 46, .85);
   pointer-events: auto; cursor: pointer;
 }
 .text-area .annotation-layer .bar:hover { background: rgba(138, 93, 18, .95); }
 .text-area .annotation-layer .bar.selected {
-  background: var(--green); height: 7px; z-index: 1;
+  background: var(--green); height: 5px; z-index: 1;
 }
 .text-area .annotation-layer .locus-editing-highlight {
   position: absolute; background: rgba(85, 175, 125, 0.38); mix-blend-mode: multiply;

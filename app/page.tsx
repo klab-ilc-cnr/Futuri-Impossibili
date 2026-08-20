@@ -125,7 +125,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.6.1";
+const appVersion = "0.6.2";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1279,6 +1279,38 @@ function textOffsetAtPoint(root: HTMLElement | null, clientX: number, clientY: n
   return findOffsetInNode(range, best.entry, best.rect, clientX);
 }
 
+function getAnnotationTextSegments(
+  rawText: string,
+  start: number,
+  end: number,
+): Array<{ start: number; end: number }> {
+  if (start >= end) return [];
+  const segments: Array<{ start: number; end: number }> = [];
+  const span = rawText.slice(start, end);
+  const regex = /\n{2,}/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(span)) !== null) {
+    if (match.index > last) {
+      segments.push({
+        start: start + last,
+        end: start + match.index,
+      });
+    }
+    last = match.index + match[0].length;
+  }
+
+  if (last < span.length) {
+    segments.push({
+      start: start + last,
+      end: end,
+    });
+  }
+
+  return segments;
+}
+
 export default function Home() {
   const [activePage, setActivePage] = useState(0);
   const [interviews, setInterviews] = useState<Interview[]>([]);
@@ -1786,8 +1818,8 @@ export default function Home() {
     }
 
     const wrapRect = wrap.getBoundingClientRect();
-    const barHeight = 5;
-    const barGap = 3;
+    const barHeight = 4;
+    const barGap = 2;
 
     layer.replaceChildren();
 
@@ -1803,12 +1835,15 @@ export default function Home() {
       if (conceptFilter && !annotation.concepts.some((c) => c.lexicalConcept === conceptFilter)) return;
       const isEditingThis = locusEditing && selection?.mode === "edit" && index === editingAnnotationIndex;
       if (!isEditingThis) {
-        jobs.push({
-          annotation,
-          index,
-          start: annotation.start,
-          end: annotation.end,
-        });
+        const textSegs = getAnnotationTextSegments(text, annotation.start, annotation.end);
+        for (const seg of textSegs) {
+          jobs.push({
+            annotation,
+            index,
+            start: seg.start,
+            end: seg.end,
+          });
+        }
       }
     });
 
@@ -1877,19 +1912,22 @@ export default function Home() {
     const pending = new Map<string, { left: number; right: number; top: number }[]>();
     annotations.forEach((annotation, index) => {
       if (conceptFilter && !annotation.concepts.some((c) => c.lexicalConcept === conceptFilter)) return;
-      const range = createRangeForOffsets(entries, annotation.start, annotation.end);
-      const rects = Array.from(range.getClientRects());
-      for (const rect of rects) {
-        if (!rect || rect.width <= 0 || rect.height <= 0) continue;
-        const band = Math.round((rect.bottom - wrapRect.top) / 4);
-        const key = `${band}:${index}`;
-        const list = pending.get(key) ?? [];
-        list.push({
-          left: rect.left - wrapRect.left,
-          right: rect.right - wrapRect.left,
-          top: rect.bottom - wrapRect.top,
-        });
-        pending.set(key, list);
+      const textSegs = getAnnotationTextSegments(text, annotation.start, annotation.end);
+      for (const seg of textSegs) {
+        const range = createRangeForOffsets(entries, seg.start, seg.end);
+        const rects = Array.from(range.getClientRects());
+        for (const rect of rects) {
+          if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+          const band = Math.round((rect.bottom - wrapRect.top) / 4);
+          const key = `${band}:${index}`;
+          const list = pending.get(key) ?? [];
+          list.push({
+            left: rect.left - wrapRect.left,
+            right: rect.right - wrapRect.left,
+            top: rect.bottom - wrapRect.top,
+          });
+          pending.set(key, list);
+        }
       }
     });
 
@@ -1963,18 +2001,21 @@ export default function Home() {
       const activeStart = locusDragging && dragBoundsRef.current ? dragBoundsRef.current.start : selection.start;
       const activeEnd = locusDragging && dragBoundsRef.current ? dragBoundsRef.current.end : selection.end;
 
-      const locusRange = createRangeForOffsets(entries, activeStart, activeEnd);
-      const locusRects = Array.from(locusRange.getClientRects());
+      const activeSegs = getAnnotationTextSegments(text, activeStart, activeEnd);
+      for (const seg of activeSegs) {
+        const locusRange = createRangeForOffsets(entries, seg.start, seg.end);
+        const locusRects = Array.from(locusRange.getClientRects());
 
-      for (const r of locusRects) {
-        if (r.width <= 0 || r.height <= 0) continue;
-        const box = document.createElement("div");
-        box.className = "locus-editing-highlight";
-        box.style.left = `${r.left - wrapRect.left}px`;
-        box.style.top = `${r.top - wrapRect.top}px`;
-        box.style.width = `${r.width}px`;
-        box.style.height = `${r.height}px`;
-        layer.appendChild(box);
+        for (const r of locusRects) {
+          if (r.width <= 0 || r.height <= 0) continue;
+          const box = document.createElement("div");
+          box.className = "locus-editing-highlight";
+          box.style.left = `${r.left - wrapRect.left}px`;
+          box.style.top = `${r.top - wrapRect.top}px`;
+          box.style.width = `${r.width}px`;
+          box.style.height = `${r.height}px`;
+          layer.appendChild(box);
+        }
       }
 
       const startPt = getHandlePoint(entries, activeStart, "start");
@@ -2025,7 +2066,7 @@ export default function Home() {
       };
       layer.appendChild(endHandle);
     }
-  }, [annotations, conceptFilter, editAnnotation, editingAnnotationIndex, locusDragging, locusEditing, nudgeLocusEndpoint, selection, textError, textLoading]);
+  }, [annotations, conceptFilter, editAnnotation, editingAnnotationIndex, locusDragging, locusEditing, nudgeLocusEndpoint, selection, text, textError, textLoading]);
 
   useLayoutEffect(() => {
     drawAnnotationsLayer();
