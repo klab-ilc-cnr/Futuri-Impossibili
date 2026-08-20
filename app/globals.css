@@ -263,14 +263,22 @@ main { height: calc(100vh - 176px); min-height: 520px; }
   font-size: 10px; line-height: 1.35; font-weight: 700;
 }
 .text-area::selection, .text-area *::selection { background: #c9e8d8; color: var(--ink); }
-.text-area mark {
-  position: relative; background: var(--yellow); color: inherit; padding: 2px 0;
-  box-shadow: 2px 0 var(--yellow); border-radius: 2px; cursor: pointer;
-  -webkit-box-decoration-break: clone; box-decoration-break: clone;
-}
 .text-area .annotated-text-wrap { position: relative; }
 .text-area .annotation-layer {
   position: absolute; inset: 0; overflow: visible; pointer-events: none;
+}
+.text-area .annotation-layer .annotation-highlight {
+  position: absolute; background: var(--yellow); mix-blend-mode: multiply;
+  border-radius: 2px; pointer-events: auto; cursor: pointer;
+}
+.text-area .annotation-layer .annotation-highlight.overlap {
+  cursor: default;
+}
+.text-area .annotation-layer .annotation-highlight:hover {
+  background: #ffd54f;
+}
+.text-area .annotation-layer .annotation-highlight.editing {
+  background: #b9dfca;
 }
 .text-area .annotation-layer .bar {
   position: absolute; height: 5px; border-radius: 3px; background: rgba(184, 138, 46, .85);
@@ -280,29 +288,13 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .text-area .annotation-layer .bar.selected {
   background: var(--green); height: 7px; z-index: 1;
 }
-.text-area .overlap-text {
-  position: relative; background: var(--yellow); color: inherit; padding: 2px 0;
-  box-shadow: 2px 0 var(--yellow); border-radius: 2px;
-  -webkit-box-decoration-break: clone; box-decoration-break: clone;
-}
-.text-area mark.locus-editing {
-  background: #b9dfca; box-shadow: 2px 0 #b9dfca;
-  cursor: text; touch-action: none;
-  -webkit-box-decoration-break: clone; box-decoration-break: clone;
-}
-.text-area .locus-drag-preview-layer {
-  position: absolute; inset: 0; overflow: visible; pointer-events: none; z-index: 6;
-}
-.text-area .locus-drag-preview-box {
+.text-area .annotation-layer .locus-editing-highlight {
   position: absolute; background: rgba(85, 175, 125, 0.38); mix-blend-mode: multiply;
   border-radius: 2px; pointer-events: none;
 }
-.text-area .locus-drag-preview-handle {
-  position: absolute; pointer-events: auto; z-index: 7;
-}
 .locus-handle {
-  position: relative; display: inline-block; width: 0; height: 1em; vertical-align: text-bottom;
-  color: #245f45; cursor: ew-resize; touch-action: none;
+  position: absolute; display: inline-block; width: 0; height: 1em;
+  color: #245f45; cursor: ew-resize; touch-action: none; pointer-events: auto; z-index: 8;
 }
 .locus-handle::before {
   content: ""; position: absolute; z-index: 4; top: -8px; width: 12px; height: 12px;
@@ -318,7 +310,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .locus-handle-end::before { left: -5px; }
 .locus-handle-end::after { left: 0; }
 .locus-handle:focus-visible::before { outline: 2px solid #173f31; outline-offset: 2px; }
-.text-area mark:focus-visible { outline: 2px solid #315f4a; outline-offset: 3px; }
+.text-area .annotation-layer .annotation-highlight:focus-visible { outline: 2px solid #315f4a; outline-offset: 2px; }
 .attestation-tooltip {
   position: absolute; z-index: 12; left: 50%; bottom: calc(100% + 8px); width: max-content;
   min-width: 190px; max-width: 330px; display: grid; gap: 5px; padding: 8px 10px;
@@ -341,11 +333,11 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .attestation-tooltip .polarity-positive .tooltip-sentiment { background-position: -66.27px -14.32px; }
 .tooltip-definition-icon { width: 18px; height: 18px; display: grid; place-items: center; color: #bfe3d1; flex: none; }
 .tooltip-definition-icon svg { width: 18px; height: 18px; }
-.text-area mark:hover .attestation-tooltip,
-.text-area mark:focus-visible .attestation-tooltip { opacity: 1; transform: translate(-50%, 0); }
-.text-area mark.editing .attestation-tooltip,
-.text-area mark.editing:hover .attestation-tooltip,
-.text-area mark.editing:focus .attestation-tooltip { opacity: 0; transform: translate(-50%, 5px); }
+.text-area .annotation-layer .annotation-highlight:hover .attestation-tooltip,
+.text-area .annotation-layer .annotation-highlight:focus-visible .attestation-tooltip { opacity: 1; transform: translate(-50%, 0); }
+.text-area .annotation-layer .annotation-highlight.editing .attestation-tooltip,
+.text-area .annotation-layer .annotation-highlight.editing:hover .attestation-tooltip,
+.text-area .annotation-layer .annotation-highlight.editing:focus .attestation-tooltip { opacity: 0; transform: translate(-50%, 5px); }
 .interview-offset-prefix { display: none; }
 .transcript-heading { font-weight: 800; color: #1e2c26; }
 .text-loading, .text-error {

@@ -1,175 +1,139 @@
 # AGENTS.md
 
-## Progetto
+## Project Overview
 
-Interfaccia web React per il progetto **Futuri (im)possibili**: caricare, leggere, annotare e
-interrogare le trascrizioni delle interviste ai ragazzi di Caivano, con un dizionario narrativo
-(concetti associati alle parole di indagine). Il backend è **LexO-server** (Java/Tomcat),
-contattato SOLO tramite i proxy API in `app/api/lexo/*` (mai direttamente dal client).
+React web interface for the **Futuri (im)possibili** project: upload, read, annotate, and
+query interview transcripts of youths from Caivano, linked to a narrative dictionary
+(concepts associated with research target words). The backend is **LexO-server** (Java/Tomcat),
+contacted ONLY through the API proxies in `app/api/lexo/*` (never directly from the client).
 
-## Stack (attenzione: non è Next puro)
+## Stack (Important: Not Pure Next.js)
 
-- **Next.js 16 App Router eseguito su Vite** tramite **vinext** (Next-on-Vite,
+- **Next.js 16 App Router running on Vite** via **vinext** (Next-on-Vite,
   pinned `1.0.0-beta.5`) + `@cloudflare/vite-plugin` (workerd/miniflare).
-  La build NON è `next build`: si usa `npm run build` → `vinext build`.
-- React 19, TypeScript, Tailwind CSS 4 (postcss), drizzle (INUTILIZZATO).
-- Il progetto è nato da uno scaffold "site-creator" (Codex/Cloudflare): restano residui
-  del template (vedi "File morti").
+  The build is NOT `next build`: `npm run build` → `vinext build` is used.
+- React 19, TypeScript, Tailwind CSS 4 (postcss), drizzle (UNUSED).
+- The project originated from a "site-creator" scaffold (Codex/Cloudflare): template leftovers
+  remain (see "Dead Files").
 
-## Comandi
+## Commands
 
-Guida operativa completa (installazione locale, build, proxy, deploy VM e Apache) in
-`INSTALL.md`; i dettagli della prima installazione sulla VM in `deploy/README.md`.
+Complete operational guide (local installation, build, proxy, VM deploy, and Apache) in
+`INSTALL.md`; first-time VM setup details in `deploy/README.md`.
 
-- `npm ci` — installa (Node >= 22.13). Su macchine con npm 11 che blocca i postinstall,
-  se mancano i binari nativi: `node node_modules/workerd/install.js` e
+- `npm ci` — install dependencies (Node >= 22.13). On machines with npm 11 blocking postinstall,
+  if native binaries are missing: `node node_modules/workerd/install.js` and
   `node node_modules/esbuild/install.js`.
-- `npm run dev` — dev server (porta 3000, vedi output); l'app è su
-  `http://localhost:3000/futuri-impossibili` (il basePath è attivo anche in dev).
-  **Nota**: `vinext dev` gira dentro workerd/miniflare, che NON riesce a raggiungere
-  IP privati come il LexO di test (`{{LEXO_TEST_URL}}` — "Network connection lost").
-  Per testare le API contro il backend remoto usare `npm run start` + `start:proxy` (sotto).
-- `npm run build` — build di produzione (`vinext build` → `dist/`).
-- `npm run build:deploy` — build + `deploy/post-build.sh` (sposta gli asset hashed da
-  `dist/client/futuri-impossibili/_next` a `dist/client/_next`). **Da usare SEMPRE per i deploy**.
-- `npm run start` — server di produzione locale (porta 3000, `-p`/`-H` per cambiarla; serve `dist/`).
-  **Nota**: in `vinext start` gli asset `_next/static` sono serviti solo alla root, quindi il sito
-  va visto tramite il proxy locale (sotto), non direttamente sulla 3000.
-- `npm run start:proxy` — reverse-proxy locale (Node, `deploy/local-proxy.mjs`, porta 3001): riscrive
-  `/futuri-impossibili/_next/static/*` → `/_next/static/*` e inoltra tutto il resto a `vinext start`.
-  Replica le 2 regole Apache del reverse proxy. **Flusso per testare in locale**: `npm run build:deploy`,
-  `npm run start`, poi in un’altra shell `npm run start:proxy` e aprire
-  `http://localhost:3001/futuri-impossibili/`. Per usare il backend remoto su questa macchina:
+- `npm run dev` — dev server (port 3000, see output); the app runs at
+  `http://localhost:3000/futuri-impossibili` (basePath is active in dev).
+  **Note**: `vinext dev` runs inside workerd/miniflare, which CANNOT reach
+  private IPs such as the remote test LexO (`{{LEXO_TEST_URL}}` — "Network connection lost").
+  To test APIs against the remote backend, use `npm run start` + `start:proxy` (below).
+- `npm run build` — production build (`vinext build` → `dist/`).
+- `npm run build:deploy` — build + `deploy/post-build.sh` (moves hashed assets from
+  `dist/client/futuri-impossibili/_next` to `dist/client/_next`). **ALWAYS use for deployments**.
+- `npm run start` — local production server (port 3000, `-p`/`-H` to change; serves `dist/`).
+  **Note**: in `vinext start` the assets `_next/static` are only served at root, so the site
+  must be accessed via the local proxy (below), not directly on port 3000.
+- `npm run start:proxy` — local reverse-proxy (Node, `deploy/local-proxy.mjs`, port 3001): rewrites
+  `/futuri-impossibili/_next/static/*` → `/_next/static/*` and forwards everything else to `vinext start`.
+  Replicates the 2 Apache reverse proxy rules. **Local test workflow**: `npm run build:deploy`,
+  `npm run start`, then in another shell `npm run start:proxy` and open
+  `http://localhost:3001/futuri-impossibili/`. To use the remote backend on this machine:
   `LEXO_SERVER_URL={{LEXO_TEST_URL}} npm run start`.
-- `npm run lint` — eslint: 0 errori; accettati i 3 warning `<img>` in `page.tsx` e il
-  warning `useCallback` per la dependency `conceptFilter` in `drawOverlayBars`
-  (voluta: il filtro concetti deve far ricalcolare le barre).
-- `npm test` — **si rompe per design**: i test del template puntano ad `app/_sites-preview/`
-  (mai esistito in questo repo). Non "sistemarli".
-- Typecheck `npx tsc --noEmit`: gli errori in `worker/index.ts` e `db/index.ts`
-  (`cloudflare:workers`, `Fetcher`, `D1Database`) sono pre-esistenti e attesi (file morti).
+- `npm run lint` — eslint: 0 errors; accepted 3 `<img>` warnings in `page.tsx`.
+- `npm test` — **broken by design**: template tests point to `app/_sites-preview/`
+  (never existed in this repo). Do not "fix" them.
+- Typecheck `npx tsc --noEmit`: pre-existing and expected errors in `worker/index.ts` and `db/index.ts`
+  (`cloudflare:workers`, `Fetcher`, `D1Database`) (dead files).
 
-## Architettura
+## Architecture
 
-- SPA: `app/page.tsx` è `"use client"` e contiene tutta l'interfaccia; i menu sono bottoni
-  (stato client-side, nessuna route). Il layout è `app/layout.tsx` (root layout + metadata).
-- `app/api/lexo/**` — route handler che fanno da **proxy** verso LexO-server: leggono
-  `LEXO_SERVER_URL` (default `http://localhost:8080/LexO-server`, senza slash finale) e, in
-  alcune route, `LEXO_SERVER_AUTHORIZATION`. Client sempre con `cache: "no-store"`.
-- Backend di test raggiungibile dalla macchina di sviluppo:
-  `{{LEXO_TEST_URL}}`. Sulla VM di produzione è su
-  `http://localhost:8080/LexO-server` (stessa macchina).
+- SPA: `app/page.tsx` is `"use client"` and contains the entire interface; navigation items are buttons
+  (client-side state, no routing). The root layout is `app/layout.tsx` (layout + metadata).
+- `app/api/lexo/**` — route handlers acting as **proxies** to LexO-server: they read
+  `LEXO_SERVER_URL` (default `http://localhost:8080/LexO-server`, without trailing slash) and, in
+  some routes, `LEXO_SERVER_AUTHORIZATION`. Client requests always use `cache: "no-store"`.
+- Test backend reachable from development machine:
+  `{{LEXO_TEST_URL}}`. On the production VM it is on
+  `http://localhost:8080/LexO-server` (same machine).
 
-### Bug noto LexO-server sul delete concetto (issue upstream #17)
+### Known LexO-server Concept Deletion Bug (Upstream Issue #17)
 
-`GET /service/delete/lexicalConcept` (usato dal proxy `DELETE` di `lexical-concept/route.ts`)
-**NON cancella davvero**: lo SPARQL update opera sul named graph `…/graphs/lexical/lexica`
-(vuoto), mentre i concetti nuovi sono in `…/graphs/lexical/lexicalConcept` → LexO risponde
-200+timestamp ma il concetto resta (riappare su refresh della lista). La GUI permette comunque
-"Elimina" dal menu contestuale; il concetto sembra sparire finché non si ricarica la pagina.
-**Fix in attesa upstream** (issue https://github.com/andreabellandi/LexO-server/issues/17).
-Non cercare workaround lato client; semmai il problema va risolto in LexO-server
-(`SKOSManager.deleteLexicalConcept` dovrebbe usare `LexiconCrudSupport.lexicalConceptGraphUri()`).
+`GET /service/delete/lexicalConcept` (used by the `DELETE` proxy in `lexical-concept/route.ts`)
+**DOES NOT actually delete**: the SPARQL update operates on named graph `…/graphs/lexical/lexica`
+(empty), whereas new concepts live in `…/graphs/lexical/lexicalConcept` → LexO responds with
+200+timestamp but the concept persists (reappears on list refresh). The GUI allows "Delete" from the
+context menu; the concept appears removed until the page is reloaded.
+**Upstream fix pending** (issue https://github.com/andreabellandi/LexO-server/issues/17).
+Do not attempt client-side workarounds; it must be fixed in LexO-server
+(`SKOSManager.deleteLexicalConcept` should use `LexiconCrudSupport.lexicalConceptGraphUri()`).
 
-Attenzione: gli IRI dei concetti contengono `+` (offset UTC, es. `…_416+02_00`). Il DELETE di
-LexO fa un `URLDecoder.decode` extra, quindi il proxy DEVE **doppio-encodare** `id`
-(`new URLSearchParams({ id: encodeURIComponent(id), ... })`) perché il `+` arrivi intatto
-(single-encode lo trasforma in spazio → "does not exist").
+Note: Concept IRIs contain `+` (UTC offset, e.g. `…_416+02_00`). LexO's DELETE performs an extra
+`URLDecoder.decode`, so the proxy MUST **double-encode** `id`
+(`new URLSearchParams({ id: encodeURIComponent(id), ... })`) so that `+` arrives intact
+(single-encode turns it into a space → "does not exist").
 
-## Rendering delle annotazioni nel testo
+## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
-- `drawOverlayBars` (`app/page.tsx`) disegna le barre sotto le annotazioni leggendo le
-  coordinate dei `mark[data-annotation-index]` e `.overlap-text[data-annotations]` dal DOM.
-  Il `useLayoutEffect` che lo chiama ha tra le deps `workspaceVisible` (cioè
-  `activePage === 4`): il testo e le attestazioni vengono caricati in background PRIMA di
-  entrare nella sezione "Costruisci Dizionario", quindi senza quella dep l'effetto non
-  riparte al mount e le barre mancano fino al primo click su un'annotazione. Non rimuovere
-  quella dipendenza.
-- La banda gialla è continua grazie al solo `box-shadow: 2px 0` (NON `-2px 0`) su
-  `.mark`/`.overlap-text`: un'ombra a sinistra dipinta dopo (ordine DOM, `position: relative`)
-  taglierebbe l'ultimo glifo del segmento precedente (es. la "o" di "sesso" dentro
-  "sesso, però").
-- **Barre vs hit-testing del drag**: le `.bar` (figli assoluti di `.annotation-layer`) e le
-  `.locus-handle` (con i pseudo-elementi `::before`/`::after` che disegnano knob e asta a
-  cavallo del boundary) sono elementi vuoti/assoluti che `document.caretPositionFromPoint`
-  restituisce come `offsetNode` (elemento, non testo): `textOffsetAtPoint` calcolava allora un
-  offset sbagliato — le `.bar` facevano "saltare" il boundary a fine documento (es. offset
-  `2560`), le maniglie lo facevano **oscillare** tra "fine riga N / inizio riga N+1" sui
-  soft-wrap (impossibile fissare il boundary destro). `pointer-events: none` NON risolve
-  (l'hit-test del caret lo ignora), solo `display: none` funziona: per questo
-  `textOffsetAtPoint` nasconde temporaneamente sia `annotationLayerRef` sia le `.locus-handle`
-  durante il calcolo e li ripristina in `finally`. Non rimuovere.
-- **Line-height uniforme**: `.text-area` ha `line-height: calc(1.5em + var(--bar-step))`,
-  così OGNI riga (annotata o no) riserva gli 8px per le barre. Se le righe annotate fossero
-  più alte delle altre (com'era, con il solo `mark` a 33.5px e il testo a 25.5px), l'altezza
-  del documento cambierebbe al variare dei confini dell'annotazione e tutto il testo sotto
-  "salterebbe" di 8px a riga durante il drag del locus. Il `lineHeight` inline è stato tolto
-dal `mark` perché ridondante (equivale alla base). `.overlap-text` conserva lo spazio extra
-  `* (N+1)` per le barre impilate.
+- **100% Pure Text in DOM**: Interview transcript text in `.text-area` NEVER contains `<mark>` or `<span>` inline splitting tags.
+  This permanently prevents reflow, line jumping, or font kerning displacement: words are never broken across element boundaries by the browser's layout engine.
+- **Unified Graphic Layer (`.annotation-layer`)**: Absolutely positioned over the text (`mix-blend-mode: multiply`), drawing:
+  1. Yellow highlights for saved attestations (`.annotation-highlight`) with hover tooltips and click handlers.
+     - Overlapping highlight segments are sliced into non-overlapping boxes to prevent darkening/double-multiplication.
+  2. Multi-level stacked underline bars (`.bar`) underneath each line.
+  3. Green active locus editing highlights (`.locus-editing-highlight`) and start/end handles (`.locus-handle`).
+- **Deterministic Hit-Testing & Soft-Wrap Affinity**: `textOffsetAtPoint` (`app/page.tsx`) finds the closest line (`distY`) and character boundary (`distX`) via `Range.getClientRects()`.
+- **Uniform Line-Height**: `.text-area` has `line-height: calc(1.5em + var(--bar-step))` reserving space for underline bars.
 
-## Locus editing drag & highlight wrapping (v0.5.5)
+## basePath — Mandatory Rules
 
-**Status**: RESOLVED (v0.5.5).
+The app runs under `/futuri-impossibili` (`next.config.ts`, default from `NEXT_PUBLIC_BASE_PATH`).
+**Known upstream bug**: vinext (0.0.50 and 1.0.0-beta.5) DOES NOT serve assets under basePath in
+`vinext start` — exports `__basePath`/`__assetPrefix` are not emitted into the bundle.
+The workaround is in place (post-build move + reverse proxy rewrite). **Do NOT try to
+"fix" vinext**: add a rule to proxy or post-build script, do not modify node_modules.
 
-### Problem description & diagnosis
-- In previous versions (<= v0.5.3), dragging locus handles modified React state on every `pointermove`, causing continuous DOM re-mounting, sub-pixel kerning shifts of text fragments, and shaking/feedback loops.
-- In v0.5.4, the preview boxes had opaque solid backgrounds covering text, and post-drag commits split words across inline `<mark>` boundaries, causing words on line N+1 to reflow/jump to line N.
-- Multi-line highlights had a "broken ribbon" visual artifact across soft-wraps due to default `box-decoration-break: slice`.
+- In `app/page.tsx`, every root-relative client URL MUST use the `basePath` prefix
+  (constant defined above endpoint constants: `textsEndpoint`, `attestationsEndpoint`, etc.
+  and `<img src>`). Any `fetch("/api/...")` or `<img src="/...">` without prefix
+  breaks in production.
+- `app/globals.css` has one hardcoded `url()` with prefix
+  (`/futuri-impossibili/sentiment.webp`): CSS cannot read env vars, keep in sync with default.
+- `app/layout.tsx`: favicon manually prefixed (vinext does not prefix it automatically).
 
-### Solution applied (Locus Overlay & Zero-Split DOM)
-- **Zero-split text DOM**: During the entire `locusEditing` session, text nodes in the DOM remain 100% intact and are never fragmented across word boundaries by inline marks. The active highlight and interactive start/end handles are rendered entirely in `.locus-drag-preview-layer`.
-- **Text visibility & highlight blend**: Overlay boxes use `mix-blend-mode: multiply` and `rgba(85, 175, 125, 0.38)` so the black text underneath remains 100% sharp and readable.
-- **Deterministic hit-testing**: `textOffsetAtPoint` (`app/page.tsx`) traverses visible text nodes with `TreeWalker`, finds the candidate visual line with minimal vertical distance (`distY`), and performs binary search on character bounds via `Range.getBoundingClientRect()`.
-- **Line fragment decoration**: Added `-webkit-box-decoration-break: clone; box-decoration-break: clone;` in `app/globals.css` to `.text-area mark`, `.text-area .overlap-text`, and `.text-area mark.locus-editing`.
+## Dead Files / Do Not Touch
 
-## basePath — regole obbligatorie
-
-L'app gira sotto `/futuri-impossibili` (`next.config.ts`, default da `NEXT_PUBLIC_BASE_PATH`).
-**Bug upstream noto**: vinext (0.0.50 e 1.0.0-beta.5) NON serve gli asset sotto il basePath in
-`vinext start` — gli export `__basePath`/`__assetPrefix` non vengono emessi nel bundle.
-Il workaround è già in place (post-build move + rewrite del reverse proxy). **Non cercare di
-"fixare" vinext**: aggiungere una regola nel proxy o nel post-build, non toccare i node_modules.
-
-- In `app/page.tsx` ogni URL client root-relative DEVE usare il prefisso `basePath`
-  (costante definita sopra le costanti endpoint: `textsEndpoint`, `attestationsEndpoint`, ecc.
-  e le `<img src>`). Un nuovo `fetch("/api/...")` o `<img src="/...">` senza prefisso
-  si rompe in produzione.
-- `app/globals.css` ha un solo `url()` hardcoded con prefisso
-  (`/futuri-impossibili/sentiment.webp`): il CSS non può leggere env, va tenuto in sync col default.
-- `app/layout.tsx`: favicon prefissato a mano (vinext non lo fa da solo).
-
-## File morti / non toccare
-
-- `app/chatgpt-auth.ts` — auth hosting OpenAI/ChatGPT, mai importata.
+- `app/chatgpt-auth.ts` — OpenAI/ChatGPT hosting auth, never imported.
 - `db/`, `worker/index.ts`, `.openai/hosting.json`, `drizzle*`, `examples/`, `tests/` —
-  roba del template Cloudflare/D1 non usata (la UI usa solo i proxy API).
-- `Avvia-LexO.command` — launcher dev macOS-only del developer originale, con path cablato
-  `/Users/andreabellandi/.cache/codex-runtimes/...` e `open` (macOS). Inutile su Linux,
-  NON eseguirlo; su Mac apre `http://localhost:3000/futuri-impossibili`.
+  scaffold leftovers from Cloudflare/D1 template (UI uses only API proxies).
+- `Avvia-LexO.command` — macOS-only dev launcher with hardcoded path
+  `/Users/andreabellandi/.cache/codex-runtimes/...` and `open` (macOS). Do NOT execute on Linux;
+  on Mac it opens `http://localhost:3000/futuri-impossibili`.
 
-## Deploy (sintesi; runbook completo in `deploy/README.md`)
+## Deployment Summary (Full Runbook in `deploy/README.md`)
 
-- VM Alpine `{{VM_IP}}`: progetto in `/opt/futuri-impossibili`, utente `futuri`,
-  servizio openrc `/etc/init.d/futuri-impossibili`, porta `3001` su `0.0.0.0`,
+- Alpine VM `{{VM_IP}}`: project in `/opt/futuri-impossibili`, user `futuri`,
+  openrc service `/etc/init.d/futuri-impossibili`, port `3001` on `0.0.0.0`,
   log in `/opt/futuri-impossibili/futuri-impossibili.log`.
-- `.env.local` sulla VM: `LEXO_SERVER_URL=http://localhost:8080/LexO-server` e
-  `NEXT_PUBLIC_BASE_PATH=/futuri-impossibili` (default comunque coperto).
-- NAT: bastion (`{{BASTION_IP}}`) con iptables `{{NAT_PORT}} → {{VM_IP}}:3001` (source limitato
-  al reverse proxy); ssh/scp verso la VM via porta `{{SSH_PORT}}` (es. `scp -P {{SSH_PORT}} ... {{BASTION_IP}}:/tmp`).
-- URL pubblica: `https://{{PUBLIC_HOST}}/futuri-impossibili` — Apache con 2 regole:
-  `/futuri-impossibili/_next/static` → `/_next/static` (asset) e `/futuri-impossibili/`
-  in passthrough (pagina, API, file pubblici).
-- Aggiornamento: la VM NON ha git → tgz dei sorgenti (comando nel `deploy/README.md`),
-  extract su `/opt/futuri-impossibili`, `npm ci && npm run build:deploy`, `rc-service
-  futuri-impossibili restart`. **Mai deploy senza `build:deploy`**, altrimenti gli asset 404.
+- `.env.local` on VM: `LEXO_SERVER_URL=http://localhost:8080/LexO-server` and
+  `NEXT_PUBLIC_BASE_PATH=/futuri-impossibili` (default covered).
+- NAT: bastion (`{{BASTION_IP}}`) with iptables `{{NAT_PORT}} → {{VM_IP}}:3001` (source restricted
+  to reverse proxy); ssh/scp to VM via port `{{SSH_PORT}}` (e.g. `scp -P {{SSH_PORT}} ... {{BASTION_IP}}:/tmp`).
+- Public URL: `https://{{PUBLIC_HOST}}/futuri-impossibili` — Apache with 2 rules:
+  `/futuri-impossibili/_next/static` → `/_next/static` (assets) and `/futuri-impossibili/`
+  in passthrough (page, API, public files).
+- Upgrade: VM does NOT have git → source tgz (command in `deploy/README.md`),
+  extract to `/opt/futuri-impossibili`, `npm ci && npm run build:deploy`, `rc-service
+  futuri-impossibili restart`. **Never deploy without `build:deploy`**, otherwise assets return 404.
 
-## Convenzioni
+## Conventions
 
-- Commit: messaggi in italiano, lowercase, stile "verbo passato"
-  (es. "introdotto base path /futuri-impossibili per il deploy sotto directory").
-- Codice: non aggiungere commenti se non richiesti.
-- Versioning dell'interfaccia: semver `x.y.z` basta una costante `appVersion` in
-  `app/page.tsx` (renderizzata come `v…` a destra in `main-nav`, classe
-  `.main-nav-version`). Bump: `x`=cambi grossi/breaking, `y`=nuove feature,
-  `z`=bugfix. Agganciare il bump al commit che introduce la modifica.
+- Commits: Italian messages, lowercase, past-tense verb style
+  (e.g. "introdotto base path /futuri-impossibili per il deploy sotto directory").
+- Code: Do not add unnecessary comments unless requested.
+- Interface Versioning: semver `x.y.z` defined in `appVersion` constant in
+  `app/page.tsx` (rendered as `v…` on the right in `main-nav`, class
+  `.main-nav-version`). Bump: `x`=breaking/major, `y`=new features,
+  `z`=bugfixes. Keep version bump aligned with the commit introducing the change.
 - Smoke test proxy: `curl http://<host>:<porta>/futuri-impossibili/api/lexo/lexical-concepts`.
