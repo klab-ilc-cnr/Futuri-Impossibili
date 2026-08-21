@@ -105,16 +105,16 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .archive-delete:hover:not(:disabled) { background: #f9ebe8; border-color: #e0a89e; transform: translateY(-1px); }
 .archive-delete:disabled { cursor: not-allowed; opacity: .45; }
 .archive-delete .trash-icon {
-  position: relative; width: 13px; height: 15px; margin-top: 2px;
+  position: relative; width: 12px; height: 13px; margin-top: 3px;
   border: 2px solid currentColor; border-top: 0; border-radius: 0 0 3px 3px;
   background: repeating-linear-gradient(90deg, transparent 0 3px, rgba(255,255,255,.72) 3px 4px);
 }
 .archive-delete .trash-icon::before {
-  content: ""; position: absolute; left: -4px; top: -5px; width: 17px; height: 2px;
+  content: ""; position: absolute; left: -3px; top: -2px; width: 16px; height: 2px;
   border-radius: 2px; background: currentColor;
 }
 .archive-delete .trash-icon::after {
-  content: ""; position: absolute; left: 2px; top: -9px; width: 5px; height: 4px;
+  content: ""; position: absolute; left: 2.5px; top: -6px; width: 5px; height: 4px;
   border: 2px solid currentColor; border-bottom: 0; border-radius: 3px 3px 0 0;
 }
 .archive-reload:hover:not(:disabled) { background: #e8f2ed; transform: rotate(25deg); }
