@@ -95,12 +95,28 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .sidebar-heading-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sidebar-heading strong { font: 21px Georgia, serif; margin-right: auto; }
 .sidebar-count { color: #929a96; font-size: 10px; margin-left: 0; white-space: nowrap; }
-.archive-upload, .archive-reload { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #dbe3de; border-radius: 8px; background: #f6f8f6; color: var(--green); cursor: pointer; font-size: 18px; line-height: 1; transition: background .18s, transform .18s, border-color .18s; }
-.archive-upload { font-size: 16px; font-weight: 900; }
-.archive-upload-bulk { font-size: 19px; }
+.archive-upload, .archive-delete, .archive-reload { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #dbe3de; border-radius: 8px; background: #f6f8f6; color: var(--green); cursor: pointer; font-size: 18px; line-height: 1; transition: background .18s, transform .18s, border-color .18s; }
+.archive-upload { padding: 0; }
+.archive-upload svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .archive-upload:hover, .archive-reload:hover:not(:disabled) { background: #e8f2ed; border-color: #cdd9d3; transform: translateY(-1px); }
 .archive-upload input { display: none; }
 .archive-upload.disabled { cursor: wait; opacity: .5; pointer-events: none; }
+.archive-delete { color: #a12f25; }
+.archive-delete:hover:not(:disabled) { background: #f9ebe8; border-color: #e0a89e; transform: translateY(-1px); }
+.archive-delete:disabled { cursor: not-allowed; opacity: .45; }
+.archive-delete .trash-icon {
+  position: relative; width: 13px; height: 15px; margin-top: 2px;
+  border: 2px solid currentColor; border-top: 0; border-radius: 0 0 3px 3px;
+  background: repeating-linear-gradient(90deg, transparent 0 3px, rgba(255,255,255,.72) 3px 4px);
+}
+.archive-delete .trash-icon::before {
+  content: ""; position: absolute; left: -4px; top: -5px; width: 17px; height: 2px;
+  border-radius: 2px; background: currentColor;
+}
+.archive-delete .trash-icon::after {
+  content: ""; position: absolute; left: 2px; top: -9px; width: 5px; height: 4px;
+  border: 2px solid currentColor; border-bottom: 0; border-radius: 3px 3px 0 0;
+}
 .archive-reload:hover:not(:disabled) { background: #e8f2ed; transform: rotate(25deg); }
 .archive-reload:disabled { cursor: wait; opacity: .5; }
 .interview-search { margin: 12px 12px 4px; height: 38px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid #dfe5e1; border-radius: 10px; background: #f8faf8; color: #739080; transition: border-color .18s, background .18s; }

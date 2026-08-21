@@ -93,11 +93,6 @@ type ConceptSelection = ConceptAnnotationOptions & {
   sensesError: string;
 };
 
-type TextConversionJob = {
-  state: string;
-  message?: string;
-};
-
 type BulkTextJobItem = {
   fileId: string;
   originalFileName?: string;
@@ -125,12 +120,11 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.6.8";
+const appVersion = "0.7.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
 const textsEndpoint = `${basePath}/api/lexo/texts`;
-const textUploadEndpoint = `${basePath}/api/lexo/texts/upload`;
 const textBulkUploadEndpoint = `${basePath}/api/lexo/texts/bulk`;
 const conceptsEndpoint = `${basePath}/api/lexo/lexical-concepts`;
 const lexicalEntriesEndpoint = `${basePath}/api/lexo/lexical-entries`;
@@ -808,24 +802,6 @@ function parseSenseTypes(payload: unknown, sense: string): LexicalSenseType[] {
   });
 }
 
-function readConversionJob(payload: unknown): TextConversionJob | null {
-  const container = payload && typeof payload === "object"
-    ? payload as Record<string, unknown>
-    : {};
-  const jobs = Array.isArray(payload)
-    ? payload
-    : [container.jobs, container.items, container.data, container.results].find(Array.isArray) ?? [];
-  const rawJob = jobs[0] ?? (!Array.isArray(payload) ? payload : null);
-  if (!rawJob || typeof rawJob !== "object") return null;
-  const job = rawJob as Record<string, unknown>;
-  const state = typeof job.state === "string" ? job.state.toUpperCase() : "";
-  if (!state) return null;
-  return {
-    state,
-    message: typeof job.message === "string" ? job.message : undefined,
-  };
-}
-
 function containsTimestamp(payload: unknown): boolean {
   if (typeof payload === "number") return Number.isFinite(payload);
   if (typeof payload === "string") {
@@ -847,25 +823,6 @@ async function readErrorDetail(response: Response) {
   } catch {
     return body;
   }
-}
-
-async function waitForTextConversion(fileId: string) {
-  const deadline = Date.now() + 120_000;
-  while (Date.now() < deadline) {
-    const response = await fetch(
-      `${textsEndpoint}/${encodeURIComponent(fileId)}/status`,
-      { headers: { Accept: "application/json" }, cache: "no-store" },
-    );
-    if (!response.ok) throw new Error(await readErrorDetail(response));
-
-    const job = readConversionJob(await response.json() as unknown);
-    if (job?.state === "COMPLETED") return;
-    if (job && ["FAILED", "CANCELLED"].includes(job.state)) {
-      throw new Error(job.message || `Conversione ${job.state.toLocaleLowerCase("it-IT")}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-  throw new Error("Tempo massimo superato durante la conversione del testo");
 }
 
 function readBulkTextJob(payload: unknown): BulkTextJob | null {
@@ -1278,6 +1235,8 @@ export default function Home() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; concept: LexicalConcept } | null>(null);
   const [conceptToDelete, setConceptToDelete] = useState<LexicalConcept | null>(null);
   const [conceptDeleting, setConceptDeleting] = useState(false);
+  const [interviewToDelete, setInterviewToDelete] = useState<Interview | null>(null);
+  const [textDeleting, setTextDeleting] = useState(false);
   const conceptFilterClickTimer = useRef<number | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -1287,6 +1246,7 @@ export default function Home() {
   const annotationActionsRef = useRef<HTMLDivElement>(null);
   const confirmDeleteRef = useRef<HTMLDivElement>(null);
   const conceptConfirmRef = useRef<HTMLDivElement>(null);
+  const textConfirmRef = useRef<HTMLDivElement>(null);
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
@@ -1663,6 +1623,24 @@ export default function Home() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [conceptToDelete]);
+
+  useEffect(() => {
+    if (!interviewToDelete) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    textConfirmRef.current
+      ?.querySelector<HTMLButtonElement>("[data-text-confirm-cancel]")
+      ?.focus();
+    return () => previousFocus?.focus();
+  }, [interviewToDelete]);
+
+  useEffect(() => {
+    if (!interviewToDelete) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") setInterviewToDelete(null);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [interviewToDelete]);
 
   useEffect(() => () => {
     if (growlTimer.current) clearTimeout(growlTimer.current);
@@ -2126,7 +2104,8 @@ export default function Home() {
           || targetElement?.closest(".locus-handle")
           || annotationActionsRef.current?.contains(target)
           || (conceptSelectionActive && conceptSidebarRef.current?.contains(target))
-          || confirmDeleteRef.current?.contains(target)) return;
+          || confirmDeleteRef.current?.contains(target)
+          || textConfirmRef.current?.contains(target)) return;
 
         if (textRef.current?.contains(target)) {
           const offset = textOffsetAtPoint(annotatedWrapRef.current ?? textRef.current, event.clientX, event.clientY);
@@ -2145,6 +2124,7 @@ export default function Home() {
       if (textRef.current?.contains(target) || annotationActionsRef.current?.contains(target)) return;
       if (conceptSelectionActive && conceptSidebarRef.current?.contains(target)) return;
       if (confirmDeleteRef.current?.contains(target)) return;
+      if (textConfirmRef.current?.contains(target)) return;
       resetSelectionFlow();
     }
 
@@ -2401,6 +2381,52 @@ export default function Home() {
     }
   }
 
+  async function deleteText(interview: Interview) {
+    if (textDeleting || attestationSaving || uploadLoading) return;
+    if (interview.source !== "server") {
+      setInterviewToDelete(null);
+      showError("Solo le interviste caricate su LexO-server possono essere eliminate.");
+      return;
+    }
+
+    setTextDeleting(true);
+    try {
+      const response = await fetch(
+        `${textsEndpoint}/${encodeURIComponent(interview.id)}`,
+        { method: "DELETE", headers: { Accept: "application/json" }, cache: "no-store" },
+      );
+      if (!response.ok) throw new Error(await readErrorDetail(response));
+      const payload = await response.json() as { deleted?: unknown };
+      if (payload.deleted !== true) {
+        throw new Error("LexO-server non ha eliminato l’intervista");
+      }
+
+      setInterviewToDelete(null);
+      setInterviews((current) => current.filter((item) => item.id !== interview.id));
+      if (activeInterview?.id === interview.id) {
+        resetSelectionFlow();
+        const remaining = interviews.find((item) => item.id !== interview.id && item.source === "server");
+        if (remaining) {
+          activeInterviewIdRef.current = remaining.id;
+          setActiveInterviewId(remaining.id);
+          setTextError("");
+          await loadCanonicalText(remaining.id);
+        } else {
+          textRequestId.current += 1;
+          activeInterviewIdRef.current = "";
+          setActiveInterviewId("");
+          setTextLoading(false);
+        }
+      }
+      showNotice(`Intervista “${interview.name}” eliminata.`);
+    } catch (error) {
+      setInterviewToDelete(null);
+      showError(`L’intervista non è stata eliminata: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+    } finally {
+      setTextDeleting(false);
+    }
+  }
+
   function handleConceptLabelClick(concept: LexicalConcept) {
     if (conceptSelectionActive) {
       toggleConcept(concept.lexicalConcept);
@@ -2449,56 +2475,6 @@ export default function Home() {
     }
 
     await loadCanonicalText(interview.id);
-  }
-
-  async function handleFile(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    textRequestId.current += 1;
-    setUploadLoading(true);
-    setArchiveLoading(true);
-    setArchiveError("");
-    setTextLoading(true);
-    setTextError("");
-    resetSelectionFlow();
-    setGrowlMessage("");
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file, file.name);
-      formData.append("language", "it");
-      const uploadResponse = await fetch(textUploadEndpoint, {
-        method: "POST",
-        headers: { Accept: "application/json" },
-        body: formData,
-      });
-      if (!uploadResponse.ok) throw new Error(await readErrorDetail(uploadResponse));
-      const uploadPayload = await uploadResponse.json() as Record<string, unknown>;
-      const fileId = readResourceIdentifier(uploadPayload.fileId ?? uploadPayload.id);
-      if (!fileId) throw new Error("LexO-server non ha restituito l’identificativo del testo");
-
-      const conversionResponse = await fetch(
-        `${textsEndpoint}/${encodeURIComponent(fileId)}/convert`,
-        { method: "POST", headers: { Accept: "application/json" } },
-      );
-      if (!conversionResponse.ok) throw new Error(await readErrorDetail(conversionResponse));
-      await waitForTextConversion(fileId);
-
-      activeInterviewIdRef.current = fileId;
-      setSearchQuery("");
-      if (!await loadArchive(fileId)) {
-        throw new Error("Il testo convertito non è ancora disponibile nell’archivio");
-      }
-    } catch (error) {
-      setArchiveLoading(false);
-      setTextLoading(false);
-      showError(`Errore durante l’importazione dell’intervista: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
-    } finally {
-      setUploadLoading(false);
-      input.value = "";
-    }
   }
 
   async function handleBulkFiles(event: ChangeEvent<HTMLInputElement>) {
@@ -3263,25 +3239,15 @@ export default function Home() {
                     <strong>Interviste</strong>
                     <label
                       className={`archive-upload ${uploadLoading ? "disabled" : ""}`}
-                      aria-label="Carica intervista"
-                      aria-disabled={uploadLoading}
-                      title="Carica una intervista"
-                    >
-                      <span aria-hidden="true">↑</span>
-                      <input
-                        type="file"
-                        accept=".txt,.md,.markdown,text/plain,text/markdown"
-                        onChange={(event) => void handleFile(event)}
-                        disabled={uploadLoading}
-                      />
-                    </label>
-                    <label
-                      className={`archive-upload archive-upload-bulk ${uploadLoading ? "disabled" : ""}`}
                       aria-label="Carica più interviste in bulk"
                       aria-disabled={uploadLoading}
-                      title="Carica più interviste in bulk"
+                      title="Carica più interviste"
                     >
-                      <span aria-hidden="true">⇈</span>
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 16V4" />
+                        <path d="M6 10l6-6 6 6" />
+                        <path d="M4 20h16" />
+                      </svg>
                       <input
                         type="file"
                         accept=".txt,.md,.markdown,text/plain,text/markdown"
@@ -3290,6 +3256,15 @@ export default function Home() {
                         multiple
                       />
                     </label>
+                    <button
+                      className="archive-delete"
+                      onClick={() => setInterviewToDelete(activeInterview)}
+                      disabled={!activeInterview || archiveLoading || uploadLoading || textLoading}
+                      aria-label="Elimina l’intervista visualizzata"
+                      title="Elimina l’intervista visualizzata"
+                    >
+                      <span className="trash-icon" aria-hidden="true" />
+                    </button>
                     <button
                       className="archive-reload"
                       onClick={() => void loadArchive()}
@@ -4065,6 +4040,41 @@ export default function Home() {
                 className="confirm-modal-danger"
                 onClick={() => void deleteConcept(conceptToDelete)}
                 disabled={conceptDeleting}
+              >
+                Elimina
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {interviewToDelete && (
+        <div
+          ref={textConfirmRef}
+          className="confirm-modal-overlay"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target && !textDeleting) setInterviewToDelete(null);
+          }}
+        >
+          <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="text-delete-title">
+            <p className="confirm-modal-kicker">ELIMINAZIONE</p>
+            <h3 id="text-delete-title">Eliminare l’intervista &quot;{interviewToDelete.name}&quot;?</h3>
+            <p>
+              Verranno eliminati il testo e le attestazioni associate. L’operazione non può essere annullata.
+            </p>
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                data-text-confirm-cancel
+                onClick={() => setInterviewToDelete(null)}
+                disabled={textDeleting}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="confirm-modal-danger"
+                onClick={() => void deleteText(interviewToDelete)}
+                disabled={textDeleting}
               >
                 Elimina
               </button>

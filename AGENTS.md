@@ -74,6 +74,15 @@ Note: Concept IRIs contain `+` (UTC offset, e.g. `…_416+02_00`). LexO's DELETE
 (`new URLSearchParams({ id: encodeURIComponent(id), ... })`) so that `+` arrives intact
 (single-encode turns it into a space → "does not exist").
 
+### Text Deletion Service
+
+`DELETE /service/texts/{fileId}` (proxy `app/api/lexo/texts/[fileId]/route.ts`) deletes the text NIF
+graph, detaches it from its corpus, clears its attestation/annotation graphs and removes persisted
+files. **Always returns HTTP 200** with a JSON body `{"deleted": true|false}` — the client MUST check
+`payload.deleted === true`, not just `response.ok`. The UI exposes deletion via the trash button in
+the archive `sidebar-heading-row` (confirmation modal, same pattern as annotation/concept deletion).
+The archive heading has exactly 3 buttons: bulk upload (multiple files), delete current interview, reload.
+
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
 - **100% Pure Text in DOM**: Interview transcript text in `.text-area` NEVER contains `<mark>` or `<span>` inline splitting tags.
