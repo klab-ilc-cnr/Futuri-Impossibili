@@ -112,6 +112,22 @@ type BulkTextJob = {
   items: BulkTextJobItem[];
 };
 
+type BulkDeletionJobItem = {
+  fileId: string;
+  state: string;
+  message?: string;
+};
+
+type BulkDeletionJob = {
+  bulkId: string;
+  state: string;
+  total: number;
+  deleted: number;
+  notFound: number;
+  failed: number;
+  items: BulkDeletionJobItem[];
+};
+
 const menuItemIds = [
   "progetto",
   "statistiche",
@@ -146,7 +162,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.8.5";
+const appVersion = "0.9.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -910,8 +926,71 @@ function readBulkTextJob(payload: unknown): BulkTextJob | null {
   };
 }
 
-async function waitForBulkTextConversion(bulkId: string) {
-  const deadline = Date.now() + 15 * 60_000;
+const BULK_DELETION_TIMEOUT = "bulk-deletion-timeout";
+
+function readBulkDeletionJob(payload: unknown): BulkDeletionJob | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const job = payload as Record<string, unknown>;
+  const bulkId = readResourceIdentifier(job.bulkId ?? job.id);
+  const state = typeof job.state === "string" ? job.state.toUpperCase() : "";
+  if (!bulkId || !state) return null;
+  const rawItems = Array.isArray(job.items) ? job.items : [];
+  const items = rawItems.flatMap((rawItem) => {
+    if (!rawItem || typeof rawItem !== "object") return [];
+    const item = rawItem as Record<string, unknown>;
+    const fileId = readResourceIdentifier(item.fileId ?? item.id);
+    const itemState = typeof item.state === "string" ? item.state.toUpperCase() : "";
+    if (!fileId || !itemState) return [];
+    return [{
+      fileId,
+      state: itemState,
+      message: typeof item.message === "string" ? item.message : undefined,
+    }];
+  });
+  return {
+    bulkId,
+    state,
+    total: Number(job.total ?? 0),
+    deleted: Number(job.deleted ?? 0),
+    notFound: Number(job.notFound ?? 0),
+    failed: Number(job.failed ?? 0),
+    items,
+  };
+}
+
+async function waitForBulkDeletion(
+  bulkId: string,
+  onProgress?: (job: BulkDeletionJob) => void,
+) {
+  const deadline = Date.now() + 5 * 60_000;
+  while (Date.now() < deadline) {
+    const response = await fetch(
+      `${basePath}/api/lexo/texts/deletions/${encodeURIComponent(bulkId)}/status`,
+      { headers: { Accept: "application/json" }, cache: "no-store" },
+    );
+    if (!response.ok) throw new Error(await readErrorDetail(response));
+
+    const job = readBulkDeletionJob(await response.json() as unknown);
+    if (job) {
+      onProgress?.(job);
+      if (["COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "CANCELLED"].includes(job.state)) {
+        return job;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+  throw new Error(BULK_DELETION_TIMEOUT);
+}
+
+function describeBulkDeletionFailures(job: BulkDeletionJob) {
+  const details = job.items
+    .filter((item) => item.state !== "DELETED")
+    .slice(0, 3)
+    .map((item) => `${item.fileId}: ${item.message ?? item.state.toLocaleLowerCase("it-IT")}`);
+  return details.join(" · ");
+}
+
+async function waitForBulkTextConversion(bulkId: string) {  const deadline = Date.now() + 15 * 60_000;
   while (Date.now() < deadline) {
     const response = await fetch(
       `${textBulkUploadEndpoint}/${encodeURIComponent(bulkId)}/status`,
@@ -1302,6 +1381,11 @@ export default function Home() {
   const [conceptDeleting, setConceptDeleting] = useState(false);
   const [interviewToDelete, setInterviewToDelete] = useState<Interview | null>(null);
   const [textDeleting, setTextDeleting] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedInterviewIds, setSelectedInterviewIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeletionProgress, setBulkDeletionProgress] = useState<{ deleted: number; total: number } | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const conceptFilterClickTimer = useRef<number | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -1313,6 +1397,7 @@ export default function Home() {
   const confirmDeleteRef = useRef<HTMLDivElement>(null);
   const conceptConfirmRef = useRef<HTMLDivElement>(null);
   const textConfirmRef = useRef<HTMLDivElement>(null);
+  const bulkDeleteRef = useRef<HTMLDivElement>(null);
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
@@ -1722,6 +1807,24 @@ export default function Home() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [interviewToDelete]);
+
+  useEffect(() => {
+    if (!bulkDeleteOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    bulkDeleteRef.current
+      ?.querySelector<HTMLButtonElement>("[data-bulk-confirm-cancel]")
+      ?.focus();
+    return () => previousFocus?.focus();
+  }, [bulkDeleteOpen]);
+
+  useEffect(() => {
+    if (!bulkDeleteOpen) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape" && !bulkDeleting) setBulkDeleteOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [bulkDeleteOpen, bulkDeleting]);
 
   useEffect(() => () => {
     if (growlTimer.current) clearTimeout(growlTimer.current);
@@ -2217,7 +2320,8 @@ export default function Home() {
           || annotationActionsRef.current?.contains(target)
           || (conceptSelectionActive && conceptSidebarRef.current?.contains(target))
           || confirmDeleteRef.current?.contains(target)
-          || textConfirmRef.current?.contains(target)) return;
+          || textConfirmRef.current?.contains(target)
+          || bulkDeleteRef.current?.contains(target)) return;
 
         if (textRef.current?.contains(target)) {
           const offset = textOffsetAtPoint(annotatedWrapRef.current ?? textRef.current, event.clientX, event.clientY);
@@ -2237,6 +2341,7 @@ export default function Home() {
       if (conceptSelectionActive && conceptSidebarRef.current?.contains(target)) return;
       if (confirmDeleteRef.current?.contains(target)) return;
       if (textConfirmRef.current?.contains(target)) return;
+      if (bulkDeleteRef.current?.contains(target)) return;
       resetSelectionFlow();
     }
 
@@ -2536,6 +2641,74 @@ export default function Home() {
       showError(t.archive.deleteError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setTextDeleting(false);
+    }
+  }
+
+  function toggleSelectionMode() {
+    if (bulkDeleting || archiveLoading || uploadLoading) return;
+    setSelectionMode((current) => !current);
+    setSelectedInterviewIds([]);
+  }
+
+  function toggleInterviewSelection(interview: Interview) {
+    if (interview.source !== "server") return;
+    setSelectedInterviewIds((current) => current.includes(interview.id)
+      ? current.filter((item) => item !== interview.id)
+      : [...current, interview.id]);
+  }
+
+  async function deleteInterviewsBulk() {
+    if (bulkDeleting || selectedInterviewIds.length === 0) return;
+    if (!activeInterview) return;
+
+    const deletingIds = [...selectedInterviewIds];
+    const activeWasDeleted = deletingIds.includes(activeInterview.id);
+
+    setBulkDeleting(true);
+    setBulkDeletionProgress({ deleted: 0, total: deletingIds.length });
+    setGrowlMessage("");
+    try {
+      const response = await fetch(`${basePath}/api/lexo/texts/bulk`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ fileIds: deletingIds }),
+      });
+      if (!response.ok) throw new Error(await readErrorDetail(response));
+      const acceptedJob = readBulkDeletionJob(await response.json() as unknown);
+      if (!acceptedJob) throw new Error(t.archive.bulkNoJob);
+
+      const completedJob = await waitForBulkDeletion(acceptedJob.bulkId, (job) => {
+        setBulkDeletionProgress({ deleted: job.deleted, total: job.total });
+      });
+
+      setBulkDeleteOpen(false);
+      setSelectionMode(false);
+      setSelectedInterviewIds([]);
+      const failures = describeBulkDeletionFailures(completedJob);
+
+      if (completedJob.state === "FAILED") {
+        showError(t.archive.bulkDeleteError(failures || completedJob.state.toLocaleLowerCase("it-IT")));
+      } else if (completedJob.state === "PARTIALLY_COMPLETED") {
+        showError(t.archive.bulkDeletePartial(completedJob.deleted, completedJob.failed + completedJob.notFound, failures));
+      } else if (completedJob.deleted > 0) {
+        showNotice(t.archive.bulkDeleteSuccess(completedJob.deleted));
+      } else {
+        showError(t.archive.bulkDeleteError(failures || t.concepts.unknownError));
+      }
+
+      if (activeWasDeleted) {
+        resetSelectionFlow();
+        textRequestId.current += 1;
+      }
+      await loadArchive(activeWasDeleted ? undefined : activeInterviewIdRef.current);
+    } catch (error) {
+      setBulkDeleteOpen(false);
+      showError(error instanceof Error && error.message === BULK_DELETION_TIMEOUT
+        ? t.archive.bulkTimeout
+        : t.archive.bulkDeleteError(error instanceof Error ? error.message : t.concepts.unknownError));
+    } finally {
+      setBulkDeleting(false);
+      setBulkDeletionProgress(null);
     }
   }
 
@@ -3390,11 +3563,35 @@ export default function Home() {
                       />
                     </label>
                     <button
+                      className={`archive-select ${selectionMode ? "active" : ""}`}
+                      onClick={toggleSelectionMode}
+                      disabled={archiveLoading || uploadLoading || bulkDeleting || textDeleting}
+                      aria-label={t.archive.selectAria}
+                      aria-pressed={selectionMode}
+                      title={t.archive.selectTitle}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <rect x="4" y="4" width="16" height="16" rx="4" />
+                        <path d="M8.5 12.2l2.4 2.4 4.8-5" className="archive-select-check" />
+                      </svg>
+                    </button>
+                    <button
                       className="archive-delete"
-                      onClick={() => setInterviewToDelete(activeInterview)}
-                      disabled={!activeInterview || archiveLoading || uploadLoading || textLoading}
+                      onClick={() => {
+                        if (selectionMode) {
+                          if (selectedInterviewIds.length > 0) setBulkDeleteOpen(true);
+                        } else {
+                          setInterviewToDelete(activeInterview);
+                        }
+                      }}
+                      disabled={!activeInterview
+                        || archiveLoading
+                        || uploadLoading
+                        || textLoading
+                        || bulkDeleting
+                        || (selectionMode && selectedInterviewIds.length === 0)}
                       aria-label={t.archive.deleteAria}
-                      title={t.archive.deleteAria}
+                      title={selectionMode && selectedInterviewIds.length === 0 ? t.archive.selectFirst : t.archive.deleteAria}
                     >
                       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="M4 7h16" />
@@ -3412,7 +3609,11 @@ export default function Home() {
                     >
                       ↻
                     </button>
-                    <small className="sidebar-count">{interviews.length} file</small>
+                    <small className="sidebar-count">
+                      {selectionMode && selectedInterviewIds.length > 0
+                        ? t.archive.selectedCount(selectedInterviewIds.length)
+                        : `${interviews.length} file`}
+                    </small>
                   </div>
                 </div>
                 <div className="interview-search">
@@ -3428,6 +3629,14 @@ export default function Home() {
                   />
                 </div>
                 <div className="interview-list">
+                  {bulkDeleting && (
+                    <div className="archive-loading" role="status" aria-live="polite">
+                      <span className="loading-spinner" aria-hidden="true" />
+                      <small>
+                        {t.archive.bulkDeleteProgress(bulkDeletionProgress?.deleted ?? 0, bulkDeletionProgress?.total ?? 0)}
+                      </small>
+                    </div>
+                  )}
                   {archiveLoading && (
                     <div className="archive-loading" role="status">
                       <span className="loading-spinner" aria-hidden="true" />
@@ -3441,12 +3650,23 @@ export default function Home() {
                       <code>LexO-server /service/texts</code>
                     </div>
                   )}
-                  {filteredInterviews.map((interview) => (
+                  {filteredInterviews.map((interview) => {
+                    const isSelectedRow = selectedInterviewIds.includes(interview.id);
+                    return (
                     <button
                       key={interview.id}
-                      className={interview.id === activeInterviewId ? "active" : ""}
-                      onClick={() => void selectInterview(interview)}
+                      className={`${interview.id === activeInterviewId ? "active" : ""} ${selectionMode ? "select-mode" : ""} ${isSelectedRow ? "row-selected" : ""} ${selectionMode && interview.source !== "server" ? "not-selectable" : ""}`}
+                      onClick={() => selectionMode ? toggleInterviewSelection(interview) : void selectInterview(interview)}
                     >
+                      {selectionMode && (
+                        <span className={`interview-select-box ${isSelectedRow ? "checked" : ""}`} aria-hidden="true">
+                          {isSelectedRow && (
+                            <svg viewBox="0 0 24 24" fill="none">
+                              <path d="M5.5 12.5l4 4 9-9" />
+                            </svg>
+                          )}
+                        </span>
+                      )}
                       <span className="list-copy">
                         <strong>{interview.name}</strong>
                         <small>
@@ -3456,7 +3676,8 @@ export default function Home() {
                         </small>
                       </span>
                     </button>
-                  ))}
+                    );
+                  })}
                   {!archiveLoading && !archiveError && filteredInterviews.length === 0 && (
                     <p className="empty-search">{t.archive.emptySearch}</p>
                   )}
@@ -4233,6 +4454,44 @@ export default function Home() {
                 className="confirm-modal-danger"
                 onClick={() => void deleteText(interviewToDelete)}
                 disabled={textDeleting}
+              >
+                {t.modals.delete}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {bulkDeleteOpen && (
+        <div
+          ref={bulkDeleteRef}
+          className="confirm-modal-overlay"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target && !bulkDeleting) setBulkDeleteOpen(false);
+          }}
+        >
+          <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-title">
+            <p className="confirm-modal-kicker">{t.modals.kicker}</p>
+            <h3 id="bulk-delete-title">{t.archive.bulkDeleteConfirmTitle(selectedInterviewIds.length)}</h3>
+            <p>
+              {t.archive.bulkDeleteConfirmBody}
+            </p>
+            {activeInterview && selectedInterviewIds.includes(activeInterview.id) && (
+              <p className="bulk-active-warning">{t.archive.bulkDeleteActiveWarning}</p>
+            )}
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                data-bulk-confirm-cancel
+                onClick={() => setBulkDeleteOpen(false)}
+                disabled={bulkDeleting}
+              >
+                {t.modals.cancel}
+              </button>
+              <button
+                type="button"
+                className="confirm-modal-danger"
+                onClick={() => void deleteInterviewsBulk()}
+                disabled={bulkDeleting}
               >
                 {t.modals.delete}
               </button>

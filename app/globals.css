@@ -103,10 +103,13 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .sidebar-heading-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sidebar-heading strong { font: 21px Georgia, serif; margin-right: auto; }
 .sidebar-count { color: #929a96; font-size: 10px; margin-left: 0; white-space: nowrap; }
-.archive-upload, .archive-delete, .archive-reload { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #dbe3de; border-radius: 8px; background: #f6f8f6; color: var(--green); cursor: pointer; font-size: 18px; line-height: 1; transition: background .18s, transform .18s, border-color .18s; }
+.archive-upload, .archive-delete, .archive-reload, .archive-select { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #dbe3de; border-radius: 8px; background: #f6f8f6; color: var(--green); cursor: pointer; font-size: 18px; line-height: 1; transition: background .18s, transform .18s, border-color .18s; }
 .archive-upload { padding: 0; }
 .archive-upload svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.archive-upload:hover, .archive-reload:hover:not(:disabled) { background: #e8f2ed; border-color: #cdd9d3; transform: translateY(-1px); }
+.archive-upload:hover, .archive-reload:hover:not(:disabled), .archive-select:hover:not(:disabled) { background: #e8f2ed; border-color: #cdd9d3; transform: translateY(-1px); }
+.archive-select svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.archive-select.active { background: var(--green); border-color: var(--green); color: #fff; }
+.archive-select.active .archive-select-check { stroke: #fff; }
 .archive-upload input { display: none; }
 .archive-upload.disabled { cursor: wait; opacity: .5; pointer-events: none; }
 .archive-delete { color: var(--green); }
@@ -124,6 +127,12 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .interview-list button { width: 100%; border: 0; border-radius: 9px; background: transparent; padding: 8px 10px; display: flex; align-items: start; text-align: left; cursor: pointer; transition: background .18s; }
 .interview-list button:hover { background: #f4f7f5; }
 .interview-list button.active { background: #eaf4ef; }
+.interview-list button.select-mode.row-selected { background: #e2f0e9; box-shadow: inset 0 0 0 1px #86d2ae; }
+.interview-select-box { flex: none; width: 15px; height: 15px; margin: 2px 9px 0 0; border: 1.6px solid #9db3a8; border-radius: 4px; background: #fff; display: grid; place-items: center; }
+.interview-select-box svg { width: 11px; height: 11px; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.interview-select-box.checked { border-color: var(--green); background: var(--green); }
+.interview-list button.not-selectable { opacity: .45; cursor: not-allowed; }
+.bulk-active-warning { margin: 0 0 6px; font-size: 10px; font-weight: 700; color: #a12f25; }
 .list-copy { min-width: 0; width: 100%; }
 .list-copy strong, .list-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-copy strong { font-size: 11px; margin-bottom: 5px; }
