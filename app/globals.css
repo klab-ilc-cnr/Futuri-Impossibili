@@ -72,7 +72,15 @@ button { color: inherit; }
 .main-nav button:hover { color: #fff; background: rgba(255,255,255,.05); }
 .main-nav button.active { color: #fff; }
 .main-nav button.active::after { content: ""; position: absolute; left: 22px; right: 22px; bottom: 0; height: 3px; background: #86d2ae; border-radius: 5px 5px 0 0; }
-.main-nav-version { margin-left: auto; align-self: center; flex: none; color: rgba(255,255,255,.45); font-size: 11px; font-weight: 600; letter-spacing: .08em; white-space: nowrap; padding-right: 4px; }
+.lang-switch { margin-left: auto; align-self: center; display: flex; gap: 4px; flex: none; }
+.lang-switch button {
+  min-width: 36px; height: 27px; padding: 0 9px; border: 1px solid rgba(255,255,255,.28); border-radius: 14px;
+  background: transparent; color: rgba(255,255,255,.62); cursor: pointer; font-size: 10px; font-weight: 700;
+  letter-spacing: .07em; transition: color .2s, background .2s, border-color .2s;
+}
+.lang-switch button:hover { color: #fff; background: rgba(255,255,255,.06); }
+.lang-switch button.active { color: #0e2a1c; background: #86d2ae; border-color: #86d2ae; }
+.main-nav-version { margin-left: 10px; align-self: center; flex: none; color: rgba(255,255,255,.45); font-size: 11px; font-weight: 600; letter-spacing: .08em; white-space: nowrap; padding-right: 4px; }
 .nav-lock {
   display: inline-grid; place-items: center; width: 19px; height: 19px; margin-left: -3px;
   border: 1px solid rgba(255,255,255,.17); border-radius: 6px; background: rgba(255,255,255,.08);

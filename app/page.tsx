@@ -1,6 +1,7 @@
 "use client";
 
-import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { dictionaries, type Lang } from "./strings";
 
 type SelectionInfo = {
   start: number;
@@ -111,17 +112,41 @@ type BulkTextJob = {
   items: BulkTextJobItem[];
 };
 
-const menuItems = [
-  "Il Progetto",
-  "Statistiche",
-  "Esplora Dizionario",
-  "Interrogazioni",
-  "Costruisci Dizionario",
-  "Risultati Scientifici",
-  "Contatti",
+const menuItemIds = [
+  "progetto",
+  "statistiche",
+  "dizionario",
+  "interrogazioni",
+  "annotazione",
+  "risultati",
+  "contatti",
 ];
 
-const appVersion = "0.7.1";
+const reservedMenuItemIndex = 4;
+
+const langSubscribers = new Set<() => void>();
+
+function subscribeLang(listener: () => void) {
+  langSubscribers.add(listener);
+  return () => {
+    langSubscribers.delete(listener);
+  };
+}
+
+function getLangSnapshot(): Lang {
+  try {
+    const stored = window.localStorage.getItem("fi-lang");
+    if (stored === "it" || stored === "en") return stored;
+  } catch {
+  }
+  return navigator.language?.toLowerCase().startsWith("en") ? "en" : "it";
+}
+
+function getServerLangSnapshot(): Lang {
+  return "it";
+}
+
+const appVersion = "0.8.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1223,6 +1248,17 @@ function getAnnotationTextSegments(
 
 export default function Home() {
   const [activePage, setActivePage] = useState(0);
+  const lang = useSyncExternalStore(subscribeLang, getLangSnapshot, getServerLangSnapshot);
+  const setLang = (next: Lang) => {
+    try {
+      window.localStorage.setItem("fi-lang", next);
+    } catch {
+    }
+    langSubscribers.forEach((listener) => listener());
+    document.documentElement.lang = next;
+  };
+  const t = dictionaries[lang];
+  const numberLocale = lang === "en" ? "en-US" : "it-IT";
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [activeInterviewId, setActiveInterviewId] = useState("");
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
@@ -1284,6 +1320,10 @@ export default function Home() {
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
   const dragBoundsRef = useRef<{ start: number; end: number } | null>(null);
   const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
 
   const activeInterview = interviews.find((item) => item.id === activeInterviewId) ?? interviews[0];
   const text = activeInterview?.text ?? "";
@@ -3212,11 +3252,11 @@ export default function Home() {
             <img src={`${basePath}/donCalabria-logo.png`} alt="" />
           </div>
           <div>
-            <p className="eyebrow">Ricerca Linguistica e Innovazione Sociale</p>
+            <p className="eyebrow">{t.header.eyebrow}</p>
             <h1>Futuri (im)Possibili</h1>
           </div>
         </div>
-        <div className="partner-logos" aria-label="Partner del progetto">
+        <div className="partner-logos" aria-label={t.header.partnerAria}>
           <img
             className="partner-logo foundation-logo"
             src={`${basePath}/logo-fondazione-rut.png`}
@@ -3231,23 +3271,37 @@ export default function Home() {
         </div>
       </header>
 
-      <nav className="main-nav" aria-label="Navigazione principale">
-        {menuItems.map((item, index) => (
+      <nav className="main-nav" aria-label={t.nav.mainAria}>
+        {menuItemIds.map((itemId, index) => (
           <button
-            key={item}
+            key={itemId}
             className={activePage === index ? "active" : ""}
             onClick={() => {
               setActivePage(index);
               if (index === 4) void loadConcepts();
             }}
-            aria-label={index === 4 ? `${item}, area riservata con autenticazione` : item}
-            title={index === 4 ? "Area riservata: sarà richiesta l’autenticazione" : undefined}
+            aria-label={index === reservedMenuItemIndex ? t.nav.reservedAria(t.nav.items[index]) : t.nav.items[index]}
+            title={index === reservedMenuItemIndex ? t.nav.reservedTitle : undefined}
           >
-            {item}
-            {index === 4 && <span className="nav-lock" aria-hidden="true">🔒</span>}
+            {t.nav.items[index]}
+            {index === reservedMenuItemIndex && <span className="nav-lock" aria-hidden="true">🔒</span>}
           </button>
         ))}
-        <span className="main-nav-version" title={`Versione dell’interfaccia ${appVersion}`}>v{appVersion}</span>
+        <div className="lang-switch" role="group" aria-label={t.nav.switchAria}>
+          {(["it", "en"] as const).map((code) => (
+            <button
+              key={code}
+              type="button"
+              className={lang === code ? "active" : ""}
+              onClick={() => setLang(code)}
+              aria-pressed={lang === code}
+              aria-label={code === "it" ? "Italiano" : "English"}
+            >
+              {code.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <span className="main-nav-version" title={t.nav.versionTitle(appVersion)}>v{appVersion}</span>
       </nav>
 
       <main>
@@ -3991,7 +4045,7 @@ export default function Home() {
         ) : (
           <section className="placeholder-page">
             <p className="section-kicker">SEZIONE 0{activePage + 1}</p>
-            <h2>{menuItems[activePage]}</h2>
+            <h2>{t.nav.items[activePage]}</h2>
             <p>Questa sezione è pronta per ospitare il prossimo servizio di LexO-server.</p>
             <div className="placeholder-grid">
               <div /><div /><div />
