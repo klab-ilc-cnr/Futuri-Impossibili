@@ -146,7 +146,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.8.2";
+const appVersion = "0.8.3";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1424,6 +1424,7 @@ export default function Home() {
   }, []);
 
   const loadCanonicalText = useCallback(async (interviewId: string) => {
+    const t = dictionaries[getLangSnapshot()];
     const requestId = ++textRequestId.current;
     setTextError("");
     setTextLoading(true);
@@ -1464,9 +1465,10 @@ export default function Home() {
     } finally {
       if (requestId === textRequestId.current) setTextLoading(false);
     }
-  }, [showError, t.concepts, t.document, t.messages]);
+  }, [showError]);
 
   const loadArchive = useCallback(async (preferredInterviewId?: string) => {
+    const t = dictionaries[getLangSnapshot()];
     setArchiveLoading(true);
     setArchiveError("");
     try {
@@ -1540,9 +1542,10 @@ export default function Home() {
     } finally {
       setArchiveLoading(false);
     }
-  }, [loadCanonicalText, t.archive, t.concepts]);
+  }, [loadCanonicalText]);
 
   const loadConcepts = useCallback(async () => {
+    const t = dictionaries[getLangSnapshot()];
     const requestId = ++conceptsRequestId.current;
     setConceptsLoading(true);
     setConceptsError("");
@@ -1563,9 +1566,10 @@ export default function Home() {
     } finally {
       if (requestId === conceptsRequestId.current) setConceptsLoading(false);
     }
-  }, [t.concepts]);
+  }, []);
 
   const loadLexicalEntries = useCallback(async () => {
+    const t = dictionaries[getLangSnapshot()];
     setLexicalEntries([]);
     setLexicalEntriesError("");
     setLexicalEntriesLoading(true);
@@ -1584,7 +1588,7 @@ export default function Home() {
     } finally {
       setLexicalEntriesLoading(false);
     }
-  }, [t.concepts]);
+  }, []);
 
   async function selectLexicalEntryOption(lexicalConcept: string, lexicalEntryIri: string) {
     const lexicalEntry = lexicalEntries.find((entry) => entry.entry === lexicalEntryIri);
@@ -1836,6 +1840,7 @@ export default function Home() {
   }, [text]);
 
   const drawAnnotationsLayer = useCallback(() => {
+    const t = dictionaries[getLangSnapshot()];
     const wrap = annotatedWrapRef.current;
     const layer = annotationLayerRef.current;
     if (!wrap || !layer) return;
@@ -2107,7 +2112,7 @@ export default function Home() {
       };
       layer.appendChild(endHandle);
     }
-  }, [annotations, conceptFilter, dragging, editAnnotation, editingAnnotationIndex, locusDragging, locusEditing, nudgeLocusEndpoint, selection, t, text, textError, textLoading]);
+  }, [annotations, conceptFilter, dragging, editAnnotation, editingAnnotationIndex, locusDragging, locusEditing, nudgeLocusEndpoint, selection, text, textError, textLoading]);
 
   useLayoutEffect(() => {
     drawAnnotationsLayer();
