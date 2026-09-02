@@ -81,7 +81,25 @@ graph, detaches it from its corpus, clears its attestation/annotation graphs and
 files. **Always returns HTTP 200** with a JSON body `{"deleted": true|false}` — the client MUST check
 `payload.deleted === true`, not just `response.ok`. The UI exposes deletion via the trash button in
 the archive `sidebar-heading-row` (confirmation modal, same pattern as annotation/concept deletion).
-The archive heading has exactly 3 buttons: bulk upload (multiple files), delete current interview, reload.
+The archive heading has exactly 4 buttons: bulk upload (multiple files), multi-selection toggle,
+delete, reload.
+
+### Bulk Interview Deletion (v0.9.0)
+
+- **Proxy**: `DELETE /api/lexo/texts/bulk` → `DELETE /service/texts/bulk` (body `{fileIds}`,
+  async job 202); `GET /api/lexo/texts/deletions/[bulkId]/status` → job status polling.
+- **UI**: a 4th archive-heading button ("Selezione") toggles multi-selection mode; rows toggle
+  selection (server-source only, checkbox shown); the trash button then bulk-deletes the selected
+  interviews (disabled with 0 selected, tooltip "Seleziona almeno una intervista"). In normal mode
+  the trash keeps deleting the currently displayed interview. Confirm modal warns when the open
+  interview is included. Progress ("Eliminate X di N…") renders in the archive list; terminal
+  states COMPLETED / PARTIALLY_COMPLETED / FAILED produce a growl (partial lists failures by
+  fileId), archive reloads and the active interview falls back to the first remaining one if it
+  was deleted. LexO job item states: DELETED / NOT_FOUND / FAILED; job states:
+  PENDING / RUNNING / COMPLETED / PARTIALLY_COMPLETED / FAILED.
+- **Semantics**: deleting interviews removes everything referencing them (NIF text, corpus
+  attachment, attestations/annotations). Deleting only the annotations of an interview is a
+  different operation (not implemented).
 
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
