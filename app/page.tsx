@@ -146,7 +146,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.8.1";
+const appVersion = "0.8.2";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1723,11 +1723,21 @@ export default function Home() {
       requestAnimationFrame(() => {
         const container = conceptListRef.current;
         if (!container || !conceptIri) return;
-        for (const item of Array.from(container.querySelectorAll<HTMLElement>("[data-concept-iri]"))) {
-          if (item.dataset.conceptIri === conceptIri) {
-            item.scrollIntoView({ block: "nearest", behavior: "smooth" });
-            break;
-          }
+        const item = Array.from(container.querySelectorAll<HTMLElement>("[data-concept-iri]"))
+          .find((element) => element.dataset.conceptIri === conceptIri);
+        if (!item) return;
+        const containerRect = container.getBoundingClientRect();
+        const itemRect = item.getBoundingClientRect();
+        const margin = 10;
+        const deltaTop = itemRect.top - containerRect.top - margin;
+        const deltaBottom = itemRect.bottom - containerRect.bottom + margin;
+        const delta = deltaTop < 0
+          ? deltaTop
+          : deltaBottom > 0
+            ? Math.min(deltaBottom, deltaTop)
+            : 0;
+        if (delta !== 0) {
+          container.scrollBy({ top: delta, behavior: "smooth" });
         }
       });
     });
