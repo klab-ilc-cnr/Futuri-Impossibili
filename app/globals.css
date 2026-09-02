@@ -347,6 +347,15 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 }
 .attestation-tooltip-label { min-width: 0; font: 700 9px/1.45 Arial, Helvetica, sans-serif; text-align: left; }
 .attestation-tooltip-label::before { content: attr(data-label); white-space: normal; overflow-wrap: anywhere; }
+.attestation-tooltip-label[data-entry]::after {
+  content: attr(data-entry);
+  display: block;
+  margin-top: 1px;
+  font: italic 10px/1.35 Georgia, "Times New Roman", serif;
+  color: #bfe3d1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .attestation-tooltip-icons { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
 .tooltip-polarity { width: 18px; height: 18px; overflow: hidden; flex: none; }
 .attestation-tooltip .tooltip-sentiment {

@@ -146,7 +146,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.8.3";
+const appVersion = "0.8.4";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1589,6 +1589,13 @@ export default function Home() {
       setLexicalEntriesLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!hoveredTooltip) return;
+    if (lexicalEntries.length > 0 || lexicalEntriesLoading || lexicalEntriesError) return;
+    const timer = setTimeout(() => void loadLexicalEntries(), 0);
+    return () => clearTimeout(timer);
+  }, [hoveredTooltip, lexicalEntries, lexicalEntriesError, lexicalEntriesLoading, loadLexicalEntries]);
 
   async function selectLexicalEntryOption(lexicalConcept: string, lexicalEntryIri: string) {
     const lexicalEntry = lexicalEntries.find((entry) => entry.entry === lexicalEntryIri);
@@ -3262,7 +3269,11 @@ export default function Home() {
       >
         {conceptItems.map((concept) => (
           <span className="attestation-tooltip-row" key={concept.lexicalConcept}>
-            <span className="attestation-tooltip-label" data-label={concept.label} />
+            <span
+              className="attestation-tooltip-label"
+              data-label={concept.label}
+              data-entry={resolveLexicalEntryLabel(concept.options.lexicalEntry, concept.observableIri, lexicalEntries) || undefined}
+            />
             <span className="attestation-tooltip-icons">
               {concept.options.polarity && (
                 <span className={`tooltip-polarity polarity-${concept.options.polarity}`}>
