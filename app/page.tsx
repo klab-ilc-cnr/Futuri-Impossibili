@@ -146,7 +146,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.8.0";
+const appVersion = "0.8.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1308,6 +1308,7 @@ export default function Home() {
   const annotatedWrapRef = useRef<HTMLDivElement>(null);
   const annotationLayerRef = useRef<HTMLDivElement>(null);
   const conceptSidebarRef = useRef<HTMLElement>(null);
+  const conceptListRef = useRef<HTMLDivElement>(null);
   const annotationActionsRef = useRef<HTMLDivElement>(null);
   const confirmDeleteRef = useRef<HTMLDivElement>(null);
   const conceptConfirmRef = useRef<HTMLDivElement>(null);
@@ -1717,6 +1718,21 @@ export default function Home() {
 
   const [layerTick, setLayerTick] = useState(0);
 
+  const scrollConceptIntoView = useCallback((conceptIri: string) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const container = conceptListRef.current;
+        if (!container || !conceptIri) return;
+        for (const item of Array.from(container.querySelectorAll<HTMLElement>("[data-concept-iri]"))) {
+          if (item.dataset.conceptIri === conceptIri) {
+            item.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            break;
+          }
+        }
+      });
+    });
+  }, []);
+
   const editAnnotation = useCallback((annotation: Annotation, target?: HTMLElement) => {
     if (attestationSaving) return;
     const wrap = annotatedWrapRef.current;
@@ -1784,8 +1800,12 @@ export default function Home() {
       sourceEnd: annotation.end,
       locusIri: annotation.locusIri,
     });
+    const firstSelectedConcept = concepts.find((concept) =>
+      knownConcepts.some((known) => known.lexicalConcept === concept.lexicalConcept),
+    )?.lexicalConcept;
+    if (firstSelectedConcept) scrollConceptIntoView(firstSelectedConcept);
     void loadLexicalEntries();
-  }, [attestationSaving, concepts, loadLexicalEntries, text]);
+  }, [attestationSaving, concepts, loadLexicalEntries, scrollConceptIntoView, text]);
 
   const nudgeLocusEndpoint = useCallback((endpoint: "start" | "end", delta: number) => {
     setSelection((current) => {
@@ -3619,7 +3639,7 @@ export default function Home() {
                     aria-label={t.concepts.searchAria}
                   />
                 </div>
-                <div className="concept-list">
+                <div className="concept-list" ref={conceptListRef}>
                   {conceptsLoading && (
                     <div className="archive-loading" role="status" aria-live="polite">
                       <span className="loading-spinner" aria-hidden="true" />
@@ -3685,6 +3705,7 @@ export default function Home() {
                     return (
                       <div
                         key={concept.lexicalConcept}
+                        data-concept-iri={concept.lexicalConcept}
                         className={`concept-item ${isSelected ? "selected" : ""} ${!conceptSelectionActive ? "selection-disabled" : ""} ${conceptFilter === concept.lexicalConcept ? "filter-active" : ""}`}
                         onContextMenu={(event) => openConceptContextMenu(event, concept)}
                       >
