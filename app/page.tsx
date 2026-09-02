@@ -146,7 +146,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.8.4";
+const appVersion = "0.8.5";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -3396,7 +3396,12 @@ export default function Home() {
                       aria-label={t.archive.deleteAria}
                       title={t.archive.deleteAria}
                     >
-                      <span className="trash-icon" aria-hidden="true" />
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M4 7h16" />
+                        <path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7" />
+                        <path d="M6.5 7l.75 12.3A1.9 1.9 0 0 0 9.15 21h5.7a1.9 1.9 0 0 0 1.9-1.7L17.5 7" />
+                        <path d="M10.1 11v6M13.9 11v6" />
+                      </svg>
                     </button>
                     <button
                       className="archive-reload"
@@ -3568,7 +3573,12 @@ export default function Home() {
                             aria-label={t.document.eraseAria}
                             title={t.document.eraseTitle}
                           >
-                            <span className="trash-icon" aria-hidden="true" />
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M4 7h16" />
+                              <path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7" />
+                              <path d="M6.5 7l.75 12.3A1.9 1.9 0 0 0 9.15 21h5.7a1.9 1.9 0 0 0 1.9-1.7L17.5 7" />
+                              <path d="M10.1 11v6M13.9 11v6" />
+                            </svg>
                           </button>
                         </div>
                       )}
