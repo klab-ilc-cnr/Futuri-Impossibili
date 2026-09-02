@@ -1683,10 +1683,17 @@ export default function Home() {
     setConceptSearchQuery("");
     setSelectedConcepts(knownConcepts.map((concept) => concept.lexicalConcept));
     setConceptSelections(Object.fromEntries(
-      knownConcepts.map((concept) => [concept.lexicalConcept, {
-        ...emptyConceptSelection(concept.lexicalConcept),
-        ...concept.options,
-      }]),
+      knownConcepts.map((concept) => {
+        const matchedEntry = lexicalEntries.find((entry) =>
+          entry.entry === concept.observableIri || entry.senses.includes(concept.observableIri),
+        );
+        return [concept.lexicalConcept, {
+          ...emptyConceptSelection(concept.lexicalConcept),
+          ...concept.options,
+          lexicalEntry: matchedEntry?.entry ?? concept.observableIri ?? "",
+          sensesReady: true,
+        }];
+      }),
     ));
     setOriginalEditingConcepts(Object.fromEntries(
       knownConcepts.map((concept) => [concept.lexicalConcept, concept]),
@@ -1715,7 +1722,7 @@ export default function Home() {
       locusIri: annotation.locusIri,
     });
     void loadLexicalEntries();
-  }, [attestationSaving, concepts, loadLexicalEntries, text]);
+  }, [attestationSaving, concepts, lexicalEntries, loadLexicalEntries, text]);
 
   const nudgeLocusEndpoint = useCallback((endpoint: "start" | "end", delta: number) => {
     setSelection((current) => {
@@ -3662,47 +3669,63 @@ export default function Home() {
                         </div>
                         {isSelected && (
                           <div className="concept-options-panel">
-                            {!isExistingEditingConcept && (
-                              <fieldset>
-                                <legend>Entrata lessicale</legend>
-                                <select
-                                  className="concept-entry-select"
-                                  value={annotationOptions.lexicalEntry}
-                                  onChange={(event) => void selectLexicalEntryOption(concept.lexicalConcept, event.target.value)}
-                                  disabled={lexicalEntriesLoading || attestationSaving}
-                                  aria-label={`Entrata lessicale per ${concept.defaultLabel}`}
-                                >
-                                  <option value="">{lexicalEntriesLoading ? "Caricamento…" : "Scegli un’entrata…"}</option>
-                                  {lexicalEntries.map((lexicalEntry) => (
-                                    <option key={lexicalEntry.entry} value={lexicalEntry.entry}>
-                                      {lexicalEntry.label}
-                                    </option>
-                                  ))}
-                                </select>
-                                {lexicalEntriesError && (
-                                  <div className="concept-entry-message error">
-                                    Entrate non disponibili. <button type="button" onClick={() => void loadLexicalEntries()}>Riprova</button>
-                                  </div>
-                                )}
-                                {annotationOptions.sensesLoading && (
-                                  <div className="concept-entry-message">Caricamento metadata dei sensi…</div>
-                                )}
-                                {annotationOptions.sensesError && (
-                                  <div className="concept-entry-message error">
-                                    Metadata non disponibili. <button type="button" onClick={() => void selectLexicalEntryOption(concept.lexicalConcept, annotationOptions.lexicalEntry)}>Riprova</button>
-                                  </div>
-                                )}
-                                {annotationOptions.sensesReady && (!annotationOptions.narrativeSense || !annotationOptions.paradigmaticSense) && (
-                                  <div className="concept-entry-message error">
-                                    {!annotationOptions.narrativeSense && !annotationOptions.paradigmaticSense
-                                      ? "Nessun senso narrativo o paradigmatico trovato."
-                                      : !annotationOptions.narrativeSense
-                                        ? "Senso narrativo non disponibile."
-                                        : "Senso paradigmatico non disponibile."}
-                                  </div>
-                                )}
-                              </fieldset>
-                            )}
+                            <fieldset disabled={isExistingEditingConcept}>
+                              <legend>Entrata lessicale</legend>
+                              <select
+                                className="concept-entry-select"
+                                value={(() => {
+                                  if (annotationOptions.lexicalEntry) return annotationOptions.lexicalEntry;
+                                  const orig = originalEditingConcepts[concept.lexicalConcept];
+                                  if (orig?.observableIri) {
+                                    const match = lexicalEntries.find((e) => e.entry === orig.observableIri || e.senses.includes(orig.observableIri));
+                                    if (match) return match.entry;
+                                  }
+                                  return "";
+                                })()}
+                                onChange={(event) => void selectLexicalEntryOption(concept.lexicalConcept, event.target.value)}
+                                disabled={isExistingEditingConcept || lexicalEntriesLoading || attestationSaving}
+                                aria-label={`Entrata lessicale per ${concept.defaultLabel}`}
+                              >
+                                <option value="">
+                                  {lexicalEntriesLoading
+                                    ? "Caricamento…"
+                                    : isExistingEditingConcept
+                                      ? "Nessuna entrata associata"
+                                      : "Scegli un’entrata…"}
+                                </option>
+                                {lexicalEntries.map((lexicalEntry) => (
+                                  <option key={lexicalEntry.entry} value={lexicalEntry.entry}>
+                                    {lexicalEntry.label}
+                                  </option>
+                                ))}
+                              </select>
+                              {!isExistingEditingConcept && (
+                                <>
+                                  {lexicalEntriesError && (
+                                    <div className="concept-entry-message error">
+                                      Entrate non disponibili. <button type="button" onClick={() => void loadLexicalEntries()}>Riprova</button>
+                                    </div>
+                                  )}
+                                  {annotationOptions.sensesLoading && (
+                                    <div className="concept-entry-message">Caricamento metadata dei sensi…</div>
+                                  )}
+                                  {annotationOptions.sensesError && (
+                                    <div className="concept-entry-message error">
+                                      Metadata non disponibili. <button type="button" onClick={() => void selectLexicalEntryOption(concept.lexicalConcept, annotationOptions.lexicalEntry)}>Riprova</button>
+                                    </div>
+                                  )}
+                                  {annotationOptions.sensesReady && (!annotationOptions.narrativeSense || !annotationOptions.paradigmaticSense) && (
+                                    <div className="concept-entry-message error">
+                                      {!annotationOptions.narrativeSense && !annotationOptions.paradigmaticSense
+                                        ? "Nessun senso narrativo o paradigmatico trovato."
+                                        : !annotationOptions.narrativeSense
+                                          ? "Senso narrativo non disponibile."
+                                          : "Senso paradigmatico non disponibile."}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </fieldset>
                             <fieldset disabled={isExistingEditingConcept || !annotationOptions.sensesReady}>
                               <legend>Relazione</legend>
                               <div className="concept-option-grid relation-options">
