@@ -162,7 +162,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.9.0";
+const appVersion = "0.9.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -2657,6 +2657,18 @@ export default function Home() {
       : [...current, interview.id]);
   }
 
+  function selectAllFilteredInterviews() {
+    if (bulkDeleting || archiveLoading) return;
+    setSelectedInterviewIds(filteredInterviews
+      .filter((interview) => interview.source === "server")
+      .map((interview) => interview.id));
+  }
+
+  function clearInterviewSelection() {
+    if (bulkDeleting) return;
+    setSelectedInterviewIds([]);
+  }
+
   async function deleteInterviewsBulk() {
     if (bulkDeleting || selectedInterviewIds.length === 0) return;
     if (!activeInterview) return;
@@ -3628,6 +3640,24 @@ export default function Home() {
                     spellCheck={false}
                   />
                 </div>
+                {selectionMode && (
+                  <div className="archive-bulk-bar">
+                    <button
+                      type="button"
+                      onClick={selectAllFilteredInterviews}
+                      disabled={bulkDeleting || archiveLoading}
+                    >
+                      {t.archive.selectAll}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearInterviewSelection}
+                      disabled={bulkDeleting || selectedInterviewIds.length === 0}
+                    >
+                      {t.archive.clearSelection}
+                    </button>
+                  </div>
+                )}
                 <div className="interview-list">
                   {bulkDeleting && (
                     <div className="archive-loading" role="status" aria-live="polite">
