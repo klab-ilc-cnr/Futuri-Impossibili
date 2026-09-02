@@ -169,28 +169,28 @@ const pragmaticUsageProperty = "https://lexo.ilc.cnr.it#pragmaticUsage";
 const skosNoteProperty = "http://www.w3.org/2004/02/skos/core#note";
 const lexicalEntryProperty = "https://lexo.ilc.cnr.it#lexicalEntry";
 
-const polarityOptions: Array<{ value: ConceptPolarity; label: string }> = [
-  { value: "negative", label: "Negative" },
-  { value: "neutral", label: "Neutral" },
-  { value: "positive", label: "Positive" },
+const polarityOptions: Array<{ value: ConceptPolarity }> = [
+  { value: "negative" },
+  { value: "neutral" },
+  { value: "positive" },
 ];
 
-const definitionTypeOptions: Array<{ value: DefinitionType; label: string }> = [
-  { value: "sinonimo", label: "Sinonimo" },
-  { value: "parafrasi", label: "Parafrasi" },
-  { value: "esempio-prototipo", label: "Esempio prototipo" },
-  { value: "associazione-concettuale", label: "Associazione concettuale" },
+const definitionTypeOptions: Array<{ value: DefinitionType }> = [
+  { value: "sinonimo" },
+  { value: "parafrasi" },
+  { value: "esempio-prototipo" },
+  { value: "associazione-concettuale" },
 ];
 
-const conceptRelationOptions: Array<{ value: ConceptRelationType; label: string }> = [
-  { value: "paradigmatico", label: "Paradigmatico" },
-  { value: "narrativo", label: "Narrativo" },
+const conceptRelationOptions: Array<{ value: ConceptRelationType }> = [
+  { value: "paradigmatico" },
+  { value: "narrativo" },
 ];
 
-const evidenceStatusOptions: Array<{ value: EvidenceStatus; label: string }> = [
-  { value: "nessuno", label: "Nessuno" },
-  { value: "attestato", label: "Attestato" },
-  { value: "inferito", label: "Inferito" },
+const evidenceStatusOptions: Array<{ value: EvidenceStatus }> = [
+  { value: "nessuno" },
+  { value: "attestato" },
+  { value: "inferito" },
 ];
 
 const definitionTypeValues: Record<DefinitionType, string> = {
@@ -1327,7 +1327,7 @@ export default function Home() {
 
   const activeInterview = interviews.find((item) => item.id === activeInterviewId) ?? interviews[0];
   const text = activeInterview?.text ?? "";
-  const fileName = activeInterview?.name ?? "Nessuna intervista";
+  const fileName = activeInterview?.name ?? t.document.noInterview;
   const annotations = useMemo(
     () => activeInterview?.annotations ?? [],
     [activeInterview],
@@ -1453,17 +1453,17 @@ export default function Home() {
           }
         : item));
       if (attestationsResult.status === "rejected") {
-        showError(`Impossibile caricare le attestazioni: ${attestationsResult.reason instanceof Error
+        showError(t.messages.attestationsLoadError(attestationsResult.reason instanceof Error
           ? attestationsResult.reason.message
-          : "errore sconosciuto"}`);
+          : t.concepts.unknownError));
       }
     } catch (error) {
       if (requestId !== textRequestId.current) return;
-      setTextError(`Impossibile caricare il testo (${error instanceof Error ? error.message : "errore sconosciuto"}).`);
+      setTextError(t.document.textLoadError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       if (requestId === textRequestId.current) setTextLoading(false);
     }
-  }, [showError]);
+  }, [showError, t.concepts, t.document, t.messages]);
 
   const loadArchive = useCallback(async (preferredInterviewId?: string) => {
     setArchiveLoading(true);
@@ -1533,13 +1533,13 @@ export default function Home() {
       }
       return preferredInterviewId ? interviewToLoad?.id === preferredInterviewId : true;
     } catch (error) {
-      setArchiveError(`Impossibile caricare l’archivio (${error instanceof Error ? error.message : "errore sconosciuto"}).`);
+      setArchiveError(t.archive.loadError(error instanceof Error ? error.message : t.concepts.unknownError));
       setTextLoading(false);
       return false;
     } finally {
       setArchiveLoading(false);
     }
-  }, [loadCanonicalText]);
+  }, [loadCanonicalText, t.archive, t.concepts]);
 
   const loadConcepts = useCallback(async () => {
     const requestId = ++conceptsRequestId.current;
@@ -1558,11 +1558,11 @@ export default function Home() {
       setConceptTotalHits(parsed.totalHits);
     } catch (error) {
       if (requestId !== conceptsRequestId.current) return;
-      setConceptsError(`Impossibile caricare i concetti (${error instanceof Error ? error.message : "errore sconosciuto"}).`);
+      setConceptsError(t.concepts.loadError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       if (requestId === conceptsRequestId.current) setConceptsLoading(false);
     }
-  }, []);
+  }, [t.concepts]);
 
   const loadLexicalEntries = useCallback(async () => {
     setLexicalEntries([]);
@@ -1579,11 +1579,11 @@ export default function Home() {
       }
       setLexicalEntries(parseLexicalEntries(await response.json() as unknown));
     } catch (error) {
-      setLexicalEntriesError(error instanceof Error ? error.message : "errore sconosciuto");
+      setLexicalEntriesError(error instanceof Error ? error.message : t.concepts.unknownError);
     } finally {
       setLexicalEntriesLoading(false);
     }
-  }, []);
+  }, [t.concepts]);
 
   async function selectLexicalEntryOption(lexicalConcept: string, lexicalEntryIri: string) {
     const lexicalEntry = lexicalEntries.find((entry) => entry.entry === lexicalEntryIri);
@@ -1637,7 +1637,7 @@ export default function Home() {
       }));
     } catch (error) {
       if (requestId !== lexicalSenseTypesRequestIds.current[lexicalConcept]) return;
-      const message = error instanceof Error ? error.message : "errore sconosciuto";
+      const message = error instanceof Error ? error.message : t.concepts.unknownError;
       setConceptSelections((current) => ({
         ...current,
         [lexicalConcept]: {
@@ -1648,7 +1648,7 @@ export default function Home() {
           sensesError: message,
         },
       }));
-      showError(`Impossibile caricare i metadata dei sensi: ${message}`);
+      showError(t.messages.senseMetadataError(message));
     }
   }
 
@@ -1874,8 +1874,8 @@ export default function Home() {
           highlightEl.setAttribute("data-annotation-index", String(primaryJob.index));
           highlightEl.setAttribute("role", "button");
           highlightEl.setAttribute("tabindex", "0");
-          highlightEl.setAttribute("aria-label", `Modifica attestazione: ${primaryJob.annotation.label.replace(/\n/g, ", ")}`);
-          highlightEl.title = "Modifica attestazione";
+          highlightEl.setAttribute("aria-label", t.document.editAria(primaryJob.annotation.label.replace(/\n/g, ", ")));
+          highlightEl.title = t.document.editTitle;
         }
         highlightEl.style.left = `${rect.left - wrapRect.left}px`;
         highlightEl.style.top = `${rect.top - wrapRect.top}px`;
@@ -1969,8 +1969,8 @@ export default function Home() {
         barEl.setAttribute("role", "button");
         barEl.setAttribute("tabindex", "0");
         const label = annotations[index]?.label ?? "";
-        barEl.setAttribute("aria-label", label ? `Modifica attestazione: ${label}` : "Modifica attestazione");
-        barEl.title = label || "Modifica attestazione";
+        barEl.setAttribute("aria-label", label ? t.document.editAria(label) : t.document.editTitle);
+        barEl.title = label || t.document.editTitle;
         barEl.style.left = `${bar.left}px`;
         barEl.style.top = `${bar.top + level * (barHeight + barGap)}px`;
         barEl.style.width = `${bar.right - bar.left}px`;
@@ -2077,7 +2077,7 @@ export default function Home() {
       };
       layer.appendChild(endHandle);
     }
-  }, [annotations, conceptFilter, dragging, editAnnotation, editingAnnotationIndex, locusDragging, locusEditing, nudgeLocusEndpoint, selection, text, textError, textLoading]);
+  }, [annotations, conceptFilter, dragging, editAnnotation, editingAnnotationIndex, locusDragging, locusEditing, nudgeLocusEndpoint, selection, t, text, textError, textLoading]);
 
   useLayoutEffect(() => {
     drawAnnotationsLayer();
@@ -2265,7 +2265,7 @@ export default function Home() {
     const label = newConceptLabel.trim();
     if (!label || conceptCreating) return;
     if (findConceptLabelConflict(label)) {
-      showError(`Esiste già un concetto chiamato “${label}”.`);
+      showError(t.concepts.exists(label));
       return;
     }
 
@@ -2283,9 +2283,9 @@ export default function Home() {
       setCreatingConcept(false);
       setNewConceptLabel("");
       await loadConcepts();
-      showNotice(`Concetto “${label}” creato correttamente.`);
+      showNotice(t.concepts.created(label));
     } catch (error) {
-      showError(`Il concetto non è stato creato: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+      showError(t.concepts.createError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setConceptCreating(false);
     }
@@ -2315,7 +2315,7 @@ export default function Home() {
       return;
     }
     if (findConceptLabelConflict(target, concept.lexicalConcept)) {
-      showError(`Esiste già un concetto chiamato “${target}”.`);
+      showError(t.concepts.exists(target));
       return;
     }
 
@@ -2379,11 +2379,11 @@ export default function Home() {
       });
       setEditingConceptUrl("");
       setEditedConceptLabel("");
-      showNotice(`Concetto rinominato in “${target}”.`);
+      showNotice(t.concepts.renamed(target));
     } catch (error) {
       setEditedConceptLabel(concept.defaultLabel);
       setEditingConceptUrl("");
-      showError(`La label non è stata modificata a causa di un errore in LexO-server: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+      showError(t.concepts.renameError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setSavingConceptUrl("");
     }
@@ -2408,7 +2408,7 @@ export default function Home() {
     );
     if (concept.attestation > 0 || usedInAnnotations) {
       setConceptToDelete(null);
-      showError(`Il concetto “${concept.defaultLabel}” è usato e non può essere eliminato.`);
+      showError(t.concepts.inUse(concept.defaultLabel));
       return;
     }
 
@@ -2442,10 +2442,10 @@ export default function Home() {
         delete next[concept.lexicalConcept];
         return next;
       });
-      showNotice(`Concetto “${concept.defaultLabel}” eliminato.`);
+      showNotice(t.concepts.deleted(concept.defaultLabel));
     } catch (error) {
       setConceptToDelete(null);
-      showError(`Il concetto non è stato eliminato: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+      showError(t.concepts.deleteError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setConceptDeleting(false);
     }
@@ -2455,7 +2455,7 @@ export default function Home() {
     if (textDeleting || attestationSaving || uploadLoading) return;
     if (interview.source !== "server") {
       setInterviewToDelete(null);
-      showError("Solo le interviste caricate su LexO-server possono essere eliminate.");
+      showError(t.archive.deleteNotAllowed);
       return;
     }
 
@@ -2468,7 +2468,7 @@ export default function Home() {
       if (!response.ok) throw new Error(await readErrorDetail(response));
       const payload = await response.json() as { deleted?: unknown };
       if (payload.deleted !== true) {
-        throw new Error("LexO-server non ha eliminato l’intervista");
+        throw new Error(t.archive.deleteRejected);
       }
 
       setInterviewToDelete(null);
@@ -2488,10 +2488,10 @@ export default function Home() {
           setTextLoading(false);
         }
       }
-      showNotice(`Intervista “${interview.name}” eliminata.`);
+      showNotice(t.archive.deleteSuccess(interview.name));
     } catch (error) {
       setInterviewToDelete(null);
-      showError(`L’intervista non è stata eliminata: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+      showError(t.archive.deleteError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setTextDeleting(false);
     }
@@ -2572,29 +2572,29 @@ export default function Home() {
       });
       if (!response.ok) throw new Error(await readErrorDetail(response));
       const acceptedJob = readBulkTextJob(await response.json() as unknown);
-      if (!acceptedJob) throw new Error("LexO-server non ha restituito l’identificativo del bulk");
+      if (!acceptedJob) throw new Error(t.archive.bulkNoJob);
 
       const completedJob = await waitForBulkTextConversion(acceptedJob.bulkId);
       const firstCompleted = completedJob.items.find((item) => item.state === "COMPLETED");
       if (!firstCompleted) {
-        throw new Error(describeBulkFailures(completedJob) || "Nessun testo del bulk è stato convertito");
+        throw new Error(describeBulkFailures(completedJob) || t.archive.bulkNoText);
       }
 
       const preferredInterviewId = firstCompleted.resultId ?? firstCompleted.fileId;
       activeInterviewIdRef.current = preferredInterviewId;
       setSearchQuery("");
       if (!await loadArchive(preferredInterviewId)) {
-        throw new Error("I testi convertiti non sono ancora disponibili nell’archivio");
+        throw new Error(t.archive.bulkNotReady);
       }
 
       if (completedJob.state === "PARTIALLY_COMPLETED") {
         const detail = describeBulkFailures(completedJob);
-        showError(`Importazione parziale: ${completedJob.completed} file caricati, ${completedJob.failed} non riusciti${detail ? `. ${detail}` : "."}`);
+        showError(t.archive.bulkPartial(completedJob.completed, completedJob.failed, detail));
       }
     } catch (error) {
       setArchiveLoading(false);
       setTextLoading(false);
-      showError(`Errore durante l’importazione bulk: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+      showError(t.archive.bulkError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setUploadLoading(false);
       input.value = "";
@@ -2693,11 +2693,11 @@ export default function Home() {
   async function addAnnotation() {
     if (!selection || selectedConcepts.length === 0 || attestationSaving) return;
     if (!selectedConceptsConfigured) {
-      showError("Scegli paradigmatico o narrativo e completa gli attributi richiesti per ogni concetto.");
+      showError(t.messages.createNeedOptions);
       return;
     }
     if (!activeInterview || activeInterview.source !== "server" || !activeInterview.contextIri) {
-      showError("Non è possibile creare l’attestazione: l’intervista non contiene l’IRI del nif:Context.");
+      showError(t.messages.createNoContext);
       return;
     }
 
@@ -2706,7 +2706,7 @@ export default function Home() {
       return concept ? [concept] : [];
     });
     if (selectedLexicalConcepts.length !== selectedConcepts.length) {
-      showError("Non è possibile creare l’attestazione: uno dei concetti selezionati non è più disponibile.");
+      showError(t.messages.createConceptGone);
       return;
     }
 
@@ -2772,7 +2772,7 @@ export default function Home() {
           const detail = (await patchResponse.text()).trim();
           return `${concept.defaultLabel}: ${detail || `HTTP ${patchResponse.status}`}`;
         } catch (error) {
-          return `${concept.defaultLabel}: ${error instanceof Error ? error.message : "errore sconosciuto"}`;
+          return `${concept.defaultLabel}: ${error instanceof Error ? error.message : t.concepts.unknownError}`;
         }
       }));
 
@@ -2783,19 +2783,19 @@ export default function Home() {
           ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
           : interview));
       } catch (error) {
-        annotationsReloadError = error instanceof Error ? error.message : "errore sconosciuto";
+        annotationsReloadError = error instanceof Error ? error.message : t.concepts.unknownError;
       }
       resetSelectionFlow();
       const failedUpdates = lexicalConceptUpdates.filter(Boolean);
       if (failedUpdates.length > 0) {
-        showError(`Attestazione creata, ma non è stato possibile aggiornare ${failedUpdates.length} concetti narrativi (${failedUpdates.join(" · ")}).`);
+        showError(t.messages.createPartialSenses(failedUpdates.length, failedUpdates.join(" · ")));
       } else if (annotationsReloadError) {
-        showError(`Attestazione creata, ma non è stato possibile ricaricare l’elenco (${annotationsReloadError}).`);
+        showError(t.messages.createReloadError(annotationsReloadError));
       } else {
-        showNotice("Annotazione salvata.");
+        showNotice(t.messages.saved);
       }
     } catch (error) {
-      showError(`Errore durante il salvataggio dell’annotazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+      showError(t.messages.saveError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setAttestationSaving(false);
     }
@@ -2921,7 +2921,7 @@ export default function Home() {
     }
 
     if (!activeInterview || activeInterview.source !== "server") {
-      showError("Non è possibile modificare il locus: mancano i dati del testo su LexO-server.");
+      showError(t.messages.locusNoText);
       return;
     }
 
@@ -2934,7 +2934,7 @@ export default function Home() {
     );
     const attestationIris = originalAnnotation?.attestationIris ?? [];
     if (attestationIris.length === 0) {
-      showError("Non è possibile modificare il locus: mancano gli IRI delle attestazioni selezionate.");
+      showError(t.messages.locusNoAttestations);
       return;
     }
 
@@ -2967,13 +2967,15 @@ export default function Home() {
 
       if (failures.length > 0) {
         const firstFailure = failures[0].reason;
-        throw new Error(`${failures.length} di ${attestationIris.length} aggiornamenti non riusciti: ${
-          firstFailure instanceof Error ? firstFailure.message : "errore sconosciuto"
-        }`);
+        throw new Error(t.messages.updatePartialFailures(
+          failures.length,
+          attestationIris.length,
+          firstFailure instanceof Error ? firstFailure.message : t.concepts.unknownError,
+        ));
       }
-      showNotice(`Nuovo locus salvato: start ${selection.start}, end ${selection.end}.`);
+      showNotice(t.messages.locusSaved(selection.start, selection.end));
     } catch (error) {
-      showError(`Errore durante la modifica del locus: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+      showError(t.messages.locusError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setAttestationSaving(false);
     }
@@ -2982,15 +2984,15 @@ export default function Home() {
   async function requestAnnotationUpdate() {
     if (!selection || !editingAttestation || !editDirty || attestationSaving) return;
     if (!addedConceptsConfigured) {
-      showError("Completa entrata, relazione e attributi obbligatori dei nuovi concetti.");
+      showError(t.messages.updateNeedOptions);
       return;
     }
     if (!activeInterview || activeInterview.source !== "server" || !activeInterview.contextIri) {
-      showError("Non è possibile modificare l’attestazione: mancano i dati del testo su LexO-server.");
+      showError(t.messages.updateNoText);
       return;
     }
     if (!selection.locusIri) {
-      showError("Non è possibile modificare l’attestazione: manca l’IRI del locus.");
+      showError(t.messages.updateNoLocus);
       return;
     }
 
@@ -2999,7 +3001,7 @@ export default function Home() {
       return concept ? [concept] : [];
     });
     if (addedConcepts.length !== addedList.length) {
-      showError("Uno dei nuovi concetti selezionati non è più disponibile.");
+      showError(t.messages.updateConceptGone);
       return;
     }
 
@@ -3017,7 +3019,7 @@ export default function Home() {
             body: JSON.stringify({ locus: selection.locusIri, attestations: removedList }),
           },
         );
-        if (!response.ok) throw new Error(`Rimozione: ${await readErrorDetail(response)}`);
+        if (!response.ok) throw new Error(t.messages.updateRemoveError(await readErrorDetail(response)));
         mutationCompleted = true;
       }
 
@@ -3052,7 +3054,7 @@ export default function Home() {
             observables,
           }),
         });
-        if (!response.ok) throw new Error(`Aggiunta: ${await readErrorDetail(response)}`);
+        if (!response.ok) throw new Error(t.messages.updateAddError(await readErrorDetail(response)));
         mutationCompleted = true;
 
         await Promise.all(addedConcepts.map(async (concept) => {
@@ -3067,7 +3069,7 @@ export default function Home() {
             }),
           });
           if (!patchResponse.ok) {
-            throw new Error(`Collegamento del senso per ${concept.defaultLabel}: ${await readErrorDetail(patchResponse)}`);
+            throw new Error(t.messages.updateSenseLinkError(concept.defaultLabel, await readErrorDetail(patchResponse)));
           }
         }));
       }
@@ -3083,7 +3085,7 @@ export default function Home() {
             properties: narrativeMetadata(update.options, true),
           }),
         });
-        if (!response.ok) throw new Error(`Aggiornamento metadati: ${await readErrorDetail(response)}`);
+        if (!response.ok) throw new Error(t.messages.updateMetadataError(await readErrorDetail(response)));
         mutationCompleted = true;
       }
 
@@ -3092,7 +3094,7 @@ export default function Home() {
         ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
         : interview));
       resetSelectionFlow();
-      showNotice("Modifiche all’attestazione salvate.");
+      showNotice(t.messages.updated);
     } catch (error) {
       if (mutationCompleted) {
         try {
@@ -3105,7 +3107,7 @@ export default function Home() {
         }
         resetSelectionFlow();
       }
-      showError(`Errore durante la modifica dell’attestazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+      showError(t.messages.updateError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setAttestationSaving(false);
     }
@@ -3114,11 +3116,11 @@ export default function Home() {
   async function requestAnnotationDeletion() {
     if (!editingAttestation || attestationSaving) return;
     if (!activeInterview || activeInterview.source !== "server" || !activeInterview.contextIri) {
-      showError("Non è possibile eliminare l’attestazione: l’intervista non contiene l’IRI del nif:Context.");
+      showError(t.messages.deleteNoContext);
       return;
     }
     if (!selection.locusIri) {
-      showError("Non è possibile eliminare l’attestazione: il servizio non ha restituito l’IRI del locus.");
+      showError(t.messages.deleteNoLocus);
       return;
     }
 
@@ -3141,9 +3143,9 @@ export default function Home() {
         ? { ...interview, annotations: loadedAnnotations, annotationCount: loadedAnnotations.length }
         : interview));
       resetSelectionFlow();
-      showNotice("Attestazione eliminata.");
+      showNotice(t.messages.deleted);
     } catch (error) {
-      showError(`Errore durante l’eliminazione dell’attestazione: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
+      showError(t.messages.deleteError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setAttestationSaving(false);
     }
@@ -3308,25 +3310,25 @@ export default function Home() {
         {activePage === 1 ? (
           <section className="statistics-page" aria-label="Statistiche" />
         ) : activePage === 4 ? (
-          <section className="workspace" aria-label="Annotazione interviste">
+          <section className="workspace" aria-label={t.workspace.sectionAria}>
             <div className="workspace-bar">
               <div>
-                <p className="section-kicker">INSERISCI E ANNOTA</p>
-                <p>Carica un’intervista e seleziona parole o frasi per annotarla.</p>
+                <p className="section-kicker">{t.workspace.kicker}</p>
+                <p>{t.workspace.intro}</p>
               </div>
             </div>
 
             <div className="interview-layout">
-              <aside className="interview-sidebar" aria-label="Interviste caricate">
+              <aside className="interview-sidebar" aria-label={t.archive.title}>
                 <div className="sidebar-heading">
-                  <span>ARCHIVIO</span>
+                  <span>{t.archive.heading}</span>
                   <div className="sidebar-heading-row">
-                    <strong>Interviste</strong>
+                    <strong>{t.archive.title}</strong>
                     <label
                       className={`archive-upload ${uploadLoading ? "disabled" : ""}`}
-                      aria-label="Carica più interviste in bulk"
+                      aria-label={t.archive.uploadAria}
                       aria-disabled={uploadLoading}
-                      title="Carica più interviste"
+                      title={t.archive.uploadTitle}
                     >
                       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="M12 16V4" />
@@ -3345,8 +3347,8 @@ export default function Home() {
                       className="archive-delete"
                       onClick={() => setInterviewToDelete(activeInterview)}
                       disabled={!activeInterview || archiveLoading || uploadLoading || textLoading}
-                      aria-label="Elimina l’intervista visualizzata"
-                      title="Elimina l’intervista visualizzata"
+                      aria-label={t.archive.deleteAria}
+                      title={t.archive.deleteAria}
                     >
                       <span className="trash-icon" aria-hidden="true" />
                     </button>
@@ -3354,12 +3356,12 @@ export default function Home() {
                       className="archive-reload"
                       onClick={() => void loadArchive()}
                       disabled={archiveLoading || uploadLoading}
-                      aria-label="Ricarica archivio da LexO-server"
-                      title="Ricarica archivio"
+                      aria-label={t.archive.reloadAria}
+                      title={t.archive.reloadTitle}
                     >
                       ↻
                     </button>
-                    <small className="sidebar-count">{interviews.length} {interviews.length === 1 ? "file" : "file"}</small>
+                    <small className="sidebar-count">{interviews.length} file</small>
                   </div>
                 </div>
                 <div className="interview-search">
@@ -3368,8 +3370,8 @@ export default function Home() {
                     type="search"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Cerca intervista…"
-                    aria-label="Cerca intervista per nome del file"
+                    placeholder={t.archive.searchPlaceholder}
+                    aria-label={t.archive.searchAria}
                     autoComplete="off"
                     spellCheck={false}
                   />
@@ -3378,12 +3380,12 @@ export default function Home() {
                   {archiveLoading && (
                     <div className="archive-loading" role="status">
                       <span className="loading-spinner" aria-hidden="true" />
-                      <small>Caricamento da LexO-server…</small>
+                      <small>{t.archive.loading}</small>
                     </div>
                   )}
                   {!archiveLoading && archiveError && (
                     <div className="archive-error">
-                      <strong>Archivio non disponibile</strong>
+                      <strong>{t.archive.unavailable}</strong>
                       <small>{archiveError}</small>
                       <code>LexO-server /service/texts</code>
                     </div>
@@ -3398,14 +3400,14 @@ export default function Home() {
                         <strong>{interview.name}</strong>
                         <small>
                           {interview.source === "server"
-                            ? `${interview.tokenCount?.toLocaleString("it-IT")} token · ${interview.sentenceCount} frasi · ${interview.annotationCount} annotazioni`
-                            : `${interview.text.length.toLocaleString("it-IT")} caratteri · ${interview.annotations.length} annotazioni`}
+                            ? t.archive.serverStats(interview.tokenCount?.toLocaleString(numberLocale) ?? "", interview.sentenceCount ?? 0, interview.annotationCount ?? 0)
+                            : t.archive.localStats(interview.text.length.toLocaleString(numberLocale), interview.annotations.length)}
                         </small>
                       </span>
                     </button>
                   ))}
                   {!archiveLoading && !archiveError && filteredInterviews.length === 0 && (
-                    <p className="empty-search">Nessuna intervista trovata.</p>
+                    <p className="empty-search">{t.archive.emptySearch}</p>
                   )}
                 </div>
               </aside>
@@ -3416,11 +3418,11 @@ export default function Home() {
                     <span className="file-icon">TXT</span>
                     <div>
                       <strong>{fileName}</strong>
-                      <small>{textLoading ? "Caricamento testo…" : `${text.length.toLocaleString("it-IT")} caratteri`}</small>
+                      <small>{textLoading ? t.document.loadingText : t.document.chars(text.length.toLocaleString(numberLocale))}</small>
                     </div>
                   </div>
                   {description && !textLoading && !textError && (
-                    <div className="description-tab" title={description} aria-label={`Descrizione: ${description}`}>
+                    <div className="description-tab" title={description} aria-label={t.document.descriptionAria(description)}>
                       <strong>{description}</strong>
                     </div>
                   )}
@@ -3476,14 +3478,14 @@ export default function Home() {
                       {textLoading ? (
                         <div className="text-loading" role="status" aria-live="polite">
                           <span className="text-loading-spinner" aria-hidden="true" />
-                          <small>Caricamento intervista…</small>
+                          <small>{t.document.loadingInterview}</small>
                         </div>
                       ) : textError ? (
                         <div className="text-error" role="alert">
-                          <strong>Testo non disponibile</strong>
+                          <strong>{t.document.textUnavailable}</strong>
                           <span>{textError}</span>
                           {activeInterview && (
-                            <button onClick={() => void selectInterview(activeInterview)}>Riprova</button>
+                            <button onClick={() => void selectInterview(activeInterview)}>{t.document.retry}</button>
                           )}
                         </div>
                       ) : (
@@ -3505,8 +3507,8 @@ export default function Home() {
                             onClick={() => void toggleLocusEditing()}
                             disabled={attestationSaving || editDirty}
                             aria-pressed={locusDirty}
-                            aria-label={locusEditing ? "Salva i nuovi limiti dell’evidenziazione" : "Modifica i limiti dell’evidenziazione"}
-                            title={locusEditing ? "Salva nuovo start ed end" : "Modifica start ed end"}
+                            aria-label={locusEditing ? t.document.locusSaveAria : t.document.locusEditAria}
+                            title={locusEditing ? t.document.locusSaveTitle : t.document.locusEditTitle}
                           >
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path d="M8 4H5v16h3M16 4h3v16h-3" />
@@ -3517,8 +3519,8 @@ export default function Home() {
                             className="annotation-eraser"
                             onClick={() => setConfirmDeleteOpen(true)}
                             disabled={attestationSaving || editDirty}
-                            aria-label="Elimina l’intera attestazione"
-                            title="Elimina attestazione e concetti associati"
+                            aria-label={t.document.eraseAria}
+                            title={t.document.eraseTitle}
                           >
                             <span className="trash-icon" aria-hidden="true" />
                           </button>
@@ -3529,28 +3531,28 @@ export default function Home() {
                 </div>
                 <div className="document-foot">
                   {attestationSaving ? (
-                    <div className="annotation-progress" role="status" aria-live="polite" aria-label="Salvataggio annotazione in corso">
+                    <div className="annotation-progress" role="status" aria-live="polite" aria-label={t.document.savingAria}>
                       <span aria-hidden="true" />
                     </div>
                   ) : (
                     <span>{locusEditing
-                      ? "Modifica locus: trascina le maniglie oppure seleziona un nuovo intervallo"
+                      ? t.document.locusHint
                       : editingAttestation
-                        ? "Modalità modifica attestazione"
-                        : "Seleziona una porzione di testo con il mouse"}</span>
+                        ? t.document.editHint
+                        : t.document.selectHint}</span>
                   )}
                   <div className="legend">
                     <span />
                     {conceptFilter
-                      ? `${filteredAnnotations.length} di ${annotations.length} annotazioni · Concetto`
-                      : `${annotations.length} annotazioni`}
+                      ? t.document.countFiltered(filteredAnnotations.length, annotations.length)
+                      : t.document.countAll(annotations.length)}
                     {conceptFilter && (
                       <button
                         type="button"
                         className="concept-filter-chip"
                         onClick={() => setConceptFilter(null)}
-                        title="Rimuovi il filtro concetto"
-                        aria-label="Rimuovi il filtro concetto"
+                        title={t.document.filterRemoveTitle}
+                        aria-label={t.document.filterRemoveTitle}
                       >
                         <strong>{filteredConceptLabel}</strong>
                         <span aria-hidden="true">✕</span>
@@ -3563,18 +3565,18 @@ export default function Home() {
               <aside
                 ref={conceptSidebarRef}
                 className={`concept-sidebar ${conceptSelectionActive ? "selection-active" : ""}`}
-                aria-label="Repertorio dei concetti"
+                aria-label={t.concepts.sidebarAria}
               >
                 <div className="sidebar-heading concept-heading">
-                  <span>REPERTORIO</span>
+                  <span>{t.concepts.heading}</span>
                   <div className="concept-heading-row">
-                    <strong>Concetti</strong>
+                    <strong>{t.concepts.title}</strong>
                     <button
                       className="archive-upload concept-add"
                       onClick={startConceptCreation}
                       disabled={conceptsLoading || Boolean(conceptsError) || conceptCreating || creatingConcept || Boolean(savingConceptUrl)}
-                      aria-label="Aggiungi lexical concept"
-                      title="Aggiungi lexical concept"
+                      aria-label={t.concepts.addAria}
+                      title={t.concepts.addTitle}
                     >
                       <span aria-hidden="true">+</span>
                     </button>
@@ -3582,9 +3584,7 @@ export default function Home() {
                       <span
                         className="concept-create-spinner"
                         role="status"
-                        aria-label={conceptCreating
-                          ? "Creazione del concetto in corso"
-                          : "Rinomina del concetto in corso"}
+                        aria-label={conceptCreating ? t.concepts.creatingAria : t.concepts.renamingAria}
                       />
                     )}
                     <button
@@ -3594,20 +3594,20 @@ export default function Home() {
                         void loadConcepts();
                       }}
                       disabled={conceptsLoading || conceptCreating || Boolean(savingConceptUrl)}
-                      aria-label="Ricarica concetti da LexO-server"
-                      title="Ricarica concetti"
+                      aria-label={t.concepts.reloadAria}
+                      title={t.concepts.reloadTitle}
                     >
                       ↻
                     </button>
-                    <small className="sidebar-count">{conceptTotalHits} voci</small>
+                    <small className="sidebar-count">{t.concepts.count(conceptTotalHits)}</small>
                   </div>
                 </div>
                 <div className="concept-intro">
                   {editingAttestation
-                    ? "Modifica i concetti associati o i loro attributi. Il tipo narrativo/paradigmatico dei concetti esistenti non può essere cambiato."
+                    ? t.concepts.introEdit
                     : conceptSelectionActive
-                      ? "Seleziona uno o più concetti, poi scegli entrata lessicale e attributi in ciascun pannello."
-                    : "Seleziona una parte dell’intervista per associare i concetti."}
+                      ? t.concepts.introSelect
+                    : t.concepts.introIdle}
                 </div>
                 <div className="interview-search">
                   <span aria-hidden="true">⌕</span>
@@ -3615,20 +3615,20 @@ export default function Home() {
                     type="search"
                     value={conceptSearchQuery}
                     onChange={(event) => setConceptSearchQuery(event.target.value)}
-                    placeholder="Cerca concetto…"
-                    aria-label="Cerca concetto per label"
+                    placeholder={t.concepts.searchPlaceholder}
+                    aria-label={t.concepts.searchAria}
                   />
                 </div>
                 <div className="concept-list">
                   {conceptsLoading && (
                     <div className="archive-loading" role="status" aria-live="polite">
                       <span className="loading-spinner" aria-hidden="true" />
-                      <small>Caricamento da LexO-server…</small>
+                      <small>{t.concepts.loading}</small>
                     </div>
                   )}
                   {!conceptsLoading && conceptsError && (
                     <div className="archive-error">
-                      <strong>Repertorio non disponibile</strong>
+                      <strong>{t.concepts.unavailable}</strong>
                       <small>{conceptsError}</small>
                       <code>LexO-server /service/data/lexicalConcepts?id=root</code>
                     </div>
@@ -3644,8 +3644,8 @@ export default function Home() {
                             onChange={(event) => setNewConceptLabel(event.target.value)}
                             onKeyDown={handleConceptCreationKeyDown}
                             disabled={conceptCreating}
-                            placeholder="Scrivi il nome del concetto"
-                            aria-label="Nome del nuovo lexical concept"
+                            placeholder={t.concepts.newPlaceholder}
+                            aria-label={t.concepts.newNameAria}
                             autoFocus
                           />
                           <button
@@ -3653,8 +3653,8 @@ export default function Home() {
                             className="concept-edit-confirm"
                             onClick={() => void createConcept()}
                             disabled={conceptCreating}
-                            aria-label="Conferma creazione"
-                            title="Conferma creazione"
+                            aria-label={t.concepts.confirmCreateAria}
+                            title={t.concepts.confirmCreateAria}
                           >
                             ✓
                           </button>
@@ -3663,8 +3663,8 @@ export default function Home() {
                             className="concept-edit-cancel"
                             onClick={cancelConceptCreation}
                             disabled={conceptCreating}
-                            aria-label="Annulla creazione"
-                            title="Annulla creazione"
+                            aria-label={t.concepts.cancelCreateAria}
+                            title={t.concepts.cancelCreateAria}
                           >
                             ✕
                           </button>
@@ -3696,20 +3696,20 @@ export default function Home() {
                                 value={editedConceptLabel}
                                 onChange={(event) => setEditedConceptLabel(event.target.value)}
                                 onKeyDown={(event) => handleConceptEditKeyDown(event, concept)}
-                                disabled={isSaving}
-                                aria-label={`Modifica ${concept.defaultLabel}`}
-                                autoFocus
-                              />
-                              <button
-                                type="button"
-                                className="concept-edit-confirm"
-                                onClick={() => void saveConceptLabel(concept)}
-                                disabled={isSaving}
-                                aria-label="Conferma rinomina"
-                                title="Conferma rinomina"
-                              >
-                                ✓
-                              </button>
+                                 disabled={isSaving}
+                                 aria-label={t.concepts.editAria(concept.defaultLabel)}
+                                 autoFocus
+                               />
+                               <button
+                                 type="button"
+                                 className="concept-edit-confirm"
+                                 onClick={() => void saveConceptLabel(concept)}
+                                 disabled={isSaving}
+                                 aria-label={t.concepts.confirmRenameAria}
+                                 title={t.concepts.confirmRenameAria}
+                               >
+                                 ✓
+                               </button>
                               <button
                                 type="button"
                                 className="concept-edit-cancel"
@@ -3717,12 +3717,12 @@ export default function Home() {
                                   setEditingConceptUrl("");
                                   setEditedConceptLabel("");
                                 }}
-                                disabled={isSaving}
-                                aria-label="Annulla rinomina"
-                                title="Annulla rinomina"
-                              >
-                                ✕
-                              </button>
+                                 disabled={isSaving}
+                                 aria-label={t.concepts.cancelRenameAria}
+                                 title={t.concepts.cancelRenameAria}
+                               >
+                                 ✕
+                               </button>
                             </div>
                           ) : (
                             <button
@@ -3732,8 +3732,8 @@ export default function Home() {
                               aria-pressed={isSelected}
                               aria-disabled={attestationSaving}
                               title={conceptSelectionActive
-                                ? "Clic per selezionare il concetto"
-                                : "Clic per filtrare le annotazioni per concetto"}
+                                ? t.concepts.clickSelect
+                                : t.concepts.clickFilter}
                             >
                               <span className="concept-check" aria-hidden="true">
                                 {isSelected ? "✓" : conceptFilter === concept.lexicalConcept ? "•" : ""}
@@ -3748,18 +3748,18 @@ export default function Home() {
                         {isSelected && (
                           <div className="concept-options-panel">
                             <fieldset disabled={isExistingEditingConcept}>
-                              <legend>Entrata lessicale</legend>
+                              <legend>{t.entry.legend}</legend>
                               {isExistingEditingConcept ? (
-                                <div className="concept-entry-readonly" aria-label={`Entrata lessicale per ${concept.defaultLabel}`}>
+                                <div className="concept-entry-readonly" aria-label={t.entry.aria(concept.defaultLabel)}>
                                   {(() => {
                                     const orig = originalEditingConcepts[concept.lexicalConcept];
                                     const label = resolveLexicalEntryLabel(annotationOptions.lexicalEntry, orig?.observableIri ?? "", lexicalEntries);
                                     if (label) return label;
                                     return lexicalEntriesLoading
-                                      ? "Caricamento…"
+                                      ? t.entry.loading
                                       : lexicalEntriesError
-                                        ? "Entrate non disponibili"
-                                        : "Nessuna entrata associata";
+                                        ? t.entry.unavailable
+                                        : t.entry.none;
                                   })()}
                                 </div>
                               ) : (
@@ -3768,9 +3768,9 @@ export default function Home() {
                                   value={annotationOptions.lexicalEntry}
                                   onChange={(event) => void selectLexicalEntryOption(concept.lexicalConcept, event.target.value)}
                                   disabled={lexicalEntriesLoading || attestationSaving}
-                                  aria-label={`Entrata lessicale per ${concept.defaultLabel}`}
+                                  aria-label={t.entry.aria(concept.defaultLabel)}
                                 >
-                                  <option value="">{lexicalEntriesLoading ? "Caricamento…" : "Scegli un’entrata…"}</option>
+                                  <option value="">{lexicalEntriesLoading ? t.entry.loading : t.entry.choose}</option>
                                   {lexicalEntries.map((lexicalEntry) => (
                                     <option key={lexicalEntry.entry} value={lexicalEntry.entry}>
                                       {lexicalEntry.label}
@@ -3782,31 +3782,31 @@ export default function Home() {
                                 <>
                                   {lexicalEntriesError && (
                                     <div className="concept-entry-message error">
-                                      Entrate non disponibili. <button type="button" onClick={() => void loadLexicalEntries()}>Riprova</button>
+                                      {t.entry.unavailable}. <button type="button" onClick={() => void loadLexicalEntries()}>{t.entry.retry}</button>
                                     </div>
                                   )}
                                   {annotationOptions.sensesLoading && (
-                                    <div className="concept-entry-message">Caricamento metadata dei sensi…</div>
+                                    <div className="concept-entry-message">{t.entry.sensesLoading}</div>
                                   )}
                                   {annotationOptions.sensesError && (
                                     <div className="concept-entry-message error">
-                                      Metadata non disponibili. <button type="button" onClick={() => void selectLexicalEntryOption(concept.lexicalConcept, annotationOptions.lexicalEntry)}>Riprova</button>
+                                      {t.entry.sensesError} <button type="button" onClick={() => void selectLexicalEntryOption(concept.lexicalConcept, annotationOptions.lexicalEntry)}>{t.entry.retry}</button>
                                     </div>
                                   )}
                                   {annotationOptions.sensesReady && (!annotationOptions.narrativeSense || !annotationOptions.paradigmaticSense) && (
                                     <div className="concept-entry-message error">
                                       {!annotationOptions.narrativeSense && !annotationOptions.paradigmaticSense
-                                        ? "Nessun senso narrativo o paradigmatico trovato."
+                                        ? t.entry.noSenses
                                         : !annotationOptions.narrativeSense
-                                          ? "Senso narrativo non disponibile."
-                                          : "Senso paradigmatico non disponibile."}
+                                          ? t.entry.noNarrative
+                                          : t.entry.noParadigmatic}
                                     </div>
                                   )}
                                 </>
                               )}
                             </fieldset>
                             <fieldset disabled={isExistingEditingConcept || !annotationOptions.sensesReady}>
-                              <legend>Relazione</legend>
+                              <legend>{t.panels.relationLegend}</legend>
                               <div className="concept-option-grid relation-options">
                                 {conceptRelationOptions.map((option) => (
                                   <button
@@ -3816,7 +3816,7 @@ export default function Home() {
                                     onClick={() => selectConceptRelation(concept.lexicalConcept, option.value)}
                                     aria-pressed={annotationOptions.relationType === option.value}
                                   >
-                                    {option.label}
+                                    {t.options.relation[option.value]}
                                   </button>
                                 ))}
                               </div>
@@ -3825,7 +3825,7 @@ export default function Home() {
                               className="dependent-concept-options"
                               disabled={annotationOptions.relationType !== "narrativo"}
                             >
-                              <legend>Polarità</legend>
+                              <legend>{t.panels.polarityLegend}</legend>
                               <div className="concept-option-grid polarity-options">
                                 {polarityOptions.map((option) => (
                                   <button
@@ -3834,8 +3834,8 @@ export default function Home() {
                                     className={`concept-option polarity-${option.value} ${annotationOptions.polarity === option.value ? "active" : ""}`}
                                     onClick={() => updateConceptAnnotationOptions(concept.lexicalConcept, { polarity: option.value })}
                                     aria-pressed={annotationOptions.polarity === option.value}
-                                    aria-label={`Polarità ${option.label}`}
-                                    title={option.label}
+                                    aria-label={t.panels.polarityAria(t.options.polarity[option.value])}
+                                    title={t.options.polarity[option.value]}
                                   >
                                     <span className="sentiment-face" aria-hidden="true" />
                                   </button>
@@ -3846,7 +3846,7 @@ export default function Home() {
                               className="dependent-concept-options"
                               disabled={annotationOptions.relationType !== "narrativo"}
                             >
-                              <legend>Tipo di definizione</legend>
+                              <legend>{t.panels.definitionLegend}</legend>
                               <div className="concept-option-grid definition-options">
                                 {definitionTypeOptions.map((option) => (
                                   <button
@@ -3855,8 +3855,8 @@ export default function Home() {
                                     className={`concept-option ${annotationOptions.definitionType === option.value ? "active" : ""}`}
                                     onClick={() => updateConceptAnnotationOptions(concept.lexicalConcept, { definitionType: option.value })}
                                     aria-pressed={annotationOptions.definitionType === option.value}
-                                    aria-label={`Tipo di definizione: ${option.label}`}
-                                    title={option.label}
+                                    aria-label={t.panels.definitionAria(t.options.definition[option.value])}
+                                    title={t.options.definition[option.value]}
                                   >
                                     <DefinitionTypeIcon type={option.value} />
                                   </button>
@@ -3867,7 +3867,7 @@ export default function Home() {
                               className="dependent-concept-options"
                               disabled={annotationOptions.relationType !== "narrativo"}
                             >
-                              <legend>Tipo di evidenza</legend>
+                              <legend>{t.panels.evidenceLegend}</legend>
                               <div className="concept-option-grid evidence-options">
                                 {evidenceStatusOptions.map((option) => (
                                   <button
@@ -3877,7 +3877,7 @@ export default function Home() {
                                     onClick={() => updateConceptAnnotationOptions(concept.lexicalConcept, { evidenceStatus: option.value })}
                                     aria-pressed={annotationOptions.evidenceStatus === option.value}
                                   >
-                                    {option.label}
+                                    {t.options.evidence[option.value]}
                                   </button>
                                 ))}
                               </div>
@@ -3886,27 +3886,27 @@ export default function Home() {
                               className="dependent-concept-options"
                               disabled={annotationOptions.relationType !== "narrativo"}
                             >
-                              <legend>Modi d’uso</legend>
+                              <legend>{t.panels.usageLegend}</legend>
                               <select
                                 className="concept-metadata-select"
                                 value={annotationOptions.pragmaticUsage}
                                 onChange={(event) => updateConceptAnnotationOptions(concept.lexicalConcept, { pragmaticUsage: event.target.value })}
-                                aria-label={`Modo d’uso per ${concept.defaultLabel}`}
+                                aria-label={t.panels.usageAria(concept.defaultLabel)}
                               >
-                                <option value="nessuno">Nessuno</option>
+                                <option value="nessuno">{t.options.usageNone}</option>
                               </select>
                             </fieldset>
                             <fieldset
                               className="dependent-concept-options"
                               disabled={annotationOptions.relationType !== "narrativo"}
                             >
-                              <legend>Note</legend>
+                              <legend>{t.panels.noteLegend}</legend>
                               <textarea
                                 className="concept-note-input"
                                 value={annotationOptions.note}
                                 onChange={(event) => updateConceptAnnotationOptions(concept.lexicalConcept, { note: event.target.value })}
-                                placeholder="Aggiungi una nota…"
-                                aria-label={`Note per ${concept.defaultLabel}`}
+                                placeholder={t.panels.notePlaceholder}
+                                aria-label={t.panels.noteAria(concept.defaultLabel)}
                                 rows={2}
                               />
                             </fieldset>
@@ -3917,7 +3917,7 @@ export default function Home() {
                   })}
                   {!conceptsLoading && !conceptsError && filteredConcepts.length === 0 && (
                     <p className="empty-search">
-                      {concepts.length === 0 ? "Nessun concetto trovato." : "Nessun concetto corrispondente."}
+                      {concepts.length === 0 ? t.concepts.emptyAll : t.concepts.emptyFilter}
                     </p>
                   )}
                 </div>
@@ -3941,27 +3941,27 @@ export default function Home() {
                     }}
                   >
                     {attestationSaving ? (
-                      <span className="concept-status-spinner" role="status" aria-label="Salvataggio in corso" />
+                      <span className="concept-status-spinner" role="status" aria-label={t.action.savingAria} />
                     ) : annotationActionReady ? (
                       <span className="concept-status-save">
                         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                           <path d="M17 21v-8H7v8M7 3v5h8" />
                         </svg>
-                        <strong>{editingAttestation ? "Conferma modifiche" : "Salva annotazione"}</strong>
+                        <strong>{editingAttestation ? t.action.confirm : t.action.save}</strong>
                       </span>
                     ) : (
                       <>
                         <strong>{selectedConcepts.length}</strong>
-                        <span>{selectedConcepts.length === 1 ? "concetto selezionato" : "concetti selezionati"}</span>
+                        <span>{selectedConcepts.length === 1 ? t.action.oneSelected : t.action.manySelected}</span>
                         <small>
                           {editingAttestation
                             ? editDirty
-                              ? "Completa i dati obbligatori dei nuovi concetti"
-                              : "Modifica concetti o attributi"
+                              ? t.action.editCompleteNew
+                              : t.action.editModify
                             : selectedConcepts.length
-                              ? "Completa entrata, relazione e attributi di ogni concetto"
-                              : "Scegli almeno un concetto"}
+                              ? t.action.createComplete
+                              : t.action.createChoose}
                         </small>
                       </>
                     )}
@@ -4063,11 +4063,10 @@ export default function Home() {
           }}
         >
           <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-delete-title">
-            <p className="confirm-modal-kicker">ELIMINAZIONE</p>
-            <h3 id="confirm-delete-title">Eliminare l’attestazione?</h3>
+            <p className="confirm-modal-kicker">{t.modals.kicker}</p>
+            <h3 id="confirm-delete-title">{t.modals.attestationTitle}</h3>
             <p>
-              Verranno eliminate l’attestazione &quot;{selection?.text}&quot; e i concetti ad essa associati.
-              L’operazione non può essere annullata.
+              {t.modals.attestationBody(selection?.text ?? "")}
             </p>
             <div className="confirm-modal-actions">
               <button
@@ -4076,7 +4075,7 @@ export default function Home() {
                 onClick={() => setConfirmDeleteOpen(false)}
                 disabled={attestationSaving}
               >
-                Annulla
+                {t.modals.cancel}
               </button>
               <button
                 type="button"
@@ -4087,7 +4086,7 @@ export default function Home() {
                 }}
                 disabled={attestationSaving}
               >
-                Elimina
+                {t.modals.delete}
               </button>
             </div>
           </div>
@@ -4099,7 +4098,7 @@ export default function Home() {
           className="concept-context-menu"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           role="menu"
-          aria-label="Menu concetto"
+          aria-label={t.concepts.menuAria}
         >
           <button
             type="button"
@@ -4110,7 +4109,7 @@ export default function Home() {
               setConceptToDelete(concept);
             }}
           >
-            Elimina
+            {t.concepts.menuDelete}
           </button>
         </div>
       )}
@@ -4123,10 +4122,10 @@ export default function Home() {
           }}
         >
           <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="concept-delete-title">
-            <p className="confirm-modal-kicker">ELIMINAZIONE</p>
-            <h3 id="concept-delete-title">Eliminare il concetto &quot;{conceptToDelete.defaultLabel}&quot;?</h3>
+            <p className="confirm-modal-kicker">{t.modals.kicker}</p>
+            <h3 id="concept-delete-title">{t.concepts.deleteConfirmTitle(conceptToDelete.defaultLabel)}</h3>
             <p>
-              Il concetto verrà rimosso dal repertorio. L’operazione non può essere annullata.
+              {t.concepts.deleteConfirmBody}
             </p>
             <div className="confirm-modal-actions">
               <button
@@ -4135,7 +4134,7 @@ export default function Home() {
                 onClick={() => setConceptToDelete(null)}
                 disabled={conceptDeleting}
               >
-                Annulla
+                {t.modals.cancel}
               </button>
               <button
                 type="button"
@@ -4143,7 +4142,7 @@ export default function Home() {
                 onClick={() => void deleteConcept(conceptToDelete)}
                 disabled={conceptDeleting}
               >
-                Elimina
+                {t.modals.delete}
               </button>
             </div>
           </div>
@@ -4158,10 +4157,10 @@ export default function Home() {
           }}
         >
           <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="text-delete-title">
-            <p className="confirm-modal-kicker">ELIMINAZIONE</p>
-            <h3 id="text-delete-title">Eliminare l’intervista &quot;{interviewToDelete.name}&quot;?</h3>
+            <p className="confirm-modal-kicker">{t.modals.kicker}</p>
+            <h3 id="text-delete-title">{t.archive.deleteConfirmTitle(interviewToDelete.name)}</h3>
             <p>
-              Verranno eliminati il testo e le attestazioni associate. L’operazione non può essere annullata.
+              {t.archive.deleteConfirmBody}
             </p>
             <div className="confirm-modal-actions">
               <button
@@ -4170,7 +4169,7 @@ export default function Home() {
                 onClick={() => setInterviewToDelete(null)}
                 disabled={textDeleting}
               >
-                Annulla
+                {t.modals.cancel}
               </button>
               <button
                 type="button"
@@ -4178,7 +4177,7 @@ export default function Home() {
                 onClick={() => void deleteText(interviewToDelete)}
                 disabled={textDeleting}
               >
-                Elimina
+                {t.modals.delete}
               </button>
             </div>
           </div>
@@ -4188,7 +4187,7 @@ export default function Home() {
         <div className={`error-growl ${growlTone === "notice" ? "notice" : ""}`} role="alert" aria-live="assertive">
           <span aria-hidden="true">{growlTone === "notice" ? "i" : "!"}</span>
           <p>{growlMessage}</p>
-          <button onClick={() => setGrowlMessage("")} aria-label="Chiudi messaggio">×</button>
+          <button onClick={() => setGrowlMessage("")} aria-label={t.modals.growlClose}>×</button>
         </div>
       )}
     </div>

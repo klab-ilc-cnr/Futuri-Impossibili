@@ -109,6 +109,26 @@ The archive heading has exactly 3 buttons: bulk upload (multiple files), delete 
 - **Timing**: `editAnnotation` never stores raw non-resolvable IRIs into `lexicalEntry`; resolution
   happens at render time when `lexicalEntries` finish loading.
 
+### Localization (v0.8.0 — Phase 1: the annotation tool)
+
+- **Dictionary**: `app/strings.ts` exports `dictionaries: Record<Lang, Dict>` (`it` source of truth,
+  `type Dict = typeof it` so TypeScript rejects missing keys in `en`), plus `detectInitialLang()`.
+  Strings are strings or interpolation functions (`t.errors.saveDetail(detail)`).
+- **Language state**: `useSyncExternalStore(subscribeLang, getLangSnapshot, getServerLangSnapshot)`
+  in `app/page.tsx` — server snapshot always `"it"` (no hydration mismatch); client snapshot reads
+  `localStorage["fi-lang"]` → fallback `navigator.language` (en* → en). Switch writes localStorage,
+  notifies subscribers and sets `document.documentElement.lang`.
+- **Rule: only display labels are translated.** Values persisted to LexO-server are NEVER translated:
+  `definitionType` Italian literals (`definitionTypeValues`), `evidenceStatus` "attestato"/"inferito",
+  polarity MARL IRIs, `pragmaticUsage`/`note` free text. `parsePolarity`/`parseDefinitionType`/
+  `parseEvidenceStatus` must keep reading the persisted values.
+- LexO data (concept/entry labels, interview metadata), technical error details from proxies and
+  bibliographic titles stay untranslated. Numbers use `numberLocale` (`en-US`/`it-IT`).
+- Phase 1 (v0.8.0) covers nav + workspace (archive, document, concept panel, action bar, modals,
+  context menu, growl) and the imperative graphic layer. NOT yet translated (phase 2): landing /
+  publications / contacts pages, statistics placeholder, module-scope technical error
+  ("Tempo massimo superato durante l'importazione bulk").
+
 ## basePath — Mandatory Rules
 
 The app runs under `/futuri-impossibili` (`next.config.ts`, default from `NEXT_PUBLIC_BASE_PATH`).
