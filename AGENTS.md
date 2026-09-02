@@ -95,6 +95,20 @@ The archive heading has exactly 3 buttons: bulk upload (multiple files), delete 
 - **Deterministic Hit-Testing & Soft-Wrap Affinity**: `textOffsetAtPoint` (`app/page.tsx`) finds the closest line (`distY`) and character boundary (`distX`) via `Range.getClientRects()`.
 - **Uniform Line-Height & Paragraph Breaks**: `.text-area` has `line-height: calc(1.5em + var(--bar-step))` reserving space for underline bars. Multiple newlines (`\n\n+`) are wrapped in `.paragraph-break` (`line-height: 10px; font-size: 0;`) to provide natural, compact paragraph spacing while preserving 100% of the original string and exact NIF character indices.
 
+### Lexical Entry Persistence & Read-Only Display (v0.7.1)
+
+- **Narrative metadata persistence**: the lexical entry IRI chosen at creation is now saved in
+  attestation metadata under `https://lexo.ilc.cnr.it#lexicalEntry` (via `narrativeMetadata`,
+  `lexicalEntryProperty`), so it is recoverable when re-opening the annotation.
+- **Paradigmatic recoverability**: paradigmatic attestations store the sense IRI as `observable`
+  (plus `referringConcept`); the entry is resolved client-side via `entry.senses.includes(observableIri)`.
+- **Read-only display in edit mode**: for existing concepts the "Entrata lessicale" panel renders a
+  static `.concept-entry-readonly` div (label resolved via `resolveLexicalEntryLabel` from
+  `lexicalEntries`; falls back to "Nessuna entrata associata" for annotations created before v0.7.1,
+  which have no persisted entry). No `cursor: wait` in read-only state (that CSS is reserved for loading).
+- **Timing**: `editAnnotation` never stores raw non-resolvable IRIs into `lexicalEntry`; resolution
+  happens at render time when `lexicalEntries` finish loading.
+
 ## basePath — Mandatory Rules
 
 The app runs under `/futuri-impossibili` (`next.config.ts`, default from `NEXT_PUBLIC_BASE_PATH`).

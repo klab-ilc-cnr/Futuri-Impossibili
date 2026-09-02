@@ -81,6 +81,7 @@ type ConceptAnnotationOptions = {
   evidenceStatus: EvidenceStatus;
   pragmaticUsage: string;
   note: string;
+  lexicalEntry: string;
 };
 
 type ConceptSelection = ConceptAnnotationOptions & {
@@ -120,7 +121,7 @@ const menuItems = [
   "Contatti",
 ];
 
-const appVersion = "0.7.0";
+const appVersion = "0.7.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -141,6 +142,7 @@ const definitionTypeProperty = "https://lexo.ilc.cnr.it#definitionType";
 const evidenceStatusProperty = "https://lexo.ilc.cnr.it#evidenceStatus";
 const pragmaticUsageProperty = "https://lexo.ilc.cnr.it#pragmaticUsage";
 const skosNoteProperty = "http://www.w3.org/2004/02/skos/core#note";
+const lexicalEntryProperty = "https://lexo.ilc.cnr.it#lexicalEntry";
 
 const polarityOptions: Array<{ value: ConceptPolarity; label: string }> = [
   { value: "negative", label: "Negative" },
@@ -191,6 +193,10 @@ function narrativeMetadata(options: ConceptAnnotationOptions, includeEmptyOption
         language: "it",
       }] : [],
     },
+    ...(includeEmptyOptional || options.lexicalEntry ? [{
+      property: lexicalEntryProperty,
+      values: options.lexicalEntry ? [{ value: options.lexicalEntry, type: "iri" }] : [],
+    }] : []),
     ...(includeEmptyOptional ? [{ property: legacyPolarityProperty, values: [] }] : []),
     ...(includeEmptyOptional || options.evidenceStatus !== "nessuno" ? [{
       property: evidenceStatusProperty,
@@ -244,6 +250,24 @@ function editableOptionsEqual(left: ConceptAnnotationOptions, right: ConceptAnno
     && left.evidenceStatus === right.evidenceStatus
     && left.pragmaticUsage.trim() === right.pragmaticUsage.trim()
     && left.note.trim() === right.note.trim();
+}
+
+function resolveLexicalEntryLabel(
+  lexicalEntry: string,
+  observableIri: string,
+  lexicalEntries: LexicalEntryOption[],
+): string {
+  if (lexicalEntry) {
+    const direct = lexicalEntries.find((item) => item.entry === lexicalEntry);
+    if (direct) return direct.label;
+  }
+  if (observableIri) {
+    const match = lexicalEntries.find((item) =>
+      item.entry === observableIri || item.senses.includes(observableIri),
+    );
+    if (match) return match.label;
+  }
+  return "";
 }
 
 function DefinitionTypeIcon({ type }: { type: DefinitionType }) {
@@ -648,6 +672,10 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
           ...collectMetadataValues(occurrence.metadata, skosNoteProperty),
           ...collectMetadataValues(attestation.metadata, skosNoteProperty),
         ][0] ?? "";
+        const annotationLexicalEntry = [
+          ...collectMetadataValues(occurrence.metadata, lexicalEntryProperty),
+          ...collectMetadataValues(attestation.metadata, lexicalEntryProperty),
+        ][0] ?? "";
         current.concepts.set(effectiveConceptIri, {
           attestationIri,
           observableIri: observable,
@@ -660,6 +688,7 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
             evidenceStatus,
             pragmaticUsage,
             note,
+            lexicalEntry: annotationLexicalEntry,
           },
         });
       }
@@ -1683,17 +1712,11 @@ export default function Home() {
     setConceptSearchQuery("");
     setSelectedConcepts(knownConcepts.map((concept) => concept.lexicalConcept));
     setConceptSelections(Object.fromEntries(
-      knownConcepts.map((concept) => {
-        const matchedEntry = lexicalEntries.find((entry) =>
-          entry.entry === concept.observableIri || entry.senses.includes(concept.observableIri),
-        );
-        return [concept.lexicalConcept, {
-          ...emptyConceptSelection(concept.lexicalConcept),
-          ...concept.options,
-          lexicalEntry: matchedEntry?.entry ?? concept.observableIri ?? "",
-          sensesReady: true,
-        }];
-      }),
+      knownConcepts.map((concept) => [concept.lexicalConcept, {
+        ...emptyConceptSelection(concept.lexicalConcept),
+        ...concept.options,
+        sensesReady: true,
+      }]),
     ));
     setOriginalEditingConcepts(Object.fromEntries(
       knownConcepts.map((concept) => [concept.lexicalConcept, concept]),
@@ -1722,7 +1745,7 @@ export default function Home() {
       locusIri: annotation.locusIri,
     });
     void loadLexicalEntries();
-  }, [attestationSaving, concepts, lexicalEntries, loadLexicalEntries, text]);
+  }, [attestationSaving, concepts, loadLexicalEntries, text]);
 
   const nudgeLocusEndpoint = useCallback((endpoint: "start" | "end", delta: number) => {
     setSelection((current) => {
@@ -3150,6 +3173,7 @@ export default function Home() {
             evidenceStatus: "nessuno",
             pragmaticUsage: "nessuno",
             note: "",
+            lexicalEntry: "",
           } as ConceptAnnotationOptions,
         }));
 
@@ -3671,34 +3695,35 @@ export default function Home() {
                           <div className="concept-options-panel">
                             <fieldset disabled={isExistingEditingConcept}>
                               <legend>Entrata lessicale</legend>
-                              <select
-                                className="concept-entry-select"
-                                value={(() => {
-                                  if (annotationOptions.lexicalEntry) return annotationOptions.lexicalEntry;
-                                  const orig = originalEditingConcepts[concept.lexicalConcept];
-                                  if (orig?.observableIri) {
-                                    const match = lexicalEntries.find((e) => e.entry === orig.observableIri || e.senses.includes(orig.observableIri));
-                                    if (match) return match.entry;
-                                  }
-                                  return "";
-                                })()}
-                                onChange={(event) => void selectLexicalEntryOption(concept.lexicalConcept, event.target.value)}
-                                disabled={isExistingEditingConcept || lexicalEntriesLoading || attestationSaving}
-                                aria-label={`Entrata lessicale per ${concept.defaultLabel}`}
-                              >
-                                <option value="">
-                                  {lexicalEntriesLoading
-                                    ? "Caricamento…"
-                                    : isExistingEditingConcept
-                                      ? "Nessuna entrata associata"
-                                      : "Scegli un’entrata…"}
-                                </option>
-                                {lexicalEntries.map((lexicalEntry) => (
-                                  <option key={lexicalEntry.entry} value={lexicalEntry.entry}>
-                                    {lexicalEntry.label}
-                                  </option>
-                                ))}
-                              </select>
+                              {isExistingEditingConcept ? (
+                                <div className="concept-entry-readonly" aria-label={`Entrata lessicale per ${concept.defaultLabel}`}>
+                                  {(() => {
+                                    const orig = originalEditingConcepts[concept.lexicalConcept];
+                                    const label = resolveLexicalEntryLabel(annotationOptions.lexicalEntry, orig?.observableIri ?? "", lexicalEntries);
+                                    if (label) return label;
+                                    return lexicalEntriesLoading
+                                      ? "Caricamento…"
+                                      : lexicalEntriesError
+                                        ? "Entrate non disponibili"
+                                        : "Nessuna entrata associata";
+                                  })()}
+                                </div>
+                              ) : (
+                                <select
+                                  className="concept-entry-select"
+                                  value={annotationOptions.lexicalEntry}
+                                  onChange={(event) => void selectLexicalEntryOption(concept.lexicalConcept, event.target.value)}
+                                  disabled={lexicalEntriesLoading || attestationSaving}
+                                  aria-label={`Entrata lessicale per ${concept.defaultLabel}`}
+                                >
+                                  <option value="">{lexicalEntriesLoading ? "Caricamento…" : "Scegli un’entrata…"}</option>
+                                  {lexicalEntries.map((lexicalEntry) => (
+                                    <option key={lexicalEntry.entry} value={lexicalEntry.entry}>
+                                      {lexicalEntry.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
                               {!isExistingEditingConcept && (
                                 <>
                                   {lexicalEntriesError && (
