@@ -136,6 +136,28 @@ delete, reload.
 - Unknown observables (not in the concept list) still render as highlight with
   `observableLabel` fallback (e.g. "femmina@it") via the existing label pipeline.
 
+## Locus Bar Placement & Unsaved-Change Guard (v0.10.1 – v0.10.4)
+
+- **Locus bar placement (v0.10.1)**: the `.annotation-actions` bar (locus edit + eraser) is
+  positioned by `locusBarY(relTop, annotationHeight, wrapHeight)` in BOTH positioning sites
+  (`openAnnotationEditor` and the edit-branch of `captureSelection`): above the annotation when
+  there is ≥56px of room, otherwise BELOW it (clamped inside the text wrap) — never covering the
+  highlighted text.
+- **Tooltips in edit mode (v0.10.2)**: hovering another annotation (text hit-test in the
+  `.text-area` `onMouseMove` or `.bar` `onmouseenter`) shows its tooltip even while a locus edit
+  session is open; the annotation being edited (`index === editingAnnotationIndex`) and
+  `dragging`/`locusDragging` still suppress it.
+- **Unsaved-change guard (v0.10.2–v0.10.4)**: `editDirty` = removed/added/updated concept lists
+  non-empty; `locusDirty` = boundaries moved from `selection.sourceStart/sourceEnd`. While a locus
+  edit session is open and either is true: clicking another annotation (`editAnnotation` guard) or
+  clicking outside (outside-click close effect, `finishOutsideLocusPointer`) opens the
+  `dirtySwitchOpen` confirm modal ("Scartare le modifiche?") — Annulla/Esc/overlay keeps the
+  session and changes; "Scarta e procedi" runs `resetSelectionFlow()` then
+  `openAnnotationEditor(target)` (the pending target is kept in `dirtySwitchTargetRef`, null =
+  just close). `editAnnotation` is the guarded wrapper; `openAnnotationEditor` is the raw opener
+  so the confirm flow can bypass the guard. The modal ref is ignored by the pointerdown-outside
+  logic (no loop). Clean sessions close/switch directly as before.
+
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
 - **100% Pure Text in DOM**: Interview transcript text in `.text-area` NEVER contains `<mark>` or `<span>` inline splitting tags.
