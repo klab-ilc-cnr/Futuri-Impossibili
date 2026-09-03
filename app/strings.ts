@@ -203,12 +203,15 @@ const it = {
     interviewTitle: (name: string) => `Eliminare l’intervista “${name}”?`,
     interviewBody: "Verranno eliminati il testo e le attestazioni associate. L’operazione non può essere annullata.",
     growlClose: "Chiudi messaggio",
+    dirtyKicker: "MODIFICHE NON SALVATE",
+    dirtyTitle: "Scartare le modifiche?",
+    dirtyBody: "L’annotazione corrente ha modifiche non salvate: procedendo verranno perse.",
+    dirtyConfirm: "Scarta e procedi",
   },
   messages: {
     attestationsLoadError: (detail: string) => `Impossibile caricare le attestazioni: ${detail}`,
     senseMetadataError: (detail: string) => `Impossibile caricare i metadata dei sensi: ${detail}`,
     createNeedOptions: "Scegli paradigmatico o narrativo e completa gli attributi richiesti per ogni concetto.",
-    editDirtySwitch: "Salva o annulla le modifiche all’annotazione corrente prima di aprirne un’altra.",
     createNoContext: "Non è possibile creare l’attestazione: l’intervista non contiene l’IRI del nif:Context.",
     createConceptGone: "Non è possibile creare l’attestazione: uno dei concetti selezionati non è più disponibile.",
     createPartialSenses: (failed: number, labels: string) =>
@@ -444,12 +447,15 @@ const en: Dict = {
     interviewTitle: (name: string) => `Delete interview “${name}”?`,
     interviewBody: "The text and its attestations will be deleted. This action cannot be undone.",
     growlClose: "Close message",
+    dirtyKicker: "UNSAVED CHANGES",
+    dirtyTitle: "Discard changes?",
+    dirtyBody: "The current annotation has unsaved changes: continuing will lose them.",
+    dirtyConfirm: "Discard and proceed",
   },
   messages: {
     attestationsLoadError: (detail: string) => `Unable to load attestations: ${detail}`,
     senseMetadataError: (detail: string) => `Unable to load sense metadata: ${detail}`,
     createNeedOptions: "Choose paradigmatic or narrative and complete the required attributes for each concept.",
-    editDirtySwitch: "Save or discard the current annotation changes before opening another one.",
     createNoContext: "Cannot create the attestation: the interview has no nif:Context IRI.",
     createConceptGone: "Cannot create the attestation: one of the selected concepts is no longer available.",
     createPartialSenses: (failed: number, labels: string) =>

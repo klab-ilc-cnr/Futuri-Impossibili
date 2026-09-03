@@ -174,7 +174,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.10.3";
+const appVersion = "0.10.4";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1443,6 +1443,7 @@ export default function Home() {
   const [textLoading, setTextLoading] = useState(false);
   const [textError, setTextError] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [dirtySwitchOpen, setDirtySwitchOpen] = useState(false);
   const [locusDragging, setLocusDragging] = useState(false);
   const [hoveredTooltip, setHoveredTooltip] = useState<{ annotation: Annotation; x: number; y: number } | null>(null);
   const [conceptFilter, setConceptFilter] = useState<string | null>(null);
@@ -1468,6 +1469,8 @@ export default function Home() {
   const conceptConfirmRef = useRef<HTMLDivElement>(null);
   const textConfirmRef = useRef<HTMLDivElement>(null);
   const bulkDeleteRef = useRef<HTMLDivElement>(null);
+  const dirtySwitchRef = useRef<HTMLDivElement>(null);
+  const dirtySwitchTargetRef = useRef<Annotation | null>(null);
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
@@ -1843,6 +1846,26 @@ export default function Home() {
   }, [confirmDeleteOpen]);
 
   useEffect(() => {
+    if (!dirtySwitchOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    dirtySwitchRef.current
+      ?.querySelector<HTMLButtonElement>("[data-dirty-cancel]")
+      ?.focus();
+    return () => previousFocus?.focus();
+  }, [dirtySwitchOpen]);
+
+  useEffect(() => {
+    if (!dirtySwitchOpen) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      dirtySwitchTargetRef.current = null;
+      setDirtySwitchOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [dirtySwitchOpen]);
+
+  useEffect(() => {
     if (!conceptToDelete) return;
     const previousFocus = document.activeElement as HTMLElement | null;
     conceptConfirmRef.current
@@ -1927,12 +1950,7 @@ export default function Home() {
     });
   }, []);
 
-  const editAnnotation = useCallback((annotation: Annotation, target?: HTMLElement) => {
-    if (attestationSaving) return;
-    if (locusEditing && editDirty) {
-      showError(dictionaries[getLangSnapshot()].messages.editDirtySwitch);
-      return;
-    }
+  const openAnnotationEditor = useCallback((annotation: Annotation, target?: HTMLElement) => {
     const wrap = annotatedWrapRef.current;
     let targetRect: DOMRect | null = null;
     if (wrap) {
@@ -2003,7 +2021,30 @@ export default function Home() {
     )?.lexicalConcept;
     if (firstSelectedConcept) scrollConceptIntoView(firstSelectedConcept);
     void loadLexicalEntries();
-  }, [attestationSaving, concepts, editDirty, loadLexicalEntries, locusEditing, scrollConceptIntoView, showError, text]);
+  }, [concepts, loadLexicalEntries, scrollConceptIntoView, text]);
+
+  const editAnnotation = useCallback((annotation: Annotation, target?: HTMLElement) => {
+    if (attestationSaving) return;
+    if (locusEditing && editDirty) {
+      dirtySwitchTargetRef.current = annotation;
+      setDirtySwitchOpen(true);
+      return;
+    }
+    openAnnotationEditor(annotation, target);
+  }, [attestationSaving, editDirty, locusEditing, openAnnotationEditor]);
+
+  function confirmDirtySwitch() {
+    const target = dirtySwitchTargetRef.current;
+    dirtySwitchTargetRef.current = null;
+    setDirtySwitchOpen(false);
+    resetSelectionFlow();
+    if (target) openAnnotationEditor(target);
+  }
+
+  function cancelDirtySwitch() {
+    dirtySwitchTargetRef.current = null;
+    setDirtySwitchOpen(false);
+  }
 
   const nudgeLocusEndpoint = useCallback((endpoint: "start" | "end", delta: number) => {
     setSelection((current) => {
@@ -2388,11 +2429,13 @@ export default function Home() {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (locusEditing) {
+        if (dirtySwitchOpen) return;
         const targetElement = target instanceof Element ? target : target.parentElement;
         if (targetElement?.closest(".bar")
           || targetElement?.closest(".locus-editing-highlight")
           || targetElement?.closest(".locus-handle")
           || annotationActionsRef.current?.contains(target)
+          || dirtySwitchRef.current?.contains(target)
           || (conceptSelectionActive && conceptSidebarRef.current?.contains(target))
           || confirmDeleteRef.current?.contains(target)
           || textConfirmRef.current?.contains(target)
@@ -2423,11 +2466,12 @@ export default function Home() {
     function finishOutsideLocusPointer(event: PointerEvent) {
       const start = locusOutsidePointerStart.current;
       locusOutsidePointerStart.current = null;
-      if (!start || !locusEditing) return;
+      if (!start || !locusEditing || dirtySwitchOpen) return;
       const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
       if (distance > 3) return;
       if (editDirty || locusDirty) {
-        showError(dictionaries[getLangSnapshot()].messages.editDirtySwitch);
+        dirtySwitchTargetRef.current = null;
+        setDirtySwitchOpen(true);
         return;
       }
       resetSelectionFlow();
@@ -2442,7 +2486,7 @@ export default function Home() {
       document.removeEventListener("pointerup", finishOutsideLocusPointer);
       document.removeEventListener("pointercancel", finishOutsideLocusPointer);
     };
-  }, [annotations, attestationSaving, conceptFilter, conceptSelectionActive, editDirty, locusDirty, locusEditing, resetSelectionFlow, selection, showError]);
+  }, [annotations, attestationSaving, conceptFilter, conceptSelectionActive, dirtySwitchOpen, editDirty, locusDirty, locusEditing, resetSelectionFlow, selection]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -4486,6 +4530,37 @@ export default function Home() {
                 disabled={attestationSaving}
               >
                 {t.modals.delete}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {dirtySwitchOpen && (
+        <div
+          ref={dirtySwitchRef}
+          className="confirm-modal-overlay"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) cancelDirtySwitch();
+          }}
+        >
+          <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="dirty-switch-title">
+            <p className="confirm-modal-kicker">{t.modals.dirtyKicker}</p>
+            <h3 id="dirty-switch-title">{t.modals.dirtyTitle}</h3>
+            <p>{t.modals.dirtyBody}</p>
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                data-dirty-cancel
+                onClick={cancelDirtySwitch}
+              >
+                {t.modals.cancel}
+              </button>
+              <button
+                type="button"
+                className="confirm-modal-danger"
+                onClick={confirmDirtySwitch}
+              >
+                {t.modals.dirtyConfirm}
               </button>
             </div>
           </div>
