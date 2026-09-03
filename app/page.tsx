@@ -177,7 +177,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.11.0";
+const appVersion = "0.11.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -3717,6 +3717,7 @@ export default function Home() {
             title={index === reservedMenuItemIndex ? t.nav.reservedTitle : undefined}
           >
             {t.nav.items[index]}
+            {index === reservedMenuItemIndex && !workspaceUnlocked && <span className="nav-lock" aria-hidden="true">🔒</span>}
           </button>
         ))}
         <div className="lang-switch" role="group" aria-label={t.nav.switchAria}>
