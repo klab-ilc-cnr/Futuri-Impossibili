@@ -173,6 +173,35 @@ delete, reload.
   keeps it, a new tab asks again. The 🔒 `nav-lock` icon shows on the nav item while locked and
   disappears once unlocked (no 🔓 variant — too small to tell apart).
 
+## Archive Identity, Import Report & Term Display (v0.11.2 – v0.12.2)
+
+- **Metadata id in the archive list (v0.11.2)**: LexO stores the JSON `metadata.id` (and .md
+  front-matter `id:`) as `dcterms:identifier`; `/service/texts` returns it in
+  `metadata.id`/`metadataValues.id` (see `TextCatalogManager.readMetadata`). The list shows the
+  id as the primary label (filename as `title` tooltip, fallback to filename when absent); the
+  interview search matches both name and id.
+- **Real unsaved-attestation count (v0.11.3)**: the import summary uses the full
+  `unsavedAttestations` count (v0.9.2 wrongly reused the 3-example slice as the counter).
+- **Imported term from rdfs:comment (v0.12.0)**: JSON-imported narrative attestations carry the
+  target term (e.g. "femmina") as an `rdfs:comment` literal metadata (producer pipeline). It is
+  read into the display-only `AnnotationConcept.term` and shown as the italic entry in the
+  tooltip and the read-only "Entrata lessicale" panel, as fallback when
+  `resolveLexicalEntryLabel` resolves nothing (real entry IRI still wins). NOTE: re-saving an
+  imported annotation in the app drops unknown metadata (term disappears) — preservation via
+  `narrativeMetadata` is planned but NOT implemented.
+- **Upload progress + count row (v0.12.1)**: the bulk conversion poller takes an `onProgress`
+  callback ("Caricati X di Y…" in the interview list, like bulk deletion); the
+  "N interviste"/"X selezionate" counter moved from the 4-button heading row to its own
+  `.sidebar-count-row` (it used to overflow the column).
+- **Import report panel (v0.12.2)**: the import growls are replaced by a persistent
+  `.import-report` box at the top of the interview list (`importReport` state: running flag,
+  completed/total, full problem list — per-file conversion failure or per-attestation
+  `code`/`cause`, no truncation). Live during upload (the poller now forwards the whole
+  `BulkTextJob` via `buildImportProblems`), stays after completion until closed (×) or replaced
+  by the next import. Growls remain for hard errors only (LexO unreachable, admission refusal,
+  timeout); `bulkPartial`/`bulkNoText` strings and the `describeBulkFailures`/
+  `describeUnsavedAttestations`/`countUnsavedAttestations` helpers were removed.
+
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
 - **100% Pure Text in DOM**: Interview transcript text in `.text-area` NEVER contains `<mark>` or `<span>` inline splitting tags.
