@@ -174,7 +174,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.10.0";
+const appVersion = "0.10.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1074,6 +1074,17 @@ function describeUnsavedAttestations(job: BulkTextJob) {
     .slice(0, 3);
 }
 
+function locusBarY(relTop: number, annotationHeight: number, wrapHeight: number | undefined) {
+  const barSize = 48;
+  const barGap = 8;
+  return relTop >= barSize + barGap
+    ? relTop - barSize - barGap
+    : Math.max(0, Math.min(
+        relTop + annotationHeight + barGap,
+        (wrapHeight ?? Number.POSITIVE_INFINITY) - barSize,
+      ));
+}
+
 function getTextNodeEntries(root: HTMLElement) {
   const entries: Array<{ node: Text; start: number; end: number }> = [];
   let offset = 0;
@@ -1969,7 +1980,7 @@ export default function Home() {
     const relLeft = wrapRect && targetRect ? targetRect.left - wrapRect.left : rect.left;
     const relTop = wrapRect && targetRect ? targetRect.top - wrapRect.top : rect.top;
     const posX = Math.max(12, relLeft + rect.width / 2 - 45);
-    const posY = Math.max(0, relTop - 54);
+    const posY = locusBarY(relTop, rect.height, wrapRect?.height);
 
     setSelection({
       start: annotation.start,
@@ -2947,7 +2958,7 @@ export default function Home() {
       const relLeft = wrapRect ? rect.left - wrapRect.left : rect.left;
       const relTop = wrapRect ? rect.top - wrapRect.top : rect.top;
       const posX = Math.max(12, relLeft + rect.width / 2 - 45);
-      const posY = Math.max(0, relTop - 54);
+      const posY = locusBarY(relTop, rect.height, wrapRect?.height);
 
       setSelection((current) => current && current.mode === "edit" ? {
         ...current,
