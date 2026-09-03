@@ -174,7 +174,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.10.1";
+const appVersion = "0.10.2";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1929,6 +1929,10 @@ export default function Home() {
 
   const editAnnotation = useCallback((annotation: Annotation, target?: HTMLElement) => {
     if (attestationSaving) return;
+    if (locusEditing && editDirty) {
+      showError(dictionaries[getLangSnapshot()].messages.editDirtySwitch);
+      return;
+    }
     const wrap = annotatedWrapRef.current;
     let targetRect: DOMRect | null = null;
     if (wrap) {
@@ -1999,7 +2003,7 @@ export default function Home() {
     )?.lexicalConcept;
     if (firstSelectedConcept) scrollConceptIntoView(firstSelectedConcept);
     void loadLexicalEntries();
-  }, [attestationSaving, concepts, loadLexicalEntries, scrollConceptIntoView, text]);
+  }, [attestationSaving, concepts, editDirty, loadLexicalEntries, locusEditing, scrollConceptIntoView, showError, text]);
 
   const nudgeLocusEndpoint = useCallback((endpoint: "start" | "end", delta: number) => {
     setSelection((current) => {
@@ -2194,7 +2198,8 @@ export default function Home() {
         };
         barEl.onmouseenter = () => {
           const annotation = annotations[index];
-          if (!annotation || locusEditing || dragging) return;
+          if (!annotation || dragging || locusDragging) return;
+          if (locusEditing && index === editingAnnotationIndex) return;
           setHoveredTooltip({
             annotation,
             x: bar.left + (bar.right - bar.left) / 2,
@@ -3504,7 +3509,7 @@ export default function Home() {
   }
 
   function renderFloatingTooltip() {
-    if (!hoveredTooltip || locusEditing || dragging) return null;
+    if (!hoveredTooltip || dragging || locusDragging) return null;
     const { annotation, x, y } = hoveredTooltip;
     const conceptItems = annotation.concepts.length
       ? annotation.concepts
@@ -3824,7 +3829,7 @@ export default function Home() {
                     }}
                     onMouseMove={(event) => {
                       if ((event.target as HTMLElement).closest(".bar")) return;
-                      if (locusEditing || dragging) {
+                      if (locusDragging || dragging) {
                         if (hoveredTooltip) setHoveredTooltip(null);
                         return;
                       }
@@ -3835,9 +3840,12 @@ export default function Home() {
                         if (hoveredTooltip) setHoveredTooltip(null);
                         return;
                       }
+                      const editingStart = selection?.mode === "edit" ? selection.sourceStart : null;
+                      const editingEnd = selection?.mode === "edit" ? selection.sourceEnd : null;
                       const matching = annotations.filter((a) =>
                         (!conceptFilter || a.concepts.some((c) => c.lexicalConcept === conceptFilter))
-                        && a.start <= offset && offset < a.end,
+                        && a.start <= offset && offset < a.end
+                        && !(editingStart !== null && a.start === editingStart && a.end === editingEnd),
                       );
                       if (matching.length === 1) {
                         const wrapRect = wrap.getBoundingClientRect();
