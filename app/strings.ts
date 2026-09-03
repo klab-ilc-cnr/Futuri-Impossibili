@@ -62,6 +62,7 @@ const it = {
     selectAria: "Attiva o disattiva la selezione multipla delle interviste",
     selectTitle: "Seleziona interviste da eliminare",
     selectedCount: (n: number) => `${n} selezionate`,
+    fileCount: (n: number) => `${n} interviste`,
     selectFirst: "Seleziona almeno una intervista",
     selectAll: "Tutte",
     clearSelection: "Nessuna",
@@ -69,6 +70,7 @@ const it = {
     bulkDeleteConfirmBody: "Verranno eliminati i testi e tutte le annotazioni associate. L’operazione non può essere annullata.",
     bulkDeleteActiveWarning: "Attenzione: è inclusa l’intervista correntemente aperta.",
     bulkDeleteProgress: (deleted: number, total: number) => `Eliminate ${deleted} di ${total}…`,
+    uploadProgress: (uploaded: number, total: number) => `Caricati ${uploaded} di ${total}…`,
     bulkDeleteSuccess: (n: number) => `${n} interviste eliminate.`,
     bulkDeletePartial: (deleted: number, failed: number, detail: string) =>
       `Eliminate ${deleted} interviste, ${failed} non riuscite${detail ? `. ${detail}` : "."}`,
@@ -313,6 +315,7 @@ const en: Dict = {
     selectAria: "Toggle multi-selection of interviews",
     selectTitle: "Select interviews to delete",
     selectedCount: (n: number) => `${n} selected`,
+    fileCount: (n: number) => `${n} interviews`,
     selectFirst: "Select at least one interview",
     selectAll: "All",
     clearSelection: "Clear",
@@ -320,6 +323,7 @@ const en: Dict = {
     bulkDeleteConfirmBody: "The texts and all their annotations will be deleted. This action cannot be undone.",
     bulkDeleteActiveWarning: "Warning: the currently open interview is included.",
     bulkDeleteProgress: (deleted: number, total: number) => `Deleted ${deleted} of ${total}…`,
+    uploadProgress: (uploaded: number, total: number) => `Uploaded ${uploaded} of ${total}…`,
     bulkDeleteSuccess: (n: number) => `${n} interviews deleted.`,
     bulkDeletePartial: (deleted: number, failed: number, detail: string) =>
       `${deleted} interviews deleted, ${failed} failed${detail ? `. ${detail}` : "."}`,

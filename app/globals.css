@@ -103,6 +103,7 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .sidebar-heading-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sidebar-heading strong { font: 21px Georgia, serif; margin-right: auto; }
 .sidebar-count { color: #929a96; font-size: 10px; margin-left: 0; white-space: nowrap; }
+.sidebar-count-row { padding: 0 12px 6px; }
 .archive-upload, .archive-delete, .archive-reload, .archive-select { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #dbe3de; border-radius: 8px; background: #f6f8f6; color: var(--green); cursor: pointer; font-size: 18px; line-height: 1; transition: background .18s, transform .18s, border-color .18s; }
 .archive-upload { padding: 0; }
 .archive-upload svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

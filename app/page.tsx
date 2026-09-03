@@ -179,7 +179,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.12.0";
+const appVersion = "0.12.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1050,7 +1050,10 @@ function describeBulkDeletionFailures(job: BulkDeletionJob) {
   return details.join(" · ");
 }
 
-async function waitForBulkTextConversion(bulkId: string) {  const deadline = Date.now() + 15 * 60_000;
+async function waitForBulkTextConversion(
+  bulkId: string,
+  onProgress?: (progress: { completed: number; total: number }) => void,
+) {  const deadline = Date.now() + 15 * 60_000;
   while (Date.now() < deadline) {
     const response = await fetch(
       `${textBulkUploadEndpoint}/${encodeURIComponent(bulkId)}/status`,
@@ -1059,8 +1062,11 @@ async function waitForBulkTextConversion(bulkId: string) {  const deadline = Dat
     if (!response.ok) throw new Error(await readErrorDetail(response));
 
     const job = readBulkTextJob(await response.json() as unknown);
-    if (job && ["COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "CANCELLED"].includes(job.state)) {
-      return job;
+    if (job) {
+      onProgress?.({ completed: job.completed, total: job.items.length });
+      if (["COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "CANCELLED"].includes(job.state)) {
+        return job;
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -1441,6 +1447,7 @@ export default function Home() {
   const [archiveLoading, setArchiveLoading] = useState(true);
   const [archiveError, setArchiveError] = useState("");
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number } | null>(null);
   const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
   const [conceptTotalHits, setConceptTotalHits] = useState(0);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -2986,6 +2993,7 @@ export default function Home() {
 
     textRequestId.current += 1;
     setUploadLoading(true);
+    setUploadProgress({ completed: 0, total: files.length });
     setArchiveLoading(true);
     setArchiveError("");
     setTextLoading(true);
@@ -3006,7 +3014,9 @@ export default function Home() {
       const acceptedJob = readBulkTextJob(await response.json() as unknown);
       if (!acceptedJob) throw new Error(t.archive.bulkNoJob);
 
-      const completedJob = await waitForBulkTextConversion(acceptedJob.bulkId);
+      const completedJob = await waitForBulkTextConversion(acceptedJob.bulkId, (progress) => {
+        setUploadProgress(progress);
+      });
       const firstCompleted = completedJob.items.find((item) => item.state === "COMPLETED");
       if (!firstCompleted) {
         throw new Error(describeBulkFailures(completedJob) || t.archive.bulkNoText);
@@ -3038,6 +3048,7 @@ export default function Home() {
       showError(t.archive.bulkError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setUploadLoading(false);
+      setUploadProgress(null);
       input.value = "";
     }
   }
@@ -3840,12 +3851,14 @@ export default function Home() {
                     >
                       ↻
                     </button>
-                    <small className="sidebar-count">
-                      {selectionMode && selectedInterviewIds.length > 0
-                        ? t.archive.selectedCount(selectedInterviewIds.length)
-                        : `${interviews.length} file`}
-                    </small>
                   </div>
+                </div>
+                <div className="sidebar-count-row">
+                  <small className="sidebar-count">
+                    {selectionMode && selectedInterviewIds.length > 0
+                      ? t.archive.selectedCount(selectedInterviewIds.length)
+                      : t.archive.fileCount(interviews.length)}
+                  </small>
                 </div>
                 <div className="interview-search">
                   <span aria-hidden="true">⌕</span>
@@ -3886,7 +3899,17 @@ export default function Home() {
                       </small>
                     </div>
                   )}
-                  {archiveLoading && (
+                  {uploadLoading && (
+                    <div className="archive-loading" role="status" aria-live="polite">
+                      <span className="loading-spinner" aria-hidden="true" />
+                      <small>
+                        {uploadProgress
+                          ? t.archive.uploadProgress(uploadProgress.completed, uploadProgress.total)
+                          : t.archive.loading}
+                      </small>
+                    </div>
+                  )}
+                  {!uploadLoading && archiveLoading && (
                     <div className="archive-loading" role="status">
                       <span className="loading-spinner" aria-hidden="true" />
                       <small>{t.archive.loading}</small>
