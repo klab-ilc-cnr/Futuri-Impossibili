@@ -95,12 +95,24 @@ type ConceptSelection = ConceptAnnotationOptions & {
   sensesError: string;
 };
 
+type UnsavedAttestation = {
+  id?: string;
+  observable?: string;
+  type?: string;
+  code?: string;
+  cause?: string;
+};
+
 type BulkTextJobItem = {
   fileId: string;
   originalFileName?: string;
   state: string;
   message?: string;
   resultId?: string;
+  attestationState?: string;
+  attestationTotal?: number;
+  savedAttestations?: number;
+  unsavedAttestations?: UnsavedAttestation[];
 };
 
 type BulkTextJob = {
@@ -162,7 +174,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.9.1";
+const appVersion = "0.9.2";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -914,6 +926,28 @@ function readBulkTextJob(payload: unknown): BulkTextJob | null {
       originalFileName: typeof item.originalFileName === "string" ? item.originalFileName : undefined,
       message: typeof item.message === "string" ? item.message : undefined,
       resultId: readResourceIdentifier(item.resultId) || undefined,
+      attestationState: typeof item.attestationState === "string"
+        ? item.attestationState.toUpperCase()
+        : undefined,
+      attestationTotal: Number.isFinite(Number(item.attestationTotal))
+        ? Number(item.attestationTotal)
+        : undefined,
+      savedAttestations: Number.isFinite(Number(item.savedAttestations))
+        ? Number(item.savedAttestations)
+        : undefined,
+      unsavedAttestations: Array.isArray(item.unsavedAttestations)
+        ? item.unsavedAttestations.flatMap((rawUnsaved) => {
+            if (!rawUnsaved || typeof rawUnsaved !== "object") return [];
+            const unsaved = rawUnsaved as Record<string, unknown>;
+            return [{
+              id: typeof unsaved.id === "string" ? unsaved.id : undefined,
+              observable: typeof unsaved.observable === "string" ? unsaved.observable : undefined,
+              type: typeof unsaved.type === "string" ? unsaved.type : undefined,
+              code: typeof unsaved.code === "string" ? unsaved.code : undefined,
+              cause: typeof unsaved.cause === "string" ? unsaved.cause : undefined,
+            }];
+          })
+        : undefined,
     }];
   });
   return {
@@ -1013,6 +1047,16 @@ function describeBulkFailures(job: BulkTextJob) {
     .slice(0, 3)
     .map((item) => `${item.originalFileName ?? item.fileId}: ${item.message ?? item.state.toLocaleLowerCase("it-IT")}`);
   return details.join(" · ");
+}
+
+function describeUnsavedAttestations(job: BulkTextJob) {
+  return job.items
+    .flatMap((item) => (item.unsavedAttestations ?? []).map((unsaved) => {
+      const subject = unsaved.id ?? unsaved.observable ?? item.originalFileName ?? item.fileId;
+      const code = unsaved.code ?? "ATTESTATION_IMPORT_FAILED";
+      return `${item.originalFileName ?? item.fileId}: ${subject} (${code}${unsaved.cause ? `: ${unsaved.cause}` : ""})`;
+    }))
+    .slice(0, 3);
 }
 
 function getTextNodeEntries(root: HTMLElement) {
@@ -2815,8 +2859,16 @@ export default function Home() {
       }
 
       if (completedJob.state === "PARTIALLY_COMPLETED") {
-        const detail = describeBulkFailures(completedJob);
+        const detail = [
+          describeBulkFailures(completedJob),
+          ...describeUnsavedAttestations(completedJob),
+        ].filter(Boolean).join(" · ");
         showError(t.archive.bulkPartial(completedJob.completed, completedJob.failed, detail));
+      } else {
+        const unsavedDetails = describeUnsavedAttestations(completedJob);
+        if (unsavedDetails.length > 0) {
+          showError(t.archive.bulkAttestationsPartial(unsavedDetails.length, unsavedDetails.join(" · ")));
+        }
       }
     } catch (error) {
       setArchiveLoading(false);
@@ -3568,7 +3620,7 @@ export default function Home() {
                       </svg>
                       <input
                         type="file"
-                        accept=".txt,.md,.markdown,text/plain,text/markdown"
+                        accept=".txt,.md,.markdown,.json,text/plain,text/markdown,application/json"
                         onChange={(event) => void handleBulkFiles(event)}
                         disabled={uploadLoading}
                         multiple

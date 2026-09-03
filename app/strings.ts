@@ -55,6 +55,8 @@ const it = {
     bulkNoJob: "LexO-server non ha restituito l’identificativo del bulk",
     bulkNotReady: "I testi convertiti non sono ancora disponibili nell’archivio",
     bulkNoText: "Nessun testo del bulk è stato convertito",
+    bulkAttestationsPartial: (count: number, detail: string) =>
+      `${count} attestazioni non salvate: ${detail}`,
     bulkTimeout: "Tempo massimo superato durante l’importazione bulk",
     loadError: (detail: string) => `Impossibile caricare l’archivio (${detail}).`,
     selectAria: "Attiva o disattiva la selezione multipla delle interviste",
@@ -293,6 +295,8 @@ const en: Dict = {
     bulkNoJob: "LexO-server did not return the bulk identifier",
     bulkNotReady: "The converted texts are not yet available in the archive",
     bulkNoText: "No text from the bulk was converted",
+    bulkAttestationsPartial: (count: number, detail: string) =>
+      `${count} attestations not saved: ${detail}`,
     bulkTimeout: "Maximum time exceeded during bulk import",
     loadError: (detail: string) => `Unable to load the archive (${detail}).`,
     selectAria: "Toggle multi-selection of interviews",
