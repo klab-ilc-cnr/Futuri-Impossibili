@@ -174,7 +174,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.10.2";
+const appVersion = "0.10.3";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -2425,7 +2425,12 @@ export default function Home() {
       locusOutsidePointerStart.current = null;
       if (!start || !locusEditing) return;
       const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-      if (distance <= 3) resetSelectionFlow();
+      if (distance > 3) return;
+      if (editDirty || locusDirty) {
+        showError(dictionaries[getLangSnapshot()].messages.editDirtySwitch);
+        return;
+      }
+      resetSelectionFlow();
     }
 
     document.addEventListener("pointerdown", leaveSelectionFlow);
@@ -2437,7 +2442,7 @@ export default function Home() {
       document.removeEventListener("pointerup", finishOutsideLocusPointer);
       document.removeEventListener("pointercancel", finishOutsideLocusPointer);
     };
-  }, [annotations, attestationSaving, conceptFilter, conceptSelectionActive, locusEditing, resetSelectionFlow, selection]);
+  }, [annotations, attestationSaving, conceptFilter, conceptSelectionActive, editDirty, locusDirty, locusEditing, resetSelectionFlow, selection, showError]);
 
   useEffect(() => {
     if (!contextMenu) return;
