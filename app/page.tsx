@@ -178,7 +178,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.11.2";
+const appVersion = "0.11.3";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1066,6 +1066,10 @@ function describeBulkFailures(job: BulkTextJob) {
     .slice(0, 3)
     .map((item) => `${item.originalFileName ?? item.fileId}: ${item.message ?? item.state.toLocaleLowerCase("it-IT")}`);
   return details.join(" · ");
+}
+
+function countUnsavedAttestations(job: BulkTextJob) {
+  return job.items.reduce((sum, item) => sum + (item.unsavedAttestations?.length ?? 0), 0);
 }
 
 function describeUnsavedAttestations(job: BulkTextJob) {
@@ -3008,17 +3012,18 @@ export default function Home() {
         throw new Error(t.archive.bulkNotReady);
       }
 
+      const unsavedTotal = countUnsavedAttestations(completedJob);
+      const unsavedExamples = describeUnsavedAttestations(completedJob);
       if (completedJob.state === "PARTIALLY_COMPLETED") {
         const detail = [
           describeBulkFailures(completedJob),
-          ...describeUnsavedAttestations(completedJob),
+          ...(unsavedTotal > 0
+            ? [t.archive.bulkAttestationsPartial(unsavedTotal, unsavedExamples.join(" · "))]
+            : []),
         ].filter(Boolean).join(" · ");
         showError(t.archive.bulkPartial(completedJob.completed, completedJob.failed, detail));
-      } else {
-        const unsavedDetails = describeUnsavedAttestations(completedJob);
-        if (unsavedDetails.length > 0) {
-          showError(t.archive.bulkAttestationsPartial(unsavedDetails.length, unsavedDetails.join(" · ")));
-        }
+      } else if (unsavedTotal > 0) {
+        showError(t.archive.bulkAttestationsPartial(unsavedTotal, unsavedExamples.join(" · ")));
       }
     } catch (error) {
       setArchiveLoading(false);
