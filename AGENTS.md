@@ -101,6 +101,41 @@ delete, reload.
   attachment, attestations/annotations). Deleting only the annotations of an interview is a
   different operation (not implemented).
 
+## JSON Text Import (v0.9.2)
+
+- The archive upload `accept` includes `.json` / `application/json`; files go through the same
+  `POST /api/lexo/texts/bulk` proxy (mixed TXT/MD/JSON allowed server-side, shared `language=it`,
+  no `corpusId` — JSON files carry their own optional `metadata.corpus`, which must already exist
+  on LexO or the file fails with `INVALID_CORPUS`).
+- **Attestation phase reporting**: JSON bulk items carry `attestationState`, `attestationTotal`,
+  `savedAttestations`, `unsavedAttestations[]` (`id`, `observable`, `type`, stable `code`, `cause`).
+  A text can convert successfully (`state: COMPLETED`) while its attestations fail individually
+  (no rollback): e.g. `OBSERVABLE_TYPE_MISMATCH` (observable must have the exact rdf:type in the
+  lexicon graph — lexicon entries are `ontolex#Word`, NOT `ontolex#LexicalEntry`) or
+  `INVALID_CORPUS`. `describeUnsavedAttestations` surfaces up to 3 failures in the growl:
+  merged into `bulkPartial` for `PARTIALLY_COMPLETED` jobs, standalone `bulkAttestationsPartial`
+  growl for otherwise-COMPLETED jobs (fixes silent data loss).
+- LexO JSON schema: root `{metadata?, text{type:"txt", content}, attestations[]}`; each attestation
+  requires `observable` (existing IRI), exact OntoLex `type`, `value` equal to the substring,
+  `start_char`/`end_char` (Unicode code-point offsets on the canonical text, end exclusive) and
+  `gloss` (REQUIRED, even empty-ish — missing gloss rejects the item with
+  `BULK_MISSING_JSON_FIELD`). Import creates attestations with creator "imported"; offsets must
+  match `nif:isString` exactly.
+- Line-break semantics (LexO commit `69c28c3`): plain TXT and JSON `text.content` preserve every
+  LF in the canonical text (per-line trim + whitespace collapse; blank lines kept).
+
+## JSON-Imported Attestations in the Viewer (v0.10.0)
+
+- `parseAttestations` now accepts observables of type `LexicalSense` (existing behaviour) **and**
+  `LexicalConcept` (direct match in the concept list → full concept panel flow: options, edit,
+  delete guard); imported concepts have no referring-concept metadata so they behave as narrative
+  annotations with empty options until edited. `LexicalEntry`/`Form` observables render as
+  label-only highlights (attestationIris kept for locus move/delete, but no concept entry →
+  no concept panel integration; the server rejects direct `LexicalEntry` type anyway —
+  real entries are `ontolex#Word`).
+- Unknown observables (not in the concept list) still render as highlight with
+  `observableLabel` fallback (e.g. "femmina@it") via the existing label pipeline.
+
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
 - **100% Pure Text in DOM**: Interview transcript text in `.text-area` NEVER contains `<mark>` or `<span>` inline splitting tags.

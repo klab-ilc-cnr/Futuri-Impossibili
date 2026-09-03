@@ -174,7 +174,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.9.2";
+const appVersion = "0.10.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -493,7 +493,10 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
   }
 
   function hasLexicalSenseObservableType(...values: unknown[]) {
-    const lexicalSenseType = "http://www.w3.org/ns/lemon/ontolex#LexicalSense";
+    return includesObservableType(values, "http://www.w3.org/ns/lemon/ontolex#LexicalSense");
+  }
+
+  function includesObservableType(values: unknown[], observableType: string) {
     function collectTypes(value: unknown): string[] {
       if (Array.isArray(value)) return value.flatMap(collectTypes);
       if (typeof value === "string") return [value.trim()];
@@ -501,7 +504,11 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
       const container = value as Record<string, unknown>;
       return collectTypes(container.value ?? container.iri ?? container["@id"] ?? container.id);
     }
-    return values.flatMap(collectTypes).includes(lexicalSenseType);
+    return values.flatMap(collectTypes).includes(observableType);
+  }
+
+  function hasLexicalConceptObservableType(...values: unknown[]) {
+    return includesObservableType(values, "http://www.w3.org/ns/lemon/ontolex#LexicalConcept");
   }
 
   function parsePolarity(values: unknown[]): ConceptPolarity | "" {
@@ -694,7 +701,15 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
           : effectiveConceptLabel);
       }
       displayLabels.forEach((label) => current.labels.add(label));
-      if (effectiveConceptIri) {
+      const observableTypeSources = [
+        attestation.observableTypes,
+        attestation.observableType,
+        occurrence.observableTypes,
+        occurrence.observableType,
+      ];
+      const conceptFlow = hasLexicalSenseObservableType(...observableTypeSources)
+        || hasLexicalConceptObservableType(...observableTypeSources);
+      if (effectiveConceptIri && conceptFlow) {
         const polarity = parsePolarity([
           ...collectMetadataValues(occurrence.metadata, polarityProperty),
           ...collectMetadataValues(attestation.metadata, polarityProperty),
