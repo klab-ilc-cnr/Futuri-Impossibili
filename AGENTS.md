@@ -158,6 +158,21 @@ delete, reload.
   so the confirm flow can bypass the guard. The modal ref is ignored by the pointerdown-outside
   logic (no loop). Clean sessions close/switch directly as before.
 
+## Password Gate on "Costruisci Dizionario" (v0.11.0 – v0.11.1)
+
+- The nav item 4 (`reservedMenuItemIndex`) is gated client-side: while locked, clicking it opens
+  a `.confirm-modal` password dialog (kicker "AREA RISERVATA"); the correct password unlocks,
+  navigates to page 4 and loads concepts. Wrong password → inline `.password-error`, field
+  cleared and refocused. Esc / Annulla / overlay close without navigating.
+- The secret is stored ONLY as a SHA-256 hex digest in the `workspacePasswordHash` constant
+  (app/page.tsx) and verified with `crypto.subtle.digest`; the plaintext password never appears
+  in the source or the bundle. To change it:
+  `printf %s 'newpassword' | sha256sum` → replace the constant (no redeploy of the backend
+  needed; it is a deterrent, NOT real authentication — the LexO API proxies remain open).
+- Unlock state persists in `sessionStorage["fi-workspace-unlocked"]` (per browser tab): reload
+  keeps it, a new tab asks again. The 🔒 `nav-lock` icon shows on the nav item while locked and
+  disappears once unlocked (no 🔓 variant — too small to tell apart).
+
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
 - **100% Pure Text in DOM**: Interview transcript text in `.text-area` NEVER contains `<mark>` or `<span>` inline splitting tags.
