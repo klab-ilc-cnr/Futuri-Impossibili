@@ -142,6 +142,13 @@ type BulkDeletionJob = {
   items: BulkDeletionJobItem[];
 };
 
+type ImportReport = {
+  running: boolean;
+  total: number;
+  completed: number;
+  problems: string[];
+};
+
 const menuItemIds = [
   "progetto",
   "statistiche",
@@ -179,7 +186,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.12.1";
+const appVersion = "0.12.2";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1052,7 +1059,7 @@ function describeBulkDeletionFailures(job: BulkDeletionJob) {
 
 async function waitForBulkTextConversion(
   bulkId: string,
-  onProgress?: (progress: { completed: number; total: number }) => void,
+  onProgress?: (job: BulkTextJob) => void,
 ) {  const deadline = Date.now() + 15 * 60_000;
   while (Date.now() < deadline) {
     const response = await fetch(
@@ -1063,7 +1070,7 @@ async function waitForBulkTextConversion(
 
     const job = readBulkTextJob(await response.json() as unknown);
     if (job) {
-      onProgress?.({ completed: job.completed, total: job.items.length });
+      onProgress?.(job);
       if (["COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "CANCELLED"].includes(job.state)) {
         return job;
       }
@@ -1071,28 +1078,6 @@ async function waitForBulkTextConversion(
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error("Tempo massimo superato durante l’importazione bulk");
-}
-
-function describeBulkFailures(job: BulkTextJob) {
-  const details = job.items
-    .filter((item) => ["FAILED", "CANCELLED"].includes(item.state))
-    .slice(0, 3)
-    .map((item) => `${item.originalFileName ?? item.fileId}: ${item.message ?? item.state.toLocaleLowerCase("it-IT")}`);
-  return details.join(" · ");
-}
-
-function countUnsavedAttestations(job: BulkTextJob) {
-  return job.items.reduce((sum, item) => sum + (item.unsavedAttestations?.length ?? 0), 0);
-}
-
-function describeUnsavedAttestations(job: BulkTextJob) {
-  return job.items
-    .flatMap((item) => (item.unsavedAttestations ?? []).map((unsaved) => {
-      const subject = unsaved.id ?? unsaved.observable ?? item.originalFileName ?? item.fileId;
-      const code = unsaved.code ?? "ATTESTATION_IMPORT_FAILED";
-      return `${item.originalFileName ?? item.fileId}: ${subject} (${code}${unsaved.cause ? `: ${unsaved.cause}` : ""})`;
-    }))
-    .slice(0, 3);
 }
 
 function locusBarY(relTop: number, annotationHeight: number, wrapHeight: number | undefined) {
@@ -1447,7 +1432,7 @@ export default function Home() {
   const [archiveLoading, setArchiveLoading] = useState(true);
   const [archiveError, setArchiveError] = useState("");
   const [uploadLoading, setUploadLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
   const [conceptTotalHits, setConceptTotalHits] = useState(0);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -2986,6 +2971,25 @@ export default function Home() {
     await loadCanonicalText(interview.id);
   }
 
+  function buildImportProblems(job: BulkTextJob) {
+    const lines: string[] = [];
+    for (const item of job.items) {
+      const name = item.originalFileName ?? item.fileId;
+      if (["FAILED", "CANCELLED"].includes(item.state)) {
+        lines.push(`${name}: ${item.message ?? item.state.toLocaleLowerCase("it-IT")}`);
+        continue;
+      }
+      const unsaved = item.unsavedAttestations ?? [];
+      if (unsaved.length > 0) {
+        const detail = unsaved.map((unsavedItem) =>
+          `${unsavedItem.id ?? unsavedItem.observable ?? "?"} (${unsavedItem.code ?? "ATTESTATION_IMPORT_FAILED"}${unsavedItem.cause ? `: ${unsavedItem.cause}` : ""})`,
+        ).join("; ");
+        lines.push(`${name}: ${t.archive.bulkAttestationsPartial(unsaved.length, detail)}`);
+      }
+    }
+    return lines;
+  }
+
   async function handleBulkFiles(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     const files = Array.from(input.files ?? []);
@@ -2993,7 +2997,7 @@ export default function Home() {
 
     textRequestId.current += 1;
     setUploadLoading(true);
-    setUploadProgress({ completed: 0, total: files.length });
+    setImportReport({ running: true, total: files.length, completed: 0, problems: [] });
     setArchiveLoading(true);
     setArchiveError("");
     setTextLoading(true);
@@ -3014,13 +3018,21 @@ export default function Home() {
       const acceptedJob = readBulkTextJob(await response.json() as unknown);
       if (!acceptedJob) throw new Error(t.archive.bulkNoJob);
 
-      const completedJob = await waitForBulkTextConversion(acceptedJob.bulkId, (progress) => {
-        setUploadProgress(progress);
+      const completedJob = await waitForBulkTextConversion(acceptedJob.bulkId, (job) => {
+        setImportReport((current) => current
+          ? { ...current, completed: job.completed, problems: buildImportProblems(job) }
+          : current);
       });
+
+      setImportReport({
+        running: false,
+        total: completedJob.items.length,
+        completed: completedJob.completed,
+        problems: buildImportProblems(completedJob),
+      });
+
       const firstCompleted = completedJob.items.find((item) => item.state === "COMPLETED");
-      if (!firstCompleted) {
-        throw new Error(describeBulkFailures(completedJob) || t.archive.bulkNoText);
-      }
+      if (!firstCompleted) return;
 
       const preferredInterviewId = firstCompleted.resultId ?? firstCompleted.fileId;
       activeInterviewIdRef.current = preferredInterviewId;
@@ -3028,27 +3040,15 @@ export default function Home() {
       if (!await loadArchive(preferredInterviewId)) {
         throw new Error(t.archive.bulkNotReady);
       }
-
-      const unsavedTotal = countUnsavedAttestations(completedJob);
-      const unsavedExamples = describeUnsavedAttestations(completedJob);
-      if (completedJob.state === "PARTIALLY_COMPLETED") {
-        const detail = [
-          describeBulkFailures(completedJob),
-          ...(unsavedTotal > 0
-            ? [t.archive.bulkAttestationsPartial(unsavedTotal, unsavedExamples.join(" · "))]
-            : []),
-        ].filter(Boolean).join(" · ");
-        showError(t.archive.bulkPartial(completedJob.completed, completedJob.failed, detail));
-      } else if (unsavedTotal > 0) {
-        showError(t.archive.bulkAttestationsPartial(unsavedTotal, unsavedExamples.join(" · ")));
-      }
     } catch (error) {
       setArchiveLoading(false);
       setTextLoading(false);
+      setImportReport((current) => current
+        ? { ...current, running: false }
+        : current);
       showError(t.archive.bulkError(error instanceof Error ? error.message : t.concepts.unknownError));
     } finally {
       setUploadLoading(false);
-      setUploadProgress(null);
       input.value = "";
     }
   }
@@ -3891,21 +3891,37 @@ export default function Home() {
                   </div>
                 )}
                 <div className="interview-list">
+                  {importReport && (
+                    <div className="import-report" role="status" aria-live="polite">
+                      <div className="import-report-head">
+                        <span className="import-report-title">{t.archive.importReportTitle}</span>
+                        <button
+                          type="button"
+                          onClick={() => setImportReport(null)}
+                          aria-label={t.modals.growlClose}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <small className="import-report-summary">
+                        {importReport.running
+                          ? t.archive.uploadProgress(importReport.completed, importReport.total)
+                          : t.archive.importReportSummary(importReport.completed, importReport.total, importReport.problems.length)}
+                      </small>
+                      {importReport.problems.length > 0 && (
+                        <ul className="import-report-list">
+                          {importReport.problems.map((line, index) => (
+                            <li key={index}>{line}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                   {bulkDeleting && (
                     <div className="archive-loading" role="status" aria-live="polite">
                       <span className="loading-spinner" aria-hidden="true" />
                       <small>
                         {t.archive.bulkDeleteProgress(bulkDeletionProgress?.deleted ?? 0, bulkDeletionProgress?.total ?? 0)}
-                      </small>
-                    </div>
-                  )}
-                  {uploadLoading && (
-                    <div className="archive-loading" role="status" aria-live="polite">
-                      <span className="loading-spinner" aria-hidden="true" />
-                      <small>
-                        {uploadProgress
-                          ? t.archive.uploadProgress(uploadProgress.completed, uploadProgress.total)
-                          : t.archive.loading}
                       </small>
                     </div>
                   )}

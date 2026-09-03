@@ -49,12 +49,14 @@ const it = {
     deleteError: (detail: string) => `L’intervista non è stata eliminata: ${detail}`,
     deleteNotAllowed: "Solo le interviste caricate su LexO-server possono essere eliminate.",
     deleteRejected: "LexO-server non ha eliminato l’intervista",
-    bulkPartial: (loaded: number, failed: number, detail: string) =>
-      `Importazione parziale: ${loaded} file caricati, ${failed} non riusciti${detail ? `. ${detail}` : "."}`,
+    importReportTitle: "ESITI IMPORTAZIONE",
+    importReportSummary: (completed: number, total: number, problems: number) =>
+      problems > 0
+        ? `Caricati ${completed} di ${total} file, ${problems} con problemi.`
+        : `Caricati ${completed} di ${total} file.`,
     bulkError: (detail: string) => `Errore durante l’importazione bulk: ${detail}`,
     bulkNoJob: "LexO-server non ha restituito l’identificativo del bulk",
     bulkNotReady: "I testi convertiti non sono ancora disponibili nell’archivio",
-    bulkNoText: "Nessun testo del bulk è stato convertito",
     bulkAttestationsPartial: (count: number, detail: string) =>
       `${count} attestazioni non salvate: ${detail}`,
     bulkTimeout: "Tempo massimo superato durante l’importazione bulk",
@@ -302,12 +304,9 @@ const en: Dict = {
     deleteError: (detail: string) => `The interview was not deleted: ${detail}`,
     deleteNotAllowed: "Only interviews stored on LexO-server can be deleted.",
     deleteRejected: "LexO-server did not delete the interview",
-    bulkPartial: (loaded: number, failed: number, detail: string) =>
-      `Partial import: ${loaded} files uploaded, ${failed} failed${detail ? `. ${detail}` : "."}`,
     bulkError: (detail: string) => `Error during bulk import: ${detail}`,
     bulkNoJob: "LexO-server did not return the bulk identifier",
     bulkNotReady: "The converted texts are not yet available in the archive",
-    bulkNoText: "No text from the bulk was converted",
     bulkAttestationsPartial: (count: number, detail: string) =>
       `${count} attestations not saved: ${detail}`,
     bulkTimeout: "Maximum time exceeded during bulk import",
@@ -324,6 +323,11 @@ const en: Dict = {
     bulkDeleteActiveWarning: "Warning: the currently open interview is included.",
     bulkDeleteProgress: (deleted: number, total: number) => `Deleted ${deleted} of ${total}…`,
     uploadProgress: (uploaded: number, total: number) => `Uploaded ${uploaded} of ${total}…`,
+    importReportTitle: "IMPORT REPORT",
+    importReportSummary: (completed: number, total: number, problems: number) =>
+      problems > 0
+        ? `Uploaded ${completed} of ${total} files, ${problems} with problems.`
+        : `Uploaded ${completed} of ${total} files.`,
     bulkDeleteSuccess: (n: number) => `${n} interviews deleted.`,
     bulkDeletePartial: (deleted: number, failed: number, detail: string) =>
       `${deleted} interviews deleted, ${failed} failed${detail ? `. ${detail}` : "."}`,
