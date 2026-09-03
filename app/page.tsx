@@ -21,6 +21,7 @@ type AnnotationConcept = {
   observableIri: string;
   lexicalConcept: string;
   label: string;
+  term: string;
   options: ConceptAnnotationOptions;
 };
 
@@ -178,7 +179,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.11.3";
+const appVersion = "0.12.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -199,6 +200,7 @@ const definitionTypeProperty = "https://lexo.ilc.cnr.it#definitionType";
 const evidenceStatusProperty = "https://lexo.ilc.cnr.it#evidenceStatus";
 const pragmaticUsageProperty = "https://lexo.ilc.cnr.it#pragmaticUsage";
 const skosNoteProperty = "http://www.w3.org/2004/02/skos/core#note";
+const rdfsCommentProperty = "http://www.w3.org/2000/01/rdf-schema#comment";
 const lexicalEntryProperty = "https://lexo.ilc.cnr.it#lexicalEntry";
 
 const polarityOptions: Array<{ value: ConceptPolarity }> = [
@@ -748,11 +750,16 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
           ...collectMetadataValues(occurrence.metadata, lexicalEntryProperty),
           ...collectMetadataValues(attestation.metadata, lexicalEntryProperty),
         ][0] ?? "";
+        const term = [
+          ...collectMetadataValues(occurrence.metadata, rdfsCommentProperty),
+          ...collectMetadataValues(attestation.metadata, rdfsCommentProperty),
+        ][0] ?? "";
         current.concepts.set(effectiveConceptIri, {
           attestationIri,
           observableIri: observable,
           lexicalConcept: effectiveConceptIri,
           label: displayLabels[0] ?? effectiveConceptLabel ?? conceptLabel ?? effectiveConceptIri,
+          term,
           options: {
             relationType: referringConceptIri ? "paradigmatico" : polarity || definitionType ? "narrativo" : "",
             polarity,
@@ -3642,6 +3649,7 @@ export default function Home() {
           observableIri: "",
           lexicalConcept: `fallback-${i}`,
           label,
+          term: "",
           options: {
             relationType: "",
             polarity: "",
@@ -3664,7 +3672,7 @@ export default function Home() {
             <span
               className="attestation-tooltip-label"
               data-label={concept.label}
-              data-entry={resolveLexicalEntryLabel(concept.options.lexicalEntry, concept.observableIri, lexicalEntries) || undefined}
+              data-entry={resolveLexicalEntryLabel(concept.options.lexicalEntry, concept.observableIri, lexicalEntries) || concept.term || undefined}
             />
             <span className="attestation-tooltip-icons">
               {concept.options.polarity && (
@@ -4277,7 +4285,7 @@ export default function Home() {
                                 <div className="concept-entry-readonly" aria-label={t.entry.aria(concept.defaultLabel)}>
                                   {(() => {
                                     const orig = originalEditingConcepts[concept.lexicalConcept];
-                                    const label = resolveLexicalEntryLabel(annotationOptions.lexicalEntry, orig?.observableIri ?? "", lexicalEntries);
+                                    const label = resolveLexicalEntryLabel(annotationOptions.lexicalEntry, orig?.observableIri ?? "", lexicalEntries) || orig?.term;
                                     if (label) return label;
                                     return lexicalEntriesLoading
                                       ? t.entry.loading
