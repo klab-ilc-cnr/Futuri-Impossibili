@@ -150,6 +150,9 @@ const menuItemIds = [
   "contatti",
 ];
 
+const workspacePasswordHash = "e2b3e011fbaf01d90acec9c3f3e3b23509b52f5d4500f9500f2770449bda4b91";
+const workspaceUnlockedKey = "fi-workspace-unlocked";
+
 const reservedMenuItemIndex = 4;
 
 const langSubscribers = new Set<() => void>();
@@ -174,7 +177,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.10.4";
+const appVersion = "0.11.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1444,6 +1447,11 @@ export default function Home() {
   const [textError, setTextError] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [dirtySwitchOpen, setDirtySwitchOpen] = useState(false);
+  const [workspaceUnlocked, setWorkspaceUnlocked] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordValue, setPasswordValue] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordPending, setPasswordPending] = useState(false);
   const [locusDragging, setLocusDragging] = useState(false);
   const [hoveredTooltip, setHoveredTooltip] = useState<{ annotation: Annotation; x: number; y: number } | null>(null);
   const [conceptFilter, setConceptFilter] = useState<string | null>(null);
@@ -1471,6 +1479,7 @@ export default function Home() {
   const bulkDeleteRef = useRef<HTMLDivElement>(null);
   const dirtySwitchRef = useRef<HTMLDivElement>(null);
   const dirtySwitchTargetRef = useRef<Annotation | null>(null);
+  const passwordModalRef = useRef<HTMLDivElement>(null);
   const textRequestId = useRef(0);
   const activeInterviewIdRef = useRef("");
   const conceptsRequestId = useRef(0);
@@ -1483,6 +1492,13 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (sessionStorage.getItem(workspaceUnlockedKey) === "1") setWorkspaceUnlocked(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   const activeInterview = interviews.find((item) => item.id === activeInterviewId) ?? interviews[0];
   const text = activeInterview?.text ?? "";
@@ -1864,6 +1880,54 @@ export default function Home() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [dirtySwitchOpen]);
+
+  useEffect(() => {
+    if (!passwordOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    passwordModalRef.current
+      ?.querySelector<HTMLInputElement>("input[type=password]")
+      ?.focus();
+    return () => previousFocus?.focus();
+  }, [passwordOpen]);
+
+  useEffect(() => {
+    if (!passwordOpen) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setPasswordOpen(false);
+      setPasswordValue("");
+      setPasswordError("");
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [passwordOpen]);
+
+  async function verifyWorkspacePassword(event: React.FormEvent) {
+    event.preventDefault();
+    if (passwordPending || !passwordValue) return;
+    setPasswordPending(true);
+    try {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(passwordValue));
+      const hex = Array.from(new Uint8Array(digest))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+      if (hex === workspacePasswordHash) {
+        sessionStorage.setItem(workspaceUnlockedKey, "1");
+        setWorkspaceUnlocked(true);
+        setPasswordOpen(false);
+        setPasswordValue("");
+        setPasswordError("");
+        setActivePage(4);
+        void loadConcepts();
+      } else {
+        setPasswordError(dictionaries[getLangSnapshot()].modals.passwordError);
+        setPasswordValue("");
+        passwordModalRef.current?.querySelector<HTMLInputElement>("input[type=password]")?.focus();
+      }
+    } finally {
+      setPasswordPending(false);
+    }
+  }
 
   useEffect(() => {
     if (!conceptToDelete) return;
@@ -3642,6 +3706,10 @@ export default function Home() {
             key={itemId}
             className={activePage === index ? "active" : ""}
             onClick={() => {
+              if (index === reservedMenuItemIndex && !workspaceUnlocked) {
+                setPasswordOpen(true);
+                return;
+              }
               setActivePage(index);
               if (index === 4) void loadConcepts();
             }}
@@ -3649,7 +3717,6 @@ export default function Home() {
             title={index === reservedMenuItemIndex ? t.nav.reservedTitle : undefined}
           >
             {t.nav.items[index]}
-            {index === reservedMenuItemIndex && <span className="nav-lock" aria-hidden="true">🔒</span>}
           </button>
         ))}
         <div className="lang-switch" role="group" aria-label={t.nav.switchAria}>
@@ -4563,6 +4630,61 @@ export default function Home() {
                 {t.modals.dirtyConfirm}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {passwordOpen && (
+        <div
+          ref={passwordModalRef}
+          className="confirm-modal-overlay"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              setPasswordOpen(false);
+              setPasswordValue("");
+              setPasswordError("");
+            }
+          }}
+        >
+          <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="password-title">
+            <p className="confirm-modal-kicker">{t.modals.passwordKicker}</p>
+            <h3 id="password-title">{t.modals.passwordTitle}</h3>
+            <p>{t.modals.passwordBody}</p>
+            <form onSubmit={(event) => void verifyWorkspacePassword(event)}>
+              <input
+                type="password"
+                className="password-input"
+                value={passwordValue}
+                onChange={(event) => {
+                  setPasswordValue(event.target.value);
+                  if (passwordError) setPasswordError("");
+                }}
+                placeholder={t.modals.passwordPlaceholder}
+                aria-label={t.modals.passwordAria}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {passwordError && <p className="password-error" role="alert">{passwordError}</p>}
+              <div className="confirm-modal-actions">
+                <button
+                  type="button"
+                  data-password-cancel
+                  onClick={() => {
+                    setPasswordOpen(false);
+                    setPasswordValue("");
+                    setPasswordError("");
+                  }}
+                >
+                  {t.modals.cancel}
+                </button>
+                <button
+                  type="submit"
+                  className="confirm-modal-confirm"
+                  disabled={passwordPending || !passwordValue}
+                >
+                  {t.modals.passwordConfirm}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

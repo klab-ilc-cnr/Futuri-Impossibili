@@ -81,12 +81,6 @@ button { color: inherit; }
 .lang-switch button:hover { color: #fff; background: rgba(255,255,255,.06); }
 .lang-switch button.active { color: #0e2a1c; background: #86d2ae; border-color: #86d2ae; }
 .main-nav-version { margin-left: 10px; align-self: center; flex: none; color: rgba(255,255,255,.45); font-size: 11px; font-weight: 600; letter-spacing: .08em; white-space: nowrap; padding-right: 4px; }
-.nav-lock {
-  display: inline-grid; place-items: center; width: 19px; height: 19px; margin-left: -3px;
-  border: 1px solid rgba(255,255,255,.17); border-radius: 6px; background: rgba(255,255,255,.08);
-  font-size: 9px; line-height: 1; filter: grayscale(1) brightness(2.25); opacity: .82;
-}
-.main-nav button:hover .nav-lock, .main-nav button.active .nav-lock { opacity: 1; background: rgba(255,255,255,.13); }
 main { height: calc(100vh - 176px); min-height: 520px; }
 .workspace, .placeholder-page { width: min(1440px, calc(100% - 32px)); margin: 0 auto; }
 .workspace { height: 100%; padding: 18px 0 20px; display: flex; flex-direction: column; }
@@ -626,5 +620,13 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .confirm-modal-actions button:hover:not(:disabled) { border-color: #97bda9; background: #f6faf8; }
 .confirm-modal-actions .confirm-modal-danger { border-color: #e0a89e; background: #a12f25; color: #fff; }
 .confirm-modal-actions .confirm-modal-danger:hover:not(:disabled) { border-color: #87271e; background: #8a281f; }
+.confirm-modal-actions .confirm-modal-confirm { border-color: #97bda9; background: var(--green); color: #fff; }
+.confirm-modal-actions .confirm-modal-confirm:hover:not(:disabled) { border-color: #35664e; background: var(--green-dark); }
 .confirm-modal-actions button:disabled { opacity: .55; cursor: wait; }
+.password-input {
+  margin-top: 14px; width: 100%; padding: 10px 12px; border: 1px solid #dfe3dc; border-radius: 10px;
+  background: #fff; font: inherit; font-size: 13px; letter-spacing: .08em;
+}
+.password-input:focus { outline: 2px solid #86d2ae; outline-offset: 1px; border-color: #97bda9; }
+.password-error { margin-top: 8px; color: #a12f25; font-size: 11px; font-weight: 700; }
 @keyframes fade-in { from { opacity: 0; } }
