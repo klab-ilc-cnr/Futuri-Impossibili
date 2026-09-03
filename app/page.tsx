@@ -43,6 +43,7 @@ type Interview = {
   id: string;
   contextIri?: string;
   name: string;
+  metadataId?: string;
   text: string;
   description?: string;
   annotations: Annotation[];
@@ -177,7 +178,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.11.1";
+const appVersion = "0.11.2";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1522,7 +1523,8 @@ export default function Home() {
   const normalizedInterviewQuery = searchQuery.trim().toLocaleLowerCase("it-IT");
   const filteredInterviews = normalizedInterviewQuery
     ? interviews.filter((interview) =>
-        interview.name.toLocaleLowerCase("it-IT").includes(normalizedInterviewQuery),
+        interview.name.toLocaleLowerCase("it-IT").includes(normalizedInterviewQuery)
+        || (interview.metadataId ?? "").toLocaleLowerCase("it-IT").includes(normalizedInterviewQuery),
       )
     : interviews;
   const filteredConcepts = concepts.filter((concept) =>
@@ -1666,6 +1668,9 @@ export default function Home() {
           ?? (Array.isArray(descriptionValues) ? descriptionValues[0] : descriptionValues)
           ?? item.description
           ?? "";
+        const rawMetadataId = metadata.id
+          ?? (Array.isArray(metadataValues.id) ? metadataValues.id[0] : metadataValues.id);
+        const metadataId = readResourceIdentifier(rawMetadataId);
 
         const id = readResourceIdentifier(
           item.fileId ?? item.id ?? item.textId ?? item.iri ?? item["@id"] ?? `server-${index}`,
@@ -1683,6 +1688,7 @@ export default function Home() {
           id,
           contextIri,
           name: String(item.fileName ?? item.filename ?? item.name ?? item.title ?? item.label ?? `Intervista ${index + 1}`),
+          metadataId: metadataId || undefined,
           text: String(item.text ?? item.content ?? item.body ?? item.value ?? ""),
           description: String(rawDescription),
           annotations: [],
@@ -3898,7 +3904,9 @@ export default function Home() {
                         </span>
                       )}
                       <span className="list-copy">
-                        <strong>{interview.name}</strong>
+                        <strong title={interview.metadataId && interview.metadataId !== interview.name ? interview.name : undefined}>
+                          {interview.metadataId || interview.name}
+                        </strong>
                         <small>
                           {interview.source === "server"
                             ? t.archive.serverStats(interview.tokenCount?.toLocaleString(numberLocale) ?? "", interview.sentenceCount ?? 0, interview.annotationCount ?? 0)
