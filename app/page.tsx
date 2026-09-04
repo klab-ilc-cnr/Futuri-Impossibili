@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.10";
+const appVersion = "0.14.11";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -3120,6 +3120,7 @@ export default function Home() {
     setTextError("");
     setConceptFilter(null);
     closeConceptContextMenu();
+    setSearchView(null);
 
     if (interview.source !== "server") {
       textRequestId.current += 1;
