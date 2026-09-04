@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.16";
+const appVersion = "0.14.17";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -4411,6 +4411,21 @@ export default function Home() {
                             setConceptSelected(null);
                             setConceptListOpen(true);
                           }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            if (conceptSelected) {
+                              void runConceptSearch(conceptSelected);
+                              return;
+                            }
+                            if (matchingConcepts.length === 1) {
+                              const concept = matchingConcepts[0];
+                              setConceptSelected(concept);
+                              setConceptQuery(concept.defaultLabel);
+                              setConceptListOpen(false);
+                              void runConceptSearch(concept);
+                            }
+                          }}
                           onFocus={() => setConceptListOpen(true)}
                           placeholder={t.search.conceptPlaceholder}
                           aria-label={t.search.conceptTitle}
@@ -4431,6 +4446,7 @@ export default function Home() {
                                     setConceptSelected(concept);
                                     setConceptQuery(concept.defaultLabel);
                                     setConceptListOpen(false);
+                                    void runConceptSearch(concept);
                                   }}
                                 >
                                   <span>{concept.defaultLabel}</span>
@@ -4464,6 +4480,21 @@ export default function Home() {
                             setEntrySelected(null);
                             setEntryListOpen(true);
                           }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            if (entrySelected) {
+                              void runEntrySearch(entrySelected);
+                              return;
+                            }
+                            if (matchingEntries.length === 1) {
+                              const entry = matchingEntries[0];
+                              setEntrySelected(entry);
+                              setEntryQuery(entry.label);
+                              setEntryListOpen(false);
+                              void runEntrySearch(entry);
+                            }
+                          }}
                           onFocus={() => setEntryListOpen(true)}
                           placeholder={t.search.entryPlaceholder}
                           aria-label={t.search.entryTitle}
@@ -4484,6 +4515,7 @@ export default function Home() {
                                     setEntrySelected(entry);
                                     setEntryQuery(entry.label);
                                     setEntryListOpen(false);
+                                    void runEntrySearch(entry);
                                   }}
                                 >
                                   <span>{entry.label}</span>
