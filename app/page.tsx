@@ -208,7 +208,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.16.0";
+const appVersion = "0.16.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1513,7 +1513,7 @@ export default function Home() {
   const [entryQuery, setEntryQuery] = useState("");
   const [entrySelected, setEntrySelected] = useState<LexicalEntryOption | null>(null);
   const [entryListOpen, setEntryListOpen] = useState(false);
-  const [relationFilter, setRelationFilter] = useState<"entrambe" | "narrativo" | "paradigmatico">("entrambe");
+  const [relationFilter, setRelationFilter] = useState<"tutte" | "narrativo" | "paradigmatico">("tutte");
   const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
   const [conceptTotalHits, setConceptTotalHits] = useState(0);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -1626,7 +1626,7 @@ export default function Home() {
     const left = normalize(searchFilters.left);
     const keyword = normalize(searchFilters.keyword);
     const right = normalize(searchFilters.right);
-    const relation = lastSearch.type === "forma" ? "" : relationFilter;
+    const relation = lastSearch.type === "forma" || relationFilter === "tutte" ? "" : relationFilter;
     return lastSearch.rows.filter((row) =>
       (!doc || row.docLabel.toLocaleLowerCase("it-IT").includes(doc))
       && (!left || row.left.toLocaleLowerCase("it-IT").includes(left))
@@ -3300,7 +3300,7 @@ export default function Home() {
       });
       setLastSearch({ type: "concetto", query: concept.defaultLabel, rows });
       setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
-      setRelationFilter("entrambe");
+      setRelationFilter("tutte");
       setSearchPage(0);
     } catch (error) {
       showError(t.search.error(error instanceof Error ? error.message : t.concepts.unknownError));
@@ -3405,7 +3405,7 @@ export default function Home() {
       });
       setLastSearch({ type: "termine", query: entry.label, rows });
       setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
-      setRelationFilter("entrambe");
+      setRelationFilter("tutte");
       setSearchPage(0);
     } catch (error) {
       showError(t.search.error(error instanceof Error ? error.message : t.concepts.unknownError));
@@ -4590,7 +4590,7 @@ export default function Home() {
                         onChange={(event) => setRelationFilter(event.target.value as typeof relationFilter)}
                         aria-label={t.search.relationAria}
                       >
-                        <option value="entrambe">{t.search.relationBoth}</option>
+                        <option value="tutte">{t.search.relationAll}</option>
                         <option value="narrativo">{t.search.relationNarrative}</option>
                         <option value="paradigmatico">{t.search.relationParadigmatic}</option>
                       </select>
@@ -4682,7 +4682,7 @@ export default function Home() {
                         onChange={(event) => setRelationFilter(event.target.value as typeof relationFilter)}
                         aria-label={t.search.relationAria}
                       >
-                        <option value="entrambe">{t.search.relationBoth}</option>
+                        <option value="tutte">{t.search.relationAll}</option>
                         <option value="narrativo">{t.search.relationNarrative}</option>
                         <option value="paradigmatico">{t.search.relationParadigmatic}</option>
                       </select>
