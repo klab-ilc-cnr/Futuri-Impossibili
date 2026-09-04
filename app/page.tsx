@@ -151,6 +151,8 @@ type ImportReport = {
 
 type SearchType = "forma" | "concetto" | "termine";
 
+type SearchRowKind = "" | "narrativo" | "paradigmatico";
+
 type SearchRow = {
   fileId: string;
   docLabel: string;
@@ -160,6 +162,7 @@ type SearchRow = {
   right: string;
   start: number;
   end: number;
+  kind: SearchRowKind;
 };
 
 type SearchState = {
@@ -205,7 +208,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.15.0";
+const appVersion = "0.16.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1510,6 +1513,7 @@ export default function Home() {
   const [entryQuery, setEntryQuery] = useState("");
   const [entrySelected, setEntrySelected] = useState<LexicalEntryOption | null>(null);
   const [entryListOpen, setEntryListOpen] = useState(false);
+  const [relationFilter, setRelationFilter] = useState<"entrambe" | "narrativo" | "paradigmatico">("entrambe");
   const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
   const [conceptTotalHits, setConceptTotalHits] = useState(0);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -1622,14 +1626,16 @@ export default function Home() {
     const left = normalize(searchFilters.left);
     const keyword = normalize(searchFilters.keyword);
     const right = normalize(searchFilters.right);
+    const relation = lastSearch.type === "forma" ? "" : relationFilter;
     return lastSearch.rows.filter((row) =>
       (!doc || row.docLabel.toLocaleLowerCase("it-IT").includes(doc))
       && (!left || row.left.toLocaleLowerCase("it-IT").includes(left))
       && (!keyword || (lastSearch.type === "forma"
         ? row.keyword.toLocaleLowerCase("it-IT").includes(keyword)
         : `${row.left} ${row.keyword} ${row.right}`.toLocaleLowerCase("it-IT").includes(keyword)))
-      && (!right || row.right.toLocaleLowerCase("it-IT").includes(right)));
-  }, [lastSearch, searchFilters]);
+      && (!right || row.right.toLocaleLowerCase("it-IT").includes(right))
+      && (!relation || row.kind === relation));
+  }, [lastSearch, relationFilter, searchFilters]);
   const searchPages = Math.max(1, Math.ceil(filteredSearchRows.length / SEARCH_PAGE_SIZE));
   const safeSearchPage = Math.min(searchPage, searchPages - 1);
   const matchingConcepts = useMemo(() => {
@@ -3214,6 +3220,7 @@ export default function Home() {
             right,
             start,
             end,
+            kind: "" as SearchRowKind,
           });
         }
       }
@@ -3255,7 +3262,27 @@ export default function Home() {
       });
       parsed.sort((a, b) => (docIndex.get(a.fileId) ?? 0) - (docIndex.get(b.fileId) ?? 0) || a.start - b.start);
       const corpus = await ensureCorpusTexts();
-      const rows: SearchRow[] = parsed.map((item) => {
+      const attestationsCorpus = await ensureAttestationsCorpus();
+      const narrativeRows: Array<{ fileId: string; value: string; start: number; end: number; kind: SearchRowKind }> = parsed.map((item) => ({ ...item, kind: "narrativo" }));
+      const paradigmaticRows: typeof narrativeRows = [];
+      for (const [fileId, corpusItems] of attestationsCorpus) {
+        if (!docIndex.has(fileId)) continue;
+        for (const rawItem of corpusItems) {
+          if (!rawItem || typeof rawItem !== "object") continue;
+          const item = rawItem as Record<string, unknown>;
+          const types = Array.isArray(item.observableTypes) ? item.observableTypes : [];
+          if (!types.some((type) => type === "http://www.w3.org/ns/lemon/ontolex#LexicalSense")) continue;
+          if (!metadataPropertyValues(item.metadata, referringConceptProperty).includes(concept.lexicalConcept)) continue;
+          const value = typeof item.value === "string" ? item.value : "";
+          const start = Number(item.start);
+          const end = Number(item.end);
+          if (!value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) continue;
+          paradigmaticRows.push({ fileId, value, start, end, kind: "paradigmatico" });
+        }
+      }
+      const merged = [...narrativeRows, ...paradigmaticRows];
+      merged.sort((a, b) => (docIndex.get(a.fileId) ?? 0) - (docIndex.get(b.fileId) ?? 0) || a.start - b.start);
+      const rows: SearchRow[] = merged.map((item) => {
         const interview = interviews.find((entry) => entry.id === item.fileId);
         const text = corpus.get(item.fileId);
         const [left, right] = text ? kwicContext(text, item.start, item.end) : ["", ""];
@@ -3268,10 +3295,12 @@ export default function Home() {
           right,
           start: item.start,
           end: item.end,
+          kind: item.kind,
         };
       });
       setLastSearch({ type: "concetto", query: concept.defaultLabel, rows });
       setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
+      setRelationFilter("entrambe");
       setSearchPage(0);
     } catch (error) {
       showError(t.search.error(error instanceof Error ? error.message : t.concepts.unknownError));
@@ -3313,7 +3342,7 @@ export default function Home() {
       }));
       const items = responses.flatMap((payload) => Array.isArray(payload.list) ? payload.list : []);
       const docIndex = new Map(interviews.map((interview, index) => [interview.id, index]));
-      const senseItems = items.flatMap((rawItem) => {
+      const senseItems: Array<{ fileId: string; value: string; start: number; end: number; iri: string; kind: SearchRowKind }> = items.flatMap((rawItem) => {
         if (!rawItem || typeof rawItem !== "object") return [];
         const item = rawItem as Record<string, unknown>;
         const fileId = typeof item.fileId === "string" ? item.fileId : "";
@@ -3328,6 +3357,7 @@ export default function Home() {
           start,
           end,
           iri: readResourceIdentifier(item.attestation),
+          kind: "paradigmatico",
         }];
       });
 
@@ -3350,7 +3380,7 @@ export default function Home() {
           const start = Number(item.start);
           const end = Number(item.end);
           if (!value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) continue;
-          narrativeItems.push({ fileId, value, start, end, iri });
+          narrativeItems.push({ fileId, value, start, end, iri, kind: "narrativo" });
         }
       }
 
@@ -3370,10 +3400,12 @@ export default function Home() {
           right,
           start: item.start,
           end: item.end,
+          kind: item.kind,
         };
       });
       setLastSearch({ type: "termine", query: entry.label, rows });
       setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
+      setRelationFilter("entrambe");
       setSearchPage(0);
     } catch (error) {
       showError(t.search.error(error instanceof Error ? error.message : t.concepts.unknownError));
@@ -4435,20 +4467,32 @@ export default function Home() {
                     {searchView === "forma" ? (
                     <div className="search-fields">
                       <span className="search-kicker">{t.search.formaTitle}</span>
-                      <input
-                        type="search"
-                        className="search-input"
-                        value={searchInput}
-                        onChange={(event) => setSearchInput(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") void runFormaSearch();
-                        }}
-                        placeholder={t.search.formaPlaceholder}
-                        aria-label={t.search.formaTitle}
-                        autoFocus
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
+                      <div className="search-field-wrap">
+                        <input
+                          type="search"
+                          className="search-input"
+                          value={searchInput}
+                          onChange={(event) => setSearchInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") void runFormaSearch();
+                          }}
+                          placeholder={t.search.formaPlaceholder}
+                          aria-label={t.search.formaTitle}
+                          autoFocus
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        {searchInput && (
+                          <button
+                            type="button"
+                            className="search-clear"
+                            onClick={() => setSearchInput("")}
+                            aria-label={t.search.clearAria}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                       <button
                         type="button"
                         className="search-run"
@@ -4493,6 +4537,20 @@ export default function Home() {
                           autoComplete="off"
                           spellCheck={false}
                         />
+                        {conceptQuery && (
+                          <button
+                            type="button"
+                            className="search-clear"
+                            onClick={() => {
+                              setConceptQuery("");
+                              setConceptSelected(null);
+                              setConceptListOpen(true);
+                            }}
+                            aria-label={t.search.clearAria}
+                          >
+                            ×
+                          </button>
+                        )}
                         {conceptListOpen && (
                           <div className="search-combo-list">
                             {matchingConcepts.length === 0 ? (
@@ -4526,6 +4584,16 @@ export default function Home() {
                       >
                         {t.search.run}
                       </button>
+                      <select
+                        className="search-relation"
+                        value={relationFilter}
+                        onChange={(event) => setRelationFilter(event.target.value as typeof relationFilter)}
+                        aria-label={t.search.relationAria}
+                      >
+                        <option value="entrambe">{t.search.relationBoth}</option>
+                        <option value="narrativo">{t.search.relationNarrative}</option>
+                        <option value="paradigmatico">{t.search.relationParadigmatic}</option>
+                      </select>
                       <small className="search-hint">{t.search.conceptHint}</small>
                     </div>
                     ) : (
@@ -4562,6 +4630,20 @@ export default function Home() {
                           autoComplete="off"
                           spellCheck={false}
                         />
+                        {entryQuery && (
+                          <button
+                            type="button"
+                            className="search-clear"
+                            onClick={() => {
+                              setEntryQuery("");
+                              setEntrySelected(null);
+                              setEntryListOpen(true);
+                            }}
+                            aria-label={t.search.clearAria}
+                          >
+                            ×
+                          </button>
+                        )}
                         {entryListOpen && (
                           <div className="search-combo-list">
                             {matchingEntries.length === 0 ? (
@@ -4594,6 +4676,16 @@ export default function Home() {
                       >
                         {t.search.run}
                       </button>
+                      <select
+                        className="search-relation"
+                        value={relationFilter}
+                        onChange={(event) => setRelationFilter(event.target.value as typeof relationFilter)}
+                        aria-label={t.search.relationAria}
+                      >
+                        <option value="entrambe">{t.search.relationBoth}</option>
+                        <option value="narrativo">{t.search.relationNarrative}</option>
+                        <option value="paradigmatico">{t.search.relationParadigmatic}</option>
+                      </select>
                       <small className="search-hint">{t.search.entryHint}</small>
                     </div>
                     )}

@@ -102,6 +102,11 @@ const it = {
     results: (n: number) => `${n} ${n === 1 ? "risultato" : "risultati"}`,
     page: (page: number, pages: number) => `Pagina ${page} di ${pages}`,
     error: (detail: string) => `Ricerca non riuscita: ${detail}`,
+    relationAria: "Tipo di attestazioni da includere",
+    relationBoth: "Narrative e paradigmatiche",
+    relationNarrative: "Solo narrative",
+    relationParadigmatic: "Solo paradigmatiche",
+    clearAria: "Cancella il contenuto del campo",
   },
   document: {
     noInterview: "Nessuna intervista",
@@ -376,6 +381,11 @@ const en: Dict = {
     results: (n: number) => `${n} ${n === 1 ? "result" : "results"}`,
     page: (page: number, pages: number) => `Page ${page} of ${pages}`,
     error: (detail: string) => `Search failed: ${detail}`,
+    relationAria: "Type of attestations to include",
+    relationBoth: "Narrative and paradigmatic",
+    relationNarrative: "Narrative only",
+    relationParadigmatic: "Paradigmatic only",
+    clearAria: "Clear the field",
   },
   document: {
     noInterview: "No interview",
