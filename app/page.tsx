@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.7";
+const appVersion = "0.14.8";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -4510,6 +4510,7 @@ export default function Home() {
                         <div className="kwic-empty">{t.search.emptyPrompt}</div>
                       ) : (
                         <>
+                          <div className={`kwic-scroll${searchView === "forma" ? "" : " anno-mode"}`}>
                           <div className={`kwic-head${searchView === "forma" ? "" : " anno-mode"}`}>
                             <span>{t.search.colDoc}</span>
                             {searchView === "forma" ? (
@@ -4574,39 +4575,38 @@ export default function Home() {
                               />
                             )}
                           </div>
-                          <div className="kwic-body">
-                            {filteredSearchRows.length === 0 ? (
-                              <div className="kwic-empty">{t.search.noResults}</div>
-                            ) : (
-                              filteredSearchRows
-                                .slice(safeSearchPage * SEARCH_PAGE_SIZE, (safeSearchPage + 1) * SEARCH_PAGE_SIZE)
-                                .map((row, index) => (
-                                  <button
-                                    type="button"
-                                    className={`kwic-row${searchView === "forma" ? "" : " anno-mode"}`}
-                                    key={`${row.fileId}-${row.start}-${index}`}
-                                    onClick={() => openSearchResult(row)}
-                                  >
-                                    <span className="kwic-doc" title={row.docTitle}>{row.docLabel}</span>
-                                    {searchView === "forma" ? (
-                                      <>
-                                        <span className="kwic-left">{row.left}</span>
-                                        <span className="kwic-keyword">{row.keyword}</span>
-                                        <span className="kwic-right">{row.right}</span>
-                                      </>
-                                    ) : (
-                                      <span
-                                        className="kwic-anno"
-                                        title={`${row.left} ${row.keyword} ${row.right}`.trim()}
-                                      >
-                                        {row.left && <span className="kwic-context">{row.left} </span>}
-                                        <strong>{row.keyword}</strong>
-                                        {row.right && <span className="kwic-context"> {row.right}</span>}
-                                      </span>
-                                    )}
-                                  </button>
-                                ))
-                            )}
+                          {filteredSearchRows.length === 0 ? (
+                            <div className="kwic-empty kwic-empty-row">{t.search.noResults}</div>
+                          ) : (
+                            filteredSearchRows
+                              .slice(safeSearchPage * SEARCH_PAGE_SIZE, (safeSearchPage + 1) * SEARCH_PAGE_SIZE)
+                              .map((row, index) => (
+                                <button
+                                  type="button"
+                                  className={`kwic-row${searchView === "forma" ? "" : " anno-mode"}`}
+                                  key={`${row.fileId}-${row.start}-${index}`}
+                                  onClick={() => openSearchResult(row)}
+                                >
+                                  <span className="kwic-doc" title={row.docTitle}>{row.docLabel}</span>
+                                  {searchView === "forma" ? (
+                                    <>
+                                      <span className="kwic-left">{row.left}</span>
+                                      <span className="kwic-keyword">{row.keyword}</span>
+                                      <span className="kwic-right">{row.right}</span>
+                                    </>
+                                  ) : (
+                                    <span
+                                      className="kwic-anno"
+                                      title={`${row.left} ${row.keyword} ${row.right}`.trim()}
+                                    >
+                                      {row.left && <span className="kwic-context">{row.left} </span>}
+                                      <strong>{row.keyword}</strong>
+                                      {row.right && <span className="kwic-context"> {row.right}</span>}
+                                    </span>
+                                  )}
+                                </button>
+                              ))
+                          )}
                           </div>
                           <div className="kwic-pager">
                             <span>{t.search.results(filteredSearchRows.length)}</span>
