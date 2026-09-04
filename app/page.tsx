@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.14";
+const appVersion = "0.14.15";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1120,7 +1120,7 @@ function wildcardToRegex(pattern: string) {
   return new RegExp(escaped, "giu");
 }
 
-const SEARCH_CONTEXT_CHARS = 60;
+const SEARCH_CONTEXT_CHARS = 40;
 const SEARCH_KEYWORD_CONTEXT_MIN = 40;
 const SEARCH_PAGE_SIZE = 20;
 
