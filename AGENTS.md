@@ -240,6 +240,20 @@ delete, reload.
   `justify-content: flex-end` flex cell (overflow clipped on the left, keyword-nearest words
   always visible); right context ellipsizes by design. Per-column "contains" filters + client
   pager (20/page, `SEARCH_PAGE_SIZE`).
+- **Search refinements (v0.14.19 – v0.16.5)**: contexts are ALWAYS computed in concetto/termine
+  (no length threshold). Term search is the UNION of senses (by-observable, paradigmatic) and a
+  corpus scan of ALL attestations (new batch proxy `GET /api/lexo/attestations/corpus`,
+  `attestationsCorpusRef` cache) matching `rdfs:comment` === entry label (case-insensitive) or
+  `lexicalEntry` metadata === entry IRI — narrative imported + in-app included; dedupe by
+  attestation IRI. Concept search also gained the paradigmatic attestations of the concept
+  (corpus scan: observableTypes LexicalSense + referringConcept === concept). Rows carry
+  `kind` (narrativo/paradigmatico) + `term`/`concept` cross columns; anno-mode table is 3
+  columns (Documento | Annotazione | Termine o Concetto, third column "—" when unresolvable)
+  with a third per-column filter. A select filters Tutte / Solo narrative / Solo paradigmatiche
+  (value "tutte" = no kind constraint — it is NOT an AND of kinds); searching starts on combobox
+  value click or Enter (auto-select when exactly one match). Search inputs have an embedded ×
+  clear button; forma has a "Solo occorrenze in annotazioni" checkbox (match contained in an
+  attestation span of the same document, via attestations corpus).
 - **Click-through**: row click opens the row's interview (`selectInterview`) then
   `pendingScroll` scrolls the text area to the match and drops persistent `.search-flash`
   overlays (removed on the next pointerdown anywhere, or when reopening a search view).
@@ -319,11 +333,11 @@ The workaround is in place (post-build move + reverse proxy rewrite). **Do NOT t
 
 ## Known Limitations & Next Steps
 
-- **Dependency audit**: `npm audit` reports dev/build-only advisories (vite, ws, undici — two
-  of them Windows-specific) that are accepted: they do not run on the server and are pinned by
-  the frozen vinext beta toolchain. Runtime runtime advisories fixed by in-range `npm audit fix`
-  (nanoid, root postcss). The `next` pin (see next step) keeps `next/node_modules/postcss` and
-  `sharp` advisory-tainted until next is bumped.
+- **Dependency audit**: `npm audit --omit=dev` is CLEAN since next 16.3.4 (`fix/next-16-3-4`
+  branch merged, pin 16.3.4 exact — verified against vinext beta.5 with full build + smoke).
+  Remaining `npm audit` advisories are dev/build-only (vite, ws, undici — two Windows-specific)
+  and are accepted: they do not run on the server and are pinned by the frozen vinext beta
+  toolchain.
 
 - **Imported term lost on re-save**: re-saving an imported annotation in the app rebuilds
   attestation metadata from `narrativeMetadata(options)` only, so the producer's
