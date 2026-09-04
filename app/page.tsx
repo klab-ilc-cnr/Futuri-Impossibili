@@ -186,7 +186,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.13.0";
+const appVersion = "0.13.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -3967,11 +3967,11 @@ export default function Home() {
               <div className="document-card">
                 <div className="document-toolbar">
                   <div className="file-info">
-                    <span className="file-icon">TXT</span>
-                    <div>
-                      <strong>{fileName}</strong>
-                      <small>{textLoading ? t.document.loadingText : t.document.chars(text.length.toLocaleString(numberLocale))}</small>
-                    </div>
+                    <strong
+                      title={activeInterview?.metadataId && activeInterview.metadataId !== activeInterview.name ? activeInterview.name : undefined}
+                    >
+                      {activeInterview?.metadataId || fileName}
+                    </strong>
                   </div>
                   {description && !textLoading && !textError && (
                     <div className="description-tab" title={description} aria-label={t.document.descriptionAria(description)}>

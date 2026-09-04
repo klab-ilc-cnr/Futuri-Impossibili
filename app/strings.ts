@@ -78,8 +78,6 @@ const it = {
   document: {
     noInterview: "Nessuna intervista",
     textLoadError: (detail: string) => `Impossibile caricare il testo (${detail}).`,
-    loadingText: "Caricamento testo…",
-    chars: (n: string) => `${n} caratteri`,
     descriptionAria: (description: string) => `Descrizione: ${description}`,
     loadingInterview: "Caricamento intervista…",
     textUnavailable: "Testo non disponibile",
@@ -326,8 +324,6 @@ const en: Dict = {
   document: {
     noInterview: "No interview",
     textLoadError: (detail: string) => `Unable to load the text (${detail}).`,
-    loadingText: "Loading text…",
-    chars: (n: string) => `${n} characters`,
     descriptionAria: (description: string) => `Description: ${description}`,
     loadingInterview: "Loading interview…",
     textUnavailable: "Text unavailable",
