@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.6";
+const appVersion = "0.14.7";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -4316,17 +4316,21 @@ export default function Home() {
 
               <div className="document-card">
                 <div className="document-toolbar">
-                  <div className="file-info">
-                    <strong
-                      title={activeInterview?.metadataId && activeInterview.metadataId !== activeInterview.name ? activeInterview.name : undefined}
-                    >
-                      {activeInterview?.metadataId || fileName}
-                    </strong>
-                  </div>
-                  {description && !textLoading && !textError && (
-                    <div className="description-tab" title={description} aria-label={t.document.descriptionAria(description)}>
-                      <strong>{description}</strong>
-                    </div>
+                  {!searchView && (
+                    <>
+                      <div className="file-info">
+                        <strong
+                          title={activeInterview?.metadataId && activeInterview.metadataId !== activeInterview.name ? activeInterview.name : undefined}
+                        >
+                          {activeInterview?.metadataId || fileName}
+                        </strong>
+                      </div>
+                      {description && !textLoading && !textError && (
+                        <div className="description-tab" title={description} aria-label={t.document.descriptionAria(description)}>
+                          <strong>{description}</strong>
+                        </div>
+                      )}
+                    </>
                   )}
                   <div className="toolbar-searches">
                     <button
