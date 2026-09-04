@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.1";
+const appVersion = "0.14.2";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1544,6 +1544,7 @@ export default function Home() {
   const lexicalSenseTypesRequestIds = useRef<Record<string, number>>({});
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const corpusTextsRef = useRef<Map<string, string> | null>(null);
+  const searchFlashRef = useRef<HTMLDivElement[]>([]);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
   const dragBoundsRef = useRef<{ start: number; end: number } | null>(null);
   const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -2521,7 +2522,9 @@ export default function Home() {
           layer.appendChild(flash);
           flashes.push(flash);
         }
-        setTimeout(() => flashes.forEach((flash) => flash.remove()), 1600);
+        clearSearchFlashes();
+        searchFlashRef.current = flashes;
+        document.addEventListener("pointerdown", clearSearchFlashes, { once: true });
       }
       setPendingScroll(null);
     }, 60);
@@ -3100,6 +3103,11 @@ export default function Home() {
     return lines;
   }
 
+  function clearSearchFlashes() {
+    searchFlashRef.current.forEach((flash) => flash.remove());
+    searchFlashRef.current = [];
+  }
+
   async function ensureCorpusTexts() {
     if (corpusTextsRef.current) return corpusTextsRef.current;
     const response = await fetch(`${textsEndpoint}/corpus`, {
@@ -3162,6 +3170,7 @@ export default function Home() {
       return;
     }
     resetSelectionFlow();
+    clearSearchFlashes();
     setSearchView(type);
   }
 
