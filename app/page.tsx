@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.19";
+const appVersion = "0.15.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -217,6 +217,7 @@ const metadataEndpoint = `${basePath}/api/lexo/metadata`;
 const lexicalConceptEndpoint = `${basePath}/api/lexo/lexical-concept`;
 const attestationsEndpoint = `${basePath}/api/lexo/attestations`;
 const attestationsByObservableEndpoint = `${basePath}/api/lexo/attestations/by-observable`;
+const attestationsCorpusEndpoint = `${basePath}/api/lexo/attestations/corpus`;
 const dctTypeProperty = "http://purl.org/dc/terms/type";
 const legacyDctTypeProperty = "http://purl.org/dc/terms/";
 const conceptLabelProperty = "https://lexo.ilc.cnr.it#conceptLabel";
@@ -1111,6 +1112,17 @@ function locusBarY(relTop: number, annotationHeight: number, wrapHeight: number 
       ));
 }
 
+function metadataPropertyValues(metadata: unknown, property: string) {
+  if (!metadata || typeof metadata !== "object") return [];
+  const values = (metadata as Record<string, unknown>)[property];
+  if (!Array.isArray(values)) return [];
+  return values.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const inner = (value as Record<string, unknown>).value;
+    return typeof inner === "string" ? [inner] : [];
+  });
+}
+
 function wildcardToRegex(pattern: string) {
   const raw = pattern.trim();
   const leading = raw.startsWith("*");
@@ -1555,6 +1567,7 @@ export default function Home() {
   const lexicalSenseTypesRequestIds = useRef<Record<string, number>>({});
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const corpusTextsRef = useRef<Map<string, string> | null>(null);
+  const attestationsCorpusRef = useRef<Map<string, Record<string, unknown>[]> | null>(null);
   const searchFlashRef = useRef<HTMLDivElement[]>([]);
   const conceptComboRef = useRef<HTMLDivElement>(null);
   const entryComboRef = useRef<HTMLDivElement>(null);
@@ -3267,6 +3280,22 @@ export default function Home() {
     }
   }
 
+  async function ensureAttestationsCorpus() {
+    if (attestationsCorpusRef.current) return attestationsCorpusRef.current;
+    const response = await fetch(attestationsCorpusEndpoint, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(await readErrorDetail(response));
+    const payload = await response.json() as { attestations?: Record<string, unknown> };
+    const map = new Map<string, Record<string, unknown>[]>();
+    for (const [fileId, value] of Object.entries(payload.attestations ?? {})) {
+      if (Array.isArray(value)) map.set(fileId, value as Record<string, unknown>[]);
+    }
+    attestationsCorpusRef.current = map;
+    return map;
+  }
+
   async function runEntrySearch(entry: LexicalEntryOption) {
     if (searchLoading || entry.senses.length === 0) return;
     setSearchLoading(true);
@@ -3284,7 +3313,7 @@ export default function Home() {
       }));
       const items = responses.flatMap((payload) => Array.isArray(payload.list) ? payload.list : []);
       const docIndex = new Map(interviews.map((interview, index) => [interview.id, index]));
-      const parsed = items.flatMap((rawItem) => {
+      const senseItems = items.flatMap((rawItem) => {
         if (!rawItem || typeof rawItem !== "object") return [];
         const item = rawItem as Record<string, unknown>;
         const fileId = typeof item.fileId === "string" ? item.fileId : "";
@@ -3293,11 +3322,42 @@ export default function Home() {
         const end = Number(item.end);
         if (!fileId || !value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) return [];
         if (!docIndex.has(fileId)) return [];
-        return [{ fileId, value, start, end }];
+        return [{
+          fileId,
+          value,
+          start,
+          end,
+          iri: readResourceIdentifier(item.attestation),
+        }];
       });
-      parsed.sort((a, b) => (docIndex.get(a.fileId) ?? 0) - (docIndex.get(b.fileId) ?? 0) || a.start - b.start);
+
+      const attestationsCorpus = await ensureAttestationsCorpus();
+      const senseIris = new Set(senseItems.map((item) => item.iri).filter(Boolean));
+      const label = entry.label.toLocaleLowerCase("it");
+      const narrativeItems: typeof senseItems = [];
+      for (const [fileId, corpusItems] of attestationsCorpus) {
+        if (!docIndex.has(fileId)) continue;
+        for (const rawItem of corpusItems) {
+          if (!rawItem || typeof rawItem !== "object") continue;
+          const item = rawItem as Record<string, unknown>;
+          const iri = readResourceIdentifier(item.attestation);
+          if (iri && senseIris.has(iri)) continue;
+          const comments = metadataPropertyValues(item.metadata, rdfsCommentProperty);
+          const termMatches = comments.some((value) => value.toLocaleLowerCase("it") === label)
+            || metadataPropertyValues(item.metadata, lexicalEntryProperty).includes(entry.entry);
+          if (!termMatches) continue;
+          const value = typeof item.value === "string" ? item.value : "";
+          const start = Number(item.start);
+          const end = Number(item.end);
+          if (!value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) continue;
+          narrativeItems.push({ fileId, value, start, end, iri });
+        }
+      }
+
+      const merged = [...senseItems, ...narrativeItems];
+      merged.sort((a, b) => (docIndex.get(a.fileId) ?? 0) - (docIndex.get(b.fileId) ?? 0) || a.start - b.start);
       const corpus = await ensureCorpusTexts();
-      const rows: SearchRow[] = parsed.map((item) => {
+      const rows: SearchRow[] = merged.map((item) => {
         const interview = interviews.find((candidate) => candidate.id === item.fileId);
         const text = corpus.get(item.fileId);
         const [left, right] = text ? kwicContext(text, item.start, item.end) : ["", ""];
