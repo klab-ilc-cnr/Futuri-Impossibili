@@ -316,12 +316,12 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .search-combo-empty { padding: 10px 12px; color: #7d8782; font-size: 11px; }
 .search-results { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .kwic-scroll {
-  flex: 1; min-height: 0; overflow-y: auto; align-items: center;
+  flex: 1; min-height: 0; overflow-y: auto; align-items: center; align-content: start;
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
   scrollbar-width: thin; scrollbar-color: #bdc7c1 transparent;
 }
 .kwic-scroll.anno-mode { grid-template-columns: auto minmax(0, 1fr); }
-.kwic-head, .kwic-filters, .kwic-row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
+.kwic-head, .kwic-filters, .kwic-row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; gap: 12px; }
 .kwic-head { position: sticky; top: 0; z-index: 2; background: #fff; padding: 8px 16px; border-bottom: 1px solid #e8ebe6; color: #5b8c78; font-size: 9px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .kwic-head span:nth-child(2) { text-align: right; }
 .kwic-head span:nth-child(3) { text-align: center; }
