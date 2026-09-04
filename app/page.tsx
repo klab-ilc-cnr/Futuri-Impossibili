@@ -149,6 +149,25 @@ type ImportReport = {
   problems: string[];
 };
 
+type SearchType = "forma" | "concetto" | "termine";
+
+type SearchRow = {
+  fileId: string;
+  docLabel: string;
+  docTitle: string;
+  left: string;
+  keyword: string;
+  right: string;
+  start: number;
+  end: number;
+};
+
+type SearchState = {
+  type: SearchType;
+  query: string;
+  rows: SearchRow[];
+};
+
 const menuItemIds = [
   "progetto",
   "statistiche",
@@ -186,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.13.1";
+const appVersion = "0.14.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1091,6 +1110,34 @@ function locusBarY(relTop: number, annotationHeight: number, wrapHeight: number 
       ));
 }
 
+function wildcardToRegex(pattern: string) {
+  const escaped = pattern
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\\\*/g, ".*")
+    .replace(/\\\?/g, ".");
+  return new RegExp(escaped, "gi");
+}
+
+const SEARCH_CONTEXT_CHARS = 60;
+const SEARCH_PAGE_SIZE = 20;
+
+function kwicContext(text: string, start: number, end: number) {
+  let leftStart = Math.max(0, start - SEARCH_CONTEXT_CHARS);
+  if (leftStart > 0) {
+    while (leftStart < start && !/\s/.test(text[leftStart])) leftStart += 1;
+    while (leftStart < start && /\s/.test(text[leftStart])) leftStart += 1;
+  }
+  let rightEnd = Math.min(text.length, end + SEARCH_CONTEXT_CHARS);
+  if (rightEnd < text.length) {
+    while (rightEnd > end && !/\s/.test(text[rightEnd - 1])) rightEnd -= 1;
+  }
+  return [
+    `${leftStart > 0 ? "… " : ""}${text.slice(leftStart, start)}`,
+    `${text.slice(end, rightEnd)}${rightEnd < text.length ? " …" : ""}`,
+  ];
+}
+
 function getTextNodeEntries(root: HTMLElement) {
   const entries: Array<{ node: Text; start: number; end: number }> = [];
   let offset = 0;
@@ -1433,6 +1480,13 @@ export default function Home() {
   const [archiveError, setArchiveError] = useState("");
   const [uploadLoading, setUploadLoading] = useState(false);
   const [importReport, setImportReport] = useState<ImportReport | null>(null);
+  const [searchView, setSearchView] = useState<SearchType | null>(null);
+  const [lastSearch, setLastSearch] = useState<SearchState | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchFilters, setSearchFilters] = useState({ doc: "", left: "", keyword: "", right: "" });
+  const [searchPage, setSearchPage] = useState(0);
+  const [pendingScroll, setPendingScroll] = useState<{ start: number; end: number } | null>(null);
   const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
   const [conceptTotalHits, setConceptTotalHits] = useState(0);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -1489,6 +1543,7 @@ export default function Home() {
   const conceptsRequestId = useRef(0);
   const lexicalSenseTypesRequestIds = useRef<Record<string, number>>({});
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const corpusTextsRef = useRef<Map<string, string> | null>(null);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
   const dragBoundsRef = useRef<{ start: number; end: number } | null>(null);
   const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -1533,6 +1588,21 @@ export default function Home() {
   const filteredConcepts = concepts.filter((concept) =>
     concept.defaultLabel.toLocaleLowerCase("it").includes(conceptSearchQuery.trim().toLocaleLowerCase("it")),
   );
+  const filteredSearchRows = useMemo(() => {
+    if (!lastSearch) return [];
+    const normalize = (value: string) => value.trim().toLocaleLowerCase("it-IT");
+    const doc = normalize(searchFilters.doc);
+    const left = normalize(searchFilters.left);
+    const keyword = normalize(searchFilters.keyword);
+    const right = normalize(searchFilters.right);
+    return lastSearch.rows.filter((row) =>
+      (!doc || row.docLabel.toLocaleLowerCase("it-IT").includes(doc))
+      && (!left || row.left.toLocaleLowerCase("it-IT").includes(left))
+      && (!keyword || row.keyword.toLocaleLowerCase("it-IT").includes(keyword))
+      && (!right || row.right.toLocaleLowerCase("it-IT").includes(right)));
+  }, [lastSearch, searchFilters]);
+  const searchPages = Math.max(1, Math.ceil(filteredSearchRows.length / SEARCH_PAGE_SIZE));
+  const safeSearchPage = Math.min(searchPage, searchPages - 1);
   const selectedConceptsConfigured = selectedConcepts.length > 0 && selectedConcepts.every((lexicalConcept) => {
     const conceptSelection = conceptSelections[lexicalConcept];
     return Boolean(conceptSelection?.lexicalEntry && conceptSelection.sensesReady && (
@@ -2419,7 +2489,47 @@ export default function Home() {
       const frame = requestAnimationFrame(() => drawAnnotationsLayer());
       return () => cancelAnimationFrame(frame);
     }
-  }, [drawAnnotationsLayer, layerTick, text, textError, textLoading, workspaceVisible]);
+  }, [drawAnnotationsLayer, layerTick, searchView, text, textError, textLoading, workspaceVisible]);
+
+  useEffect(() => {
+    if (!pendingScroll || searchView || textLoading || textError) return;
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      if (cancelled || !pendingScroll) return;
+      const wrap = annotatedWrapRef.current;
+      const area = textRef.current;
+      if (!wrap || !area) return;
+      const entries = getTextNodeEntries(wrap);
+      if (entries.length === 0) return;
+      const range = createRangeForOffsets(entries, pendingScroll.start, pendingScroll.end);
+      const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
+      if (rects.length === 0) return;
+      const areaRect = area.getBoundingClientRect();
+      const targetTop = rects[0].top - areaRect.top + area.scrollTop - 90;
+      area.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+      const layer = annotationLayerRef.current;
+      if (layer) {
+        const wrapRect = wrap.getBoundingClientRect();
+        const flashes: HTMLDivElement[] = [];
+        for (const rect of rects.slice(0, 12)) {
+          const flash = document.createElement("div");
+          flash.className = "search-flash";
+          flash.style.left = `${rect.left - wrapRect.left}px`;
+          flash.style.top = `${rect.top - wrapRect.top}px`;
+          flash.style.width = `${rect.width}px`;
+          flash.style.height = `${rect.height}px`;
+          layer.appendChild(flash);
+          flashes.push(flash);
+        }
+        setTimeout(() => flashes.forEach((flash) => flash.remove()), 1600);
+      }
+      setPendingScroll(null);
+    }, 60);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [pendingScroll, searchView, text, textLoading, textError]);
 
   useEffect(() => {
     const wrap = annotatedWrapRef.current;
@@ -2988,6 +3098,80 @@ export default function Home() {
       }
     }
     return lines;
+  }
+
+  async function ensureCorpusTexts() {
+    if (corpusTextsRef.current) return corpusTextsRef.current;
+    const response = await fetch(`${textsEndpoint}/corpus`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(await readErrorDetail(response));
+    const payload = await response.json() as { texts?: Record<string, unknown> };
+    const map = new Map<string, string>();
+    for (const [fileId, value] of Object.entries(payload.texts ?? {})) {
+      if (typeof value === "string") map.set(fileId, value);
+    }
+    corpusTextsRef.current = map;
+    return map;
+  }
+
+  async function runFormaSearch() {
+    const query = searchInput.trim();
+    if (!query || searchLoading) return;
+    setSearchLoading(true);
+    setGrowlMessage("");
+    try {
+      const corpus = await ensureCorpusTexts();
+      const regex = wildcardToRegex(query);
+      const rows: SearchRow[] = [];
+      for (const interview of interviews) {
+        if (interview.source !== "server") continue;
+        const text = corpus.get(interview.id);
+        if (!text) continue;
+        for (const match of text.matchAll(regex)) {
+          const start = match.index ?? 0;
+          const end = start + match[0].length;
+          if (end <= start) continue;
+          const [left, right] = kwicContext(text, start, end);
+          rows.push({
+            fileId: interview.id,
+            docLabel: interview.metadataId || interview.name,
+            docTitle: interview.name,
+            left,
+            keyword: match[0],
+            right,
+            start,
+            end,
+          });
+        }
+      }
+      setLastSearch({ type: "forma", query, rows });
+      setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
+      setSearchPage(0);
+    } catch (error) {
+      showError(t.search.error(error instanceof Error ? error.message : t.concepts.unknownError));
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  function toggleSearchView(type: SearchType) {
+    if (searchView === type) {
+      setSearchView(null);
+      return;
+    }
+    resetSelectionFlow();
+    setSearchView(type);
+  }
+
+  function openSearchResult(row: SearchRow) {
+    setSearchView(null);
+    if (row.fileId !== activeInterviewId) {
+      const target = interviews.find((interview) => interview.id === row.fileId);
+      if (target) void selectInterview(target);
+    }
+    setPendingScroll({ start: row.start, end: row.end });
   }
 
   async function handleBulkFiles(event: ChangeEvent<HTMLInputElement>) {
@@ -3978,7 +4162,165 @@ export default function Home() {
                       <strong>{description}</strong>
                     </div>
                   )}
+                  <div className="toolbar-searches">
+                    <button
+                      type="button"
+                      className={`toolbar-search ${searchView === "forma" ? "active" : ""}`}
+                      onClick={() => toggleSearchView("forma")}
+                      disabled={Boolean(selection) || textLoading || Boolean(textError)}
+                      aria-label={t.search.formaTitle}
+                      aria-pressed={searchView === "forma"}
+                      title={t.search.formaTitle}
+                    >
+                      {t.search.formaButton}
+                    </button>
+                    <button
+                      type="button"
+                      className="toolbar-search"
+                      disabled
+                      aria-label={t.search.conceptTitle}
+                      title={t.search.soon}
+                    >
+                      {t.search.conceptButton}
+                    </button>
+                    <button
+                      type="button"
+                      className="toolbar-search"
+                      disabled
+                      aria-label={t.search.entryTitle}
+                      title={t.search.soon}
+                    >
+                      {t.search.entryButton}
+                    </button>
+                  </div>
                 </div>
+                {searchView === "forma" ? (
+                  <div className="search-panel">
+                    <div className="search-fields">
+                      <span className="search-kicker">{t.search.formaTitle}</span>
+                      <input
+                        type="search"
+                        className="search-input"
+                        value={searchInput}
+                        onChange={(event) => setSearchInput(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") void runFormaSearch();
+                        }}
+                        placeholder={t.search.formaPlaceholder}
+                        aria-label={t.search.formaTitle}
+                        autoFocus
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button
+                        type="button"
+                        className="search-run"
+                        onClick={() => void runFormaSearch()}
+                        disabled={!searchInput.trim() || searchLoading}
+                      >
+                        {t.search.run}
+                      </button>
+                      <small className="search-hint">{t.search.formaHint}</small>
+                    </div>
+                    <div className="search-results">
+                      {searchLoading ? (
+                        <div className="kwic-empty">{t.search.loading}</div>
+                      ) : !lastSearch || lastSearch.type !== "forma" ? (
+                        <div className="kwic-empty">{t.search.emptyPrompt}</div>
+                      ) : (
+                        <>
+                          <div className="kwic-head">
+                            <span>{t.search.colDoc}</span>
+                            <span>{t.search.colLeft}</span>
+                            <span>{t.search.colKeyword}</span>
+                            <span>{t.search.colRight}</span>
+                          </div>
+                          <div className="kwic-filters">
+                            <input
+                              type="search"
+                              value={searchFilters.doc}
+                              onChange={(event) => { setSearchFilters({ ...searchFilters, doc: event.target.value }); setSearchPage(0); }}
+                              placeholder={t.search.filterDoc}
+                              aria-label={t.search.colDoc}
+                              autoComplete="off"
+                              spellCheck={false}
+                            />
+                            <input
+                              type="search"
+                              value={searchFilters.left}
+                              onChange={(event) => { setSearchFilters({ ...searchFilters, left: event.target.value }); setSearchPage(0); }}
+                              placeholder={t.search.filterContext}
+                              aria-label={t.search.colLeft}
+                              autoComplete="off"
+                              spellCheck={false}
+                            />
+                            <input
+                              type="search"
+                              value={searchFilters.keyword}
+                              onChange={(event) => { setSearchFilters({ ...searchFilters, keyword: event.target.value }); setSearchPage(0); }}
+                              placeholder={t.search.filterKeyword}
+                              aria-label={t.search.colKeyword}
+                              autoComplete="off"
+                              spellCheck={false}
+                            />
+                            <input
+                              type="search"
+                              value={searchFilters.right}
+                              onChange={(event) => { setSearchFilters({ ...searchFilters, right: event.target.value }); setSearchPage(0); }}
+                              placeholder={t.search.filterContext}
+                              aria-label={t.search.colRight}
+                              autoComplete="off"
+                              spellCheck={false}
+                            />
+                          </div>
+                          <div className="kwic-body">
+                            {filteredSearchRows.length === 0 ? (
+                              <div className="kwic-empty">{t.search.noResults}</div>
+                            ) : (
+                              filteredSearchRows
+                                .slice(safeSearchPage * SEARCH_PAGE_SIZE, (safeSearchPage + 1) * SEARCH_PAGE_SIZE)
+                                .map((row, index) => (
+                                  <button
+                                    type="button"
+                                    className="kwic-row"
+                                    key={`${row.fileId}-${row.start}-${index}`}
+                                    onClick={() => openSearchResult(row)}
+                                  >
+                                    <span className="kwic-doc" title={row.docTitle}>{row.docLabel}</span>
+                                    <span className="kwic-left">{row.left}</span>
+                                    <span className="kwic-keyword">{row.keyword}</span>
+                                    <span className="kwic-right">{row.right}</span>
+                                  </button>
+                                ))
+                            )}
+                          </div>
+                          <div className="kwic-pager">
+                            <span>{t.search.results(filteredSearchRows.length)}</span>
+                            <span className="kwic-pager-nav">
+                              <button
+                                type="button"
+                                disabled={safeSearchPage === 0}
+                                onClick={() => setSearchPage(safeSearchPage - 1)}
+                                aria-label="<"
+                              >
+                                ‹
+                              </button>
+                              <span>{t.search.page(safeSearchPage + 1, searchPages)}</span>
+                              <button
+                                type="button"
+                                disabled={safeSearchPage >= searchPages - 1}
+                                onClick={() => setSearchPage(safeSearchPage + 1)}
+                                aria-label=">"
+                              >
+                                ›
+                              </button>
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : (
                 <div className="document-body">
                   <div
                     ref={textRef}
@@ -4089,6 +4431,7 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
+                )}
                 <div className="document-foot">
                   {attestationSaving ? (
                     <div className="annotation-progress" role="status" aria-live="polite" aria-label={t.document.savingAria}>
