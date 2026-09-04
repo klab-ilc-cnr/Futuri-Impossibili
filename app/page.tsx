@@ -163,6 +163,8 @@ type SearchRow = {
   start: number;
   end: number;
   kind: SearchRowKind;
+  term: string;
+  concept: string;
 };
 
 type SearchState = {
@@ -208,7 +210,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.16.3";
+const appVersion = "0.16.5";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1115,6 +1117,21 @@ function locusBarY(relTop: number, annotationHeight: number, wrapHeight: number 
       ));
 }
 
+function resolveEntryTerm(metadata: unknown, observable: string, lexicalEntries: LexicalEntryOption[]) {
+  const comments = metadataPropertyValues(metadata, rdfsCommentProperty);
+  if (comments.length > 0) return comments[0];
+  const entryIri = metadataPropertyValues(metadata, lexicalEntryProperty)[0] ?? "";
+  if (entryIri) {
+    const direct = lexicalEntries.find((entry) => entry.entry === entryIri);
+    if (direct) return direct.label;
+  }
+  if (observable) {
+    const viaSense = lexicalEntries.find((entry) => entry.senses.includes(observable));
+    if (viaSense) return viaSense.label;
+  }
+  return "";
+}
+
 function metadataPropertyValues(metadata: unknown, property: string) {
   if (!metadata || typeof metadata !== "object") return [];
   const values = (metadata as Record<string, unknown>)[property];
@@ -1504,7 +1521,7 @@ export default function Home() {
   const [lastSearch, setLastSearch] = useState<SearchState | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchInput, setSearchInput] = useState("");
-  const [searchFilters, setSearchFilters] = useState({ doc: "", left: "", keyword: "", right: "" });
+  const [searchFilters, setSearchFilters] = useState({ doc: "", left: "", keyword: "", right: "", term: "" });
   const [searchPage, setSearchPage] = useState(0);
   const [pendingScroll, setPendingScroll] = useState<{ start: number; end: number } | null>(null);
   const [conceptQuery, setConceptQuery] = useState("");
@@ -1628,6 +1645,7 @@ export default function Home() {
     const keyword = normalize(searchFilters.keyword);
     const right = normalize(searchFilters.right);
     const relation = lastSearch.type === "forma" || relationFilter === "tutte" ? "" : relationFilter;
+    const extra = normalize(searchFilters.term);
     return lastSearch.rows.filter((row) =>
       (!doc || row.docLabel.toLocaleLowerCase("it-IT").includes(doc))
       && (!left || row.left.toLocaleLowerCase("it-IT").includes(left))
@@ -1635,7 +1653,9 @@ export default function Home() {
         ? row.keyword.toLocaleLowerCase("it-IT").includes(keyword)
         : `${row.left} ${row.keyword} ${row.right}`.toLocaleLowerCase("it-IT").includes(keyword)))
       && (!right || row.right.toLocaleLowerCase("it-IT").includes(right))
-      && (!relation || row.kind === relation));
+      && (!relation || row.kind === relation)
+      && (!extra || (lastSearch.type === "concetto" ? row.term : row.concept)
+        .toLocaleLowerCase("it-IT").includes(extra)));
   }, [lastSearch, relationFilter, searchFilters]);
   const searchPages = Math.max(1, Math.ceil(filteredSearchRows.length / SEARCH_PAGE_SIZE));
   const safeSearchPage = Math.min(searchPage, searchPages - 1);
@@ -3233,11 +3253,13 @@ export default function Home() {
             start,
             end,
             kind: "" as SearchRowKind,
+            term: "",
+            concept: "",
           });
         }
       }
       setLastSearch({ type: "forma", query, rows });
-      setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
+      setSearchFilters({ doc: "", left: "", keyword: "", right: "", term: "" });
       setSearchPage(0);
     } catch (error) {
       showError(t.search.error(error instanceof Error ? error.message : t.concepts.unknownError));
@@ -3270,12 +3292,12 @@ export default function Home() {
         const end = Number(item.end);
         if (!fileId || !value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) return [];
         if (!docIndex.has(fileId)) return [];
-        return [{ fileId, value, start, end }];
+        return [{ fileId, value, start, end, observable: readResourceIdentifier(item.observable), metadata: item.metadata }];
       });
       parsed.sort((a, b) => (docIndex.get(a.fileId) ?? 0) - (docIndex.get(b.fileId) ?? 0) || a.start - b.start);
       const corpus = await ensureCorpusTexts();
       const attestationsCorpus = await ensureAttestationsCorpus();
-      const narrativeRows: Array<{ fileId: string; value: string; start: number; end: number; kind: SearchRowKind }> = parsed.map((item) => ({ ...item, kind: "narrativo" }));
+      const narrativeRows: Array<{ fileId: string; value: string; start: number; end: number; kind: SearchRowKind; observable: string; metadata: unknown }> = parsed.map((item) => ({ ...item, kind: "narrativo" }));
       const paradigmaticRows: typeof narrativeRows = [];
       for (const [fileId, corpusItems] of attestationsCorpus) {
         if (!docIndex.has(fileId)) continue;
@@ -3289,7 +3311,15 @@ export default function Home() {
           const start = Number(item.start);
           const end = Number(item.end);
           if (!value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) continue;
-          paradigmaticRows.push({ fileId, value, start, end, kind: "paradigmatico" });
+          paradigmaticRows.push({
+            fileId,
+            value,
+            start,
+            end,
+            kind: "paradigmatico",
+            observable: readResourceIdentifier(item.observable),
+            metadata: item.metadata,
+          });
         }
       }
       const merged = [...narrativeRows, ...paradigmaticRows];
@@ -3308,10 +3338,12 @@ export default function Home() {
           start: item.start,
           end: item.end,
           kind: item.kind,
+          concept: "",
+          term: resolveEntryTerm(item.metadata, item.observable, lexicalEntries) || "—",
         };
       });
       setLastSearch({ type: "concetto", query: concept.defaultLabel, rows });
-      setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
+      setSearchFilters({ doc: "", left: "", keyword: "", right: "", term: "" });
       setRelationFilter("tutte");
       setSearchPage(0);
     } catch (error) {
@@ -3354,7 +3386,7 @@ export default function Home() {
       }));
       const items = responses.flatMap((payload) => Array.isArray(payload.list) ? payload.list : []);
       const docIndex = new Map(interviews.map((interview, index) => [interview.id, index]));
-      const senseItems: Array<{ fileId: string; value: string; start: number; end: number; iri: string; kind: SearchRowKind }> = items.flatMap((rawItem) => {
+      const senseItems: Array<{ fileId: string; value: string; start: number; end: number; iri: string; kind: SearchRowKind; observable: string; metadata: unknown }> = items.flatMap((rawItem) => {
         if (!rawItem || typeof rawItem !== "object") return [];
         const item = rawItem as Record<string, unknown>;
         const fileId = typeof item.fileId === "string" ? item.fileId : "";
@@ -3370,6 +3402,8 @@ export default function Home() {
           end,
           iri: readResourceIdentifier(item.attestation),
           kind: "paradigmatico",
+          observable: readResourceIdentifier(item.observable),
+          metadata: item.metadata,
         }];
       });
 
@@ -3392,7 +3426,16 @@ export default function Home() {
           const start = Number(item.start);
           const end = Number(item.end);
           if (!value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) continue;
-          narrativeItems.push({ fileId, value, start, end, iri, kind: "narrativo" });
+          narrativeItems.push({
+            fileId,
+            value,
+            start,
+            end,
+            iri,
+            kind: "narrativo",
+            observable: readResourceIdentifier(item.observable),
+            metadata: item.metadata,
+          });
         }
       }
 
@@ -3403,6 +3446,12 @@ export default function Home() {
         const interview = interviews.find((candidate) => candidate.id === item.fileId);
         const text = corpus.get(item.fileId);
         const [left, right] = text ? kwicContext(text, item.start, item.end) : ["", ""];
+        const conceptIri = item.kind === "paradigmatico"
+          ? metadataPropertyValues(item.metadata, referringConceptProperty)[0] ?? ""
+          : item.observable;
+        const conceptLabel = conceptIri
+          ? concepts.find((concept) => concept.lexicalConcept === conceptIri)?.defaultLabel ?? "—"
+          : "";
         return {
           fileId: item.fileId,
           docLabel: interview?.metadataId || interview?.name || item.fileId,
@@ -3413,10 +3462,12 @@ export default function Home() {
           start: item.start,
           end: item.end,
           kind: item.kind,
+          concept: conceptLabel,
+          term: "",
         };
       });
       setLastSearch({ type: "termine", query: entry.label, rows });
-      setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
+      setSearchFilters({ doc: "", left: "", keyword: "", right: "", term: "" });
       setRelationFilter("tutte");
       setSearchPage(0);
     } catch (error) {
@@ -3433,7 +3484,7 @@ export default function Home() {
     }
     resetSelectionFlow();
     clearSearchFlashes();
-    if (type === "termine") void loadLexicalEntries();
+    if (type === "termine" || type === "concetto") void loadLexicalEntries();
     setSearchView(type);
   }
 
@@ -4726,7 +4777,10 @@ export default function Home() {
                                 <span>{t.search.colRight}</span>
                               </>
                             ) : (
-                              <span>{t.search.colAnnotation}</span>
+                              <>
+                                <span>{t.search.colAnnotation}</span>
+                                <span>{searchView === "concetto" ? t.search.colTerm : t.search.colConcept}</span>
+                              </>
                             )}
                           </div>
                           <div className={`kwic-filters${searchView === "forma" ? "" : " anno-mode"}`}>
@@ -4766,14 +4820,24 @@ export default function Home() {
                                 />
                               </>
                             ) : (
-                              <input
-                                type="search"
-                                value={searchFilters.keyword}
-                                onChange={(event) => { setSearchFilters({ ...searchFilters, keyword: event.target.value }); setSearchPage(0); }}
+                              <>
+                                <input
+                                  type="search"
+                                  value={searchFilters.keyword}
+                                  onChange={(event) => { setSearchFilters({ ...searchFilters, keyword: event.target.value }); setSearchPage(0); }}
                                   aria-label={t.search.colAnnotation}
-                                autoComplete="off"
-                                spellCheck={false}
-                              />
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                />
+                                <input
+                                  type="search"
+                                  value={searchFilters.term}
+                                  onChange={(event) => { setSearchFilters({ ...searchFilters, term: event.target.value }); setSearchPage(0); }}
+                                  aria-label={searchView === "concetto" ? t.search.colTerm : t.search.colConcept}
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                />
+                              </>
                             )}
                           </div>
                           {filteredSearchRows.length === 0 ? (
@@ -4796,14 +4860,22 @@ export default function Home() {
                                       <span className="kwic-right">{row.right}</span>
                                     </>
                                   ) : (
-                                    <span
-                                      className="kwic-anno"
-                                      title={`${row.left} ${row.keyword} ${row.right}`.trim()}
-                                    >
-                                      {row.left && <span className="kwic-context">{row.left} </span>}
-                                      <strong>{row.keyword}</strong>
-                                      {row.right && <span className="kwic-context"> {row.right}</span>}
-                                    </span>
+                                    <>
+                                      <span
+                                        className="kwic-anno"
+                                        title={`${row.left} ${row.keyword} ${row.right}`.trim()}
+                                      >
+                                        {row.left && <span className="kwic-context">{row.left} </span>}
+                                        <strong>{row.keyword}</strong>
+                                        {row.right && <span className="kwic-context"> {row.right}</span>}
+                                      </span>
+                                      <span
+                                        className="kwic-extra"
+                                        title={searchView === "concetto" ? row.term : row.concept}
+                                      >
+                                        {searchView === "concetto" ? row.term : row.concept}
+                                      </span>
+                                    </>
                                   )}
                                 </button>
                               ))
