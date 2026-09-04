@@ -23,11 +23,8 @@ const it = {
   },
   workspace: {
     sectionAria: "Annotazione interviste",
-    kicker: "INSERISCI E ANNOTA",
-    intro: "Carica un’intervista e seleziona parole o frasi per annotarla.",
   },
   archive: {
-    heading: "ARCHIVIO",
     title: "Interviste",
     uploadAria: "Carica più interviste in bulk",
     uploadTitle: "Carica più interviste",
@@ -105,7 +102,6 @@ const it = {
   },
   concepts: {
     sidebarAria: "Repertorio dei concetti",
-    heading: "REPERTORIO",
     title: "Concetti",
     addAria: "Aggiungi lexical concept",
     addTitle: "Aggiungi lexical concept",
@@ -114,9 +110,6 @@ const it = {
     reloadAria: "Ricarica concetti da LexO-server",
     reloadTitle: "Ricarica concetti",
     count: (n: number) => `${n} voci`,
-    introEdit: "Modifica i concetti associati o i loro attributi. Il tipo narrativo/paradigmatico dei concetti esistenti non può essere cambiato.",
-    introSelect: "Seleziona uno o più concetti, poi scegli entrata lessicale e attributi in ciascun pannello.",
-    introIdle: "Seleziona una parte dell’intervista per associare i concetti.",
     searchPlaceholder: "Cerca concetto…",
     searchAria: "Cerca concetto per label",
     loading: "Caricamento da LexO-server…",
@@ -278,11 +271,8 @@ const en: Dict = {
   },
   workspace: {
     sectionAria: "Interview annotation",
-    kicker: "UPLOAD AND ANNOTATE",
-    intro: "Upload an interview and select words or phrases to annotate it.",
   },
   archive: {
-    heading: "ARCHIVE",
     title: "Interviews",
     uploadAria: "Bulk upload interviews",
     uploadTitle: "Bulk upload interviews",
@@ -360,7 +350,6 @@ const en: Dict = {
   },
   concepts: {
     sidebarAria: "Concept repertory",
-    heading: "REPERTORY",
     title: "Concepts",
     addAria: "Add lexical concept",
     addTitle: "Add lexical concept",
@@ -369,9 +358,6 @@ const en: Dict = {
     reloadAria: "Reload concepts from LexO-server",
     reloadTitle: "Reload concepts",
     count: (n: number) => `${n} entries`,
-    introEdit: "Edit the associated concepts or their attributes. The narrative/paradigmatic type of existing concepts cannot be changed.",
-    introSelect: "Select one or more concepts, then choose the lexical entry and attributes in each panel.",
-    introIdle: "Select part of the interview to associate concepts.",
     searchPlaceholder: "Search concepts…",
     searchAria: "Search concepts by label",
     loading: "Loading from LexO-server…",

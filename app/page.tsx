@@ -186,7 +186,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.12.2";
+const appVersion = "0.13.0";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -3772,17 +3772,9 @@ export default function Home() {
           <section className="statistics-page" aria-label="Statistiche" />
         ) : activePage === 4 ? (
           <section className="workspace" aria-label={t.workspace.sectionAria}>
-            <div className="workspace-bar">
-              <div>
-                <p className="section-kicker">{t.workspace.kicker}</p>
-                <p>{t.workspace.intro}</p>
-              </div>
-            </div>
-
             <div className="interview-layout">
               <aside className="interview-sidebar" aria-label={t.archive.title}>
                 <div className="sidebar-heading">
-                  <span>{t.archive.heading}</span>
                   <div className="sidebar-heading-row">
                     <strong>{t.archive.title}</strong>
                     <label
@@ -3852,8 +3844,6 @@ export default function Home() {
                       ↻
                     </button>
                   </div>
-                </div>
-                <div className="sidebar-count-row">
                   <small className="sidebar-count">
                     {selectionMode && selectedInterviewIds.length > 0
                       ? t.archive.selectedCount(selectedInterviewIds.length)
@@ -4138,7 +4128,6 @@ export default function Home() {
                 aria-label={t.concepts.sidebarAria}
               >
                 <div className="sidebar-heading concept-heading">
-                  <span>{t.concepts.heading}</span>
                   <div className="concept-heading-row">
                     <strong>{t.concepts.title}</strong>
                     <button
@@ -4169,15 +4158,8 @@ export default function Home() {
                     >
                       ↻
                     </button>
-                    <small className="sidebar-count">{t.concepts.count(conceptTotalHits)}</small>
                   </div>
-                </div>
-                <div className="concept-intro">
-                  {editingAttestation
-                    ? t.concepts.introEdit
-                    : conceptSelectionActive
-                      ? t.concepts.introSelect
-                    : t.concepts.introIdle}
+                  <small className="sidebar-count">{t.concepts.count(conceptTotalHits)}</small>
                 </div>
                 <div className="interview-search">
                   <span aria-hidden="true">⌕</span>
