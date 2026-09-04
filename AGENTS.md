@@ -202,6 +202,50 @@ delete, reload.
   timeout); `bulkPartial`/`bulkNoText` strings and the `describeBulkFailures`/
   `describeUnsavedAttestations`/`countUnsavedAttestations` helpers were removed.
 
+## Dictionary Builder UI Cleanup & KWIC Searches (v0.13.0 – v0.14.17)
+
+### Workspace cleanup (v0.13.0 – v0.13.1)
+- Removed the "INSERISCI E ANNOTA" workspace bar and both sidebars' kickers ("ARCHIVIO",
+  "REPERTORIO") and the concept-intro hint block (all 3 variants). The counts ("N interviste",
+  "N voci") live INSIDE `.sidebar-heading` under the title row; a single `border-bottom` closes
+  the header. All three columns share header height 64px (`.document-toolbar` height 64) so the
+  border lines align.
+- Document toolbar: "TXT" badge and character count removed; title shows
+  `metadataId || name` (tooltip = filename); the description tab (Sesso/Età/Residenza) is an
+  inline pill right after the title (no notch, `pointer-events: none`); the right side is free
+  for the search buttons. While a search view is open the title+tab are hidden.
+
+### Searches (v0.14.x)
+- **Three searches, one result set**: toolbar buttons Forma / Concetto / Termine toggle the
+  document body between text and search panel; results persist until a new search runs;
+  selecting an interview in the list closes the search view (`selectInterview` calls
+  `setSearchView(null)`).
+- **Forma**: client-side scan of all canonical texts via new batch proxy
+  `GET /api/lexo/texts/corpus` (`{fileId: text}`, cached per session in `corpusTextsRef`).
+  Case-insensitive; wildcards `*` (any within-word sequence) and `?` (one within-word char) —
+  implemented as `[^\\s\\p{P}\\p{S}]` with flags `giu`, so jollys never cross spaces or
+  punctuation. Context window `SEARCH_CONTEXT_CHARS` (50) word-snapped.
+- **Concetto / Termine**: new proxy `POST /api/lexo/attestations/by-observable` (forwards
+  observable/limit/offset, limit 500). Blocked comboboxes (values only from the lexicon:
+  `concepts` with per-concept attestation counts / `lexicalEntries`, lazy-loaded on view open).
+  Clicking a value runs the search immediately; typing runs on Enter when exactly one item
+  matches. Term search = entry → senses → by-observable in parallel (paradigmatic only;
+  narrative same-term attestations need a LexO-side service — upstream issue pending).
+- **Results table** (`.kwic-scroll`, single grid with `subgrid` rows — head/filters/rows share
+  tracks and stay aligned; header sticky): forma = 4 columns (Documento | Contesto sinistro |
+  Keyword | Contesto destro); concetto/termine = 2 columns (Documento | Annotazione) with the
+  attestation value bold and contexts (only when value < `SEARCH_KEYWORD_CONTEXT_MIN` = 40
+  chars) merged into the same cell. Doc column `fit-content(120px)` with filter input capped
+  (`max-width: 105px`) so the input never inflates the auto track; left context is a
+  `justify-content: flex-end` flex cell (overflow clipped on the left, keyword-nearest words
+  always visible); right context ellipsizes by design. Per-column "contains" filters + client
+  pager (20/page, `SEARCH_PAGE_SIZE`).
+- **Click-through**: row click opens the row's interview (`selectInterview`) then
+  `pendingScroll` scrolls the text area to the match and drops persistent `.search-flash`
+  overlays (removed on the next pointerdown anywhere, or when reopening a search view).
+  `drawAnnotationsLayer` re-runs on search-view swap (deps include `searchView`). Search
+  buttons are disabled while an annotation/creation session is open (`selection !== null`).
+
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
 - **100% Pure Text in DOM**: Interview transcript text in `.text-area` NEVER contains `<mark>` or `<span>` inline splitting tags.
