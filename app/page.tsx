@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.4";
+const appVersion = "0.14.5";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1605,7 +1605,9 @@ export default function Home() {
     return lastSearch.rows.filter((row) =>
       (!doc || row.docLabel.toLocaleLowerCase("it-IT").includes(doc))
       && (!left || row.left.toLocaleLowerCase("it-IT").includes(left))
-      && (!keyword || row.keyword.toLocaleLowerCase("it-IT").includes(keyword))
+      && (!keyword || (lastSearch.type === "forma"
+        ? row.keyword.toLocaleLowerCase("it-IT").includes(keyword)
+        : `${row.left} ${row.keyword} ${row.right}`.toLocaleLowerCase("it-IT").includes(keyword)))
       && (!right || row.right.toLocaleLowerCase("it-IT").includes(right)));
   }, [lastSearch, searchFilters]);
   const searchPages = Math.max(1, Math.ceil(filteredSearchRows.length / SEARCH_PAGE_SIZE));
@@ -4372,13 +4374,19 @@ export default function Home() {
                         <div className="kwic-empty">{t.search.emptyPrompt}</div>
                       ) : (
                         <>
-                          <div className="kwic-head">
+                          <div className={`kwic-head${searchView === "forma" ? "" : " anno-mode"}`}>
                             <span>{t.search.colDoc}</span>
-                            <span>{t.search.colLeft}</span>
-                            <span>{t.search.colKeyword}</span>
-                            <span>{t.search.colRight}</span>
+                            {searchView === "forma" ? (
+                              <>
+                                <span>{t.search.colLeft}</span>
+                                <span>{t.search.colKeyword}</span>
+                                <span>{t.search.colRight}</span>
+                              </>
+                            ) : (
+                              <span>{t.search.colAnnotation}</span>
+                            )}
                           </div>
-                          <div className="kwic-filters">
+                          <div className={`kwic-filters${searchView === "forma" ? "" : " anno-mode"}`}>
                             <input
                               type="search"
                               value={searchFilters.doc}
@@ -4388,33 +4396,47 @@ export default function Home() {
                               autoComplete="off"
                               spellCheck={false}
                             />
-                            <input
-                              type="search"
-                              value={searchFilters.left}
-                              onChange={(event) => { setSearchFilters({ ...searchFilters, left: event.target.value }); setSearchPage(0); }}
-                              placeholder={t.search.filterContext}
-                              aria-label={t.search.colLeft}
-                              autoComplete="off"
-                              spellCheck={false}
-                            />
-                            <input
-                              type="search"
-                              value={searchFilters.keyword}
-                              onChange={(event) => { setSearchFilters({ ...searchFilters, keyword: event.target.value }); setSearchPage(0); }}
-                              placeholder={t.search.filterKeyword}
-                              aria-label={t.search.colKeyword}
-                              autoComplete="off"
-                              spellCheck={false}
-                            />
-                            <input
-                              type="search"
-                              value={searchFilters.right}
-                              onChange={(event) => { setSearchFilters({ ...searchFilters, right: event.target.value }); setSearchPage(0); }}
-                              placeholder={t.search.filterContext}
-                              aria-label={t.search.colRight}
-                              autoComplete="off"
-                              spellCheck={false}
-                            />
+                            {searchView === "forma" ? (
+                              <>
+                                <input
+                                  type="search"
+                                  value={searchFilters.left}
+                                  onChange={(event) => { setSearchFilters({ ...searchFilters, left: event.target.value }); setSearchPage(0); }}
+                                  placeholder={t.search.filterContext}
+                                  aria-label={t.search.colLeft}
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                />
+                                <input
+                                  type="search"
+                                  value={searchFilters.keyword}
+                                  onChange={(event) => { setSearchFilters({ ...searchFilters, keyword: event.target.value }); setSearchPage(0); }}
+                                  placeholder={t.search.filterKeyword}
+                                  aria-label={t.search.colKeyword}
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                />
+                                <input
+                                  type="search"
+                                  value={searchFilters.right}
+                                  onChange={(event) => { setSearchFilters({ ...searchFilters, right: event.target.value }); setSearchPage(0); }}
+                                  placeholder={t.search.filterContext}
+                                  aria-label={t.search.colRight}
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                />
+                              </>
+                            ) : (
+                              <input
+                                type="search"
+                                value={searchFilters.keyword}
+                                onChange={(event) => { setSearchFilters({ ...searchFilters, keyword: event.target.value }); setSearchPage(0); }}
+                                placeholder={t.search.filterAnnotation}
+                                aria-label={t.search.colAnnotation}
+                                autoComplete="off"
+                                spellCheck={false}
+                              />
+                            )}
                           </div>
                           <div className="kwic-body">
                             {filteredSearchRows.length === 0 ? (
@@ -4425,14 +4447,27 @@ export default function Home() {
                                 .map((row, index) => (
                                   <button
                                     type="button"
-                                    className="kwic-row"
+                                    className={`kwic-row${searchView === "forma" ? "" : " anno-mode"}`}
                                     key={`${row.fileId}-${row.start}-${index}`}
                                     onClick={() => openSearchResult(row)}
                                   >
                                     <span className="kwic-doc" title={row.docTitle}>{row.docLabel}</span>
-                                    <span className="kwic-left">{row.left}</span>
-                                    <span className="kwic-keyword">{row.keyword}</span>
-                                    <span className="kwic-right">{row.right}</span>
+                                    {searchView === "forma" ? (
+                                      <>
+                                        <span className="kwic-left">{row.left}</span>
+                                        <span className="kwic-keyword">{row.keyword}</span>
+                                        <span className="kwic-right">{row.right}</span>
+                                      </>
+                                    ) : (
+                                      <span
+                                        className="kwic-anno"
+                                        title={`${row.left} ${row.keyword} ${row.right}`.trim()}
+                                      >
+                                        {row.left && <span className="kwic-context">{row.left} </span>}
+                                        <strong>{row.keyword}</strong>
+                                        {row.right && <span className="kwic-context"> {row.right}</span>}
+                                      </span>
+                                    )}
                                   </button>
                                 ))
                             )}

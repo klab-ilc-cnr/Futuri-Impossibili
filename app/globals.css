@@ -316,6 +316,8 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .search-combo-empty { padding: 10px 12px; color: #7d8782; font-size: 11px; }
 .search-results { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .kwic-head, .kwic-filters, .kwic-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: center; }
+.kwic-head.anno-mode, .kwic-filters.anno-mode, .kwic-row.anno-mode { grid-template-columns: auto minmax(0, 1fr); }
+.kwic-anno .kwic-context { color: #5a6560; }
 .kwic-head { flex: none; padding: 8px 16px; border-bottom: 1px solid #e8ebe6; color: #5b8c78; font-size: 9px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .kwic-head span:nth-child(2) { text-align: right; }
 .kwic-head span:nth-child(3) { text-align: center; }
