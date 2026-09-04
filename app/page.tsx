@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.2";
+const appVersion = "0.14.3";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -216,6 +216,7 @@ const lexicalEntriesEndpoint = `${basePath}/api/lexo/lexical-entries`;
 const metadataEndpoint = `${basePath}/api/lexo/metadata`;
 const lexicalConceptEndpoint = `${basePath}/api/lexo/lexical-concept`;
 const attestationsEndpoint = `${basePath}/api/lexo/attestations`;
+const attestationsByObservableEndpoint = `${basePath}/api/lexo/attestations/by-observable`;
 const dctTypeProperty = "http://purl.org/dc/terms/type";
 const legacyDctTypeProperty = "http://purl.org/dc/terms/";
 const conceptLabelProperty = "https://lexo.ilc.cnr.it#conceptLabel";
@@ -1120,6 +1121,7 @@ function wildcardToRegex(pattern: string) {
 }
 
 const SEARCH_CONTEXT_CHARS = 60;
+const SEARCH_KEYWORD_CONTEXT_MIN = 40;
 const SEARCH_PAGE_SIZE = 20;
 
 function kwicContext(text: string, start: number, end: number) {
@@ -1487,6 +1489,9 @@ export default function Home() {
   const [searchFilters, setSearchFilters] = useState({ doc: "", left: "", keyword: "", right: "" });
   const [searchPage, setSearchPage] = useState(0);
   const [pendingScroll, setPendingScroll] = useState<{ start: number; end: number } | null>(null);
+  const [conceptQuery, setConceptQuery] = useState("");
+  const [conceptSelected, setConceptSelected] = useState<LexicalConcept | null>(null);
+  const [conceptListOpen, setConceptListOpen] = useState(false);
   const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
   const [conceptTotalHits, setConceptTotalHits] = useState(0);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -1545,6 +1550,7 @@ export default function Home() {
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const corpusTextsRef = useRef<Map<string, string> | null>(null);
   const searchFlashRef = useRef<HTMLDivElement[]>([]);
+  const conceptComboRef = useRef<HTMLDivElement>(null);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
   const dragBoundsRef = useRef<{ start: number; end: number } | null>(null);
   const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -1604,6 +1610,12 @@ export default function Home() {
   }, [lastSearch, searchFilters]);
   const searchPages = Math.max(1, Math.ceil(filteredSearchRows.length / SEARCH_PAGE_SIZE));
   const safeSearchPage = Math.min(searchPage, searchPages - 1);
+  const matchingConcepts = useMemo(() => {
+    const query = conceptQuery.trim().toLocaleLowerCase("it");
+    return query
+      ? concepts.filter((concept) => concept.defaultLabel.toLocaleLowerCase("it").includes(query))
+      : concepts;
+  }, [conceptQuery, concepts]);
   const selectedConceptsConfigured = selectedConcepts.length > 0 && selectedConcepts.every((lexicalConcept) => {
     const conceptSelection = conceptSelections[lexicalConcept];
     return Boolean(conceptSelection?.lexicalEntry && conceptSelection.sensesReady && (
@@ -2535,6 +2547,17 @@ export default function Home() {
   }, [pendingScroll, searchView, text, textLoading, textError]);
 
   useEffect(() => {
+    if (!conceptListOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && conceptComboRef.current?.contains(target)) return;
+      setConceptListOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [conceptListOpen]);
+
+  useEffect(() => {
     const wrap = annotatedWrapRef.current;
     if (!wrap) return;
     const observer = new ResizeObserver(() => setLayerTick((tick) => tick + 1));
@@ -3155,6 +3178,60 @@ export default function Home() {
         }
       }
       setLastSearch({ type: "forma", query, rows });
+      setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
+      setSearchPage(0);
+    } catch (error) {
+      showError(t.search.error(error instanceof Error ? error.message : t.concepts.unknownError));
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  async function runConceptSearch(concept: LexicalConcept) {
+    if (searchLoading) return;
+    setSearchLoading(true);
+    setGrowlMessage("");
+    try {
+      const parameters = new URLSearchParams({ observable: concept.lexicalConcept, limit: "500" });
+      const response = await fetch(`${attestationsByObservableEndpoint}?${parameters.toString()}`, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(await readErrorDetail(response));
+      const payload = await response.json() as { list?: unknown };
+      const items = Array.isArray(payload.list) ? payload.list : [];
+      const docIndex = new Map(interviews.map((interview, index) => [interview.id, index]));
+      const parsed = items.flatMap((rawItem) => {
+        if (!rawItem || typeof rawItem !== "object") return [];
+        const item = rawItem as Record<string, unknown>;
+        const fileId = typeof item.fileId === "string" ? item.fileId : "";
+        const value = typeof item.value === "string" ? item.value : "";
+        const start = Number(item.start);
+        const end = Number(item.end);
+        if (!fileId || !value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) return [];
+        if (!docIndex.has(fileId)) return [];
+        return [{ fileId, value, start, end }];
+      });
+      parsed.sort((a, b) => (docIndex.get(a.fileId) ?? 0) - (docIndex.get(b.fileId) ?? 0) || a.start - b.start);
+      const corpus = await ensureCorpusTexts();
+      const rows: SearchRow[] = parsed.map((item) => {
+        const interview = interviews.find((entry) => entry.id === item.fileId);
+        const withContext = item.value.length < SEARCH_KEYWORD_CONTEXT_MIN;
+        const text = withContext ? corpus.get(item.fileId) : undefined;
+        const [left, right] = text ? kwicContext(text, item.start, item.end) : ["", ""];
+        return {
+          fileId: item.fileId,
+          docLabel: interview?.metadataId || interview?.name || item.fileId,
+          docTitle: interview?.name ?? item.fileId,
+          left,
+          keyword: item.value,
+          right,
+          start: item.start,
+          end: item.end,
+        };
+      });
+      setLastSearch({ type: "concetto", query: concept.defaultLabel, rows });
       setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
       setSearchPage(0);
     } catch (error) {
@@ -4185,10 +4262,12 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      className="toolbar-search"
-                      disabled
+                      className={`toolbar-search ${searchView === "concetto" ? "active" : ""}`}
+                      onClick={() => toggleSearchView("concetto")}
+                      disabled={Boolean(selection) || textLoading || Boolean(textError) || conceptsLoading || Boolean(conceptsError)}
                       aria-label={t.search.conceptTitle}
-                      title={t.search.soon}
+                      aria-pressed={searchView === "concetto"}
+                      title={t.search.conceptTitle}
                     >
                       {t.search.conceptButton}
                     </button>
@@ -4203,8 +4282,9 @@ export default function Home() {
                     </button>
                   </div>
                 </div>
-                {searchView === "forma" ? (
+                {searchView ? (
                   <div className="search-panel">
+                    {searchView === "forma" ? (
                     <div className="search-fields">
                       <span className="search-kicker">{t.search.formaTitle}</span>
                       <input
@@ -4231,10 +4311,64 @@ export default function Home() {
                       </button>
                       <small className="search-hint">{t.search.formaHint}</small>
                     </div>
+                    ) : (
+                    <div className="search-fields">
+                      <span className="search-kicker">{t.search.conceptTitle}</span>
+                      <div className="search-combo" ref={conceptComboRef}>
+                        <input
+                          type="search"
+                          className="search-input"
+                          value={conceptQuery}
+                          onChange={(event) => {
+                            setConceptQuery(event.target.value);
+                            setConceptSelected(null);
+                            setConceptListOpen(true);
+                          }}
+                          onFocus={() => setConceptListOpen(true)}
+                          placeholder={t.search.conceptPlaceholder}
+                          aria-label={t.search.conceptTitle}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        {conceptListOpen && (
+                          <div className="search-combo-list">
+                            {matchingConcepts.length === 0 ? (
+                              <div className="search-combo-empty">{t.search.noMatch}</div>
+                            ) : (
+                              matchingConcepts.map((concept) => (
+                                <button
+                                  type="button"
+                                  key={concept.lexicalConcept}
+                                  className={`search-combo-item ${conceptSelected?.lexicalConcept === concept.lexicalConcept ? "selected" : ""}`}
+                                  onClick={() => {
+                                    setConceptSelected(concept);
+                                    setConceptQuery(concept.defaultLabel);
+                                    setConceptListOpen(false);
+                                  }}
+                                >
+                                  <span>{concept.defaultLabel}</span>
+                                  <small>{concept.attestation}</small>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="search-run"
+                        onClick={() => { if (conceptSelected) void runConceptSearch(conceptSelected); }}
+                        disabled={!conceptSelected || searchLoading}
+                      >
+                        {t.search.run}
+                      </button>
+                      <small className="search-hint">{t.search.conceptHint}</small>
+                    </div>
+                    )}
                     <div className="search-results">
                       {searchLoading ? (
                         <div className="kwic-empty">{t.search.loading}</div>
-                      ) : !lastSearch || lastSearch.type !== "forma" ? (
+                      ) : !lastSearch || lastSearch.type !== searchView ? (
                         <div className="kwic-empty">{t.search.emptyPrompt}</div>
                       ) : (
                         <>
