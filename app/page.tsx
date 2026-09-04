@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.11";
+const appVersion = "0.14.12";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -4529,7 +4529,6 @@ export default function Home() {
                               type="search"
                               value={searchFilters.doc}
                               onChange={(event) => { setSearchFilters({ ...searchFilters, doc: event.target.value }); setSearchPage(0); }}
-                              placeholder={t.search.filterDoc}
                               aria-label={t.search.colDoc}
                               autoComplete="off"
                               spellCheck={false}
@@ -4540,8 +4539,7 @@ export default function Home() {
                                   type="search"
                                   value={searchFilters.left}
                                   onChange={(event) => { setSearchFilters({ ...searchFilters, left: event.target.value }); setSearchPage(0); }}
-                                  placeholder={t.search.filterContext}
-                                  aria-label={t.search.colLeft}
+                                      aria-label={t.search.colLeft}
                                   autoComplete="off"
                                   spellCheck={false}
                                 />
@@ -4549,8 +4547,7 @@ export default function Home() {
                                   type="search"
                                   value={searchFilters.keyword}
                                   onChange={(event) => { setSearchFilters({ ...searchFilters, keyword: event.target.value }); setSearchPage(0); }}
-                                  placeholder={t.search.filterKeyword}
-                                  aria-label={t.search.colKeyword}
+                                      aria-label={t.search.colKeyword}
                                   autoComplete="off"
                                   spellCheck={false}
                                 />
@@ -4558,8 +4555,7 @@ export default function Home() {
                                   type="search"
                                   value={searchFilters.right}
                                   onChange={(event) => { setSearchFilters({ ...searchFilters, right: event.target.value }); setSearchPage(0); }}
-                                  placeholder={t.search.filterContext}
-                                  aria-label={t.search.colRight}
+                                      aria-label={t.search.colRight}
                                   autoComplete="off"
                                   spellCheck={false}
                                 />
@@ -4569,8 +4565,7 @@ export default function Home() {
                                 type="search"
                                 value={searchFilters.keyword}
                                 onChange={(event) => { setSearchFilters({ ...searchFilters, keyword: event.target.value }); setSearchPage(0); }}
-                                placeholder={t.search.filterAnnotation}
-                                aria-label={t.search.colAnnotation}
+                                  aria-label={t.search.colAnnotation}
                                 autoComplete="off"
                                 spellCheck={false}
                               />
