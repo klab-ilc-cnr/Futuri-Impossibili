@@ -273,6 +273,22 @@ The workaround is in place (post-build move + reverse proxy rewrite). **Do NOT t
   `/Users/andreabellandi/.cache/codex-runtimes/...` and `open` (macOS). Do NOT execute on Linux;
   on Mac it opens `http://localhost:3000/futuri-impossibili`.
 
+## Known Limitations & Next Steps
+
+- **Imported term lost on re-save**: re-saving an imported annotation in the app rebuilds
+  attestation metadata from `narrativeMetadata(options)` only, so the producer's
+  `rdfs:comment` term (see v0.12.0) disappears after the first edit. Planned: re-emit
+  `rdfs:comment` in `narrativeMetadata` when the parsed `term` is present.
+- **Localization phase 2**: the static pages (Il Progetto, Pubblicazioni, Contatti), the
+  statistics placeholder aria, and the module-scope bulk-conversion timeout string
+  ("Tempo massimo superato durante l'importazione bulk", page.tsx) are still Italian-only.
+- **Annotation-only deletion of one interview**: deleting an interview removes everything
+  referencing it; deleting only its annotations (keeping the text) is a different LexO
+  operation, not implemented.
+- **Corpus selector**: TXT/MD uploads never send `corpusId` (no corpus); JSON files carry
+  their own optional `metadata.corpus`. An optional corpus picker for TXT/MD uploads is a
+  possible future addition (requires a corpus-list service).
+
 ## Deployment Summary (Full Runbook in `deploy/README.md`)
 
 - Alpine VM `{{VM_IP}}`: project in `/opt/futuri-impossibili`, user `futuri`,

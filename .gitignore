@@ -48,9 +48,6 @@ next-env.d.ts
 # installazione istanziata con dati di rete reali (solo locale)
 /INSTALL.local.md
 
-# documento locale di passaggio consegne
-/CONTINUE.md
-
 # config locale dell'agente Serena (memories/config, mai nel repo)
 /.serena/
 
