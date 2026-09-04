@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.5";
+const appVersion = "0.14.6";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1492,6 +1492,9 @@ export default function Home() {
   const [conceptQuery, setConceptQuery] = useState("");
   const [conceptSelected, setConceptSelected] = useState<LexicalConcept | null>(null);
   const [conceptListOpen, setConceptListOpen] = useState(false);
+  const [entryQuery, setEntryQuery] = useState("");
+  const [entrySelected, setEntrySelected] = useState<LexicalEntryOption | null>(null);
+  const [entryListOpen, setEntryListOpen] = useState(false);
   const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
   const [conceptTotalHits, setConceptTotalHits] = useState(0);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -1551,6 +1554,7 @@ export default function Home() {
   const corpusTextsRef = useRef<Map<string, string> | null>(null);
   const searchFlashRef = useRef<HTMLDivElement[]>([]);
   const conceptComboRef = useRef<HTMLDivElement>(null);
+  const entryComboRef = useRef<HTMLDivElement>(null);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
   const dragBoundsRef = useRef<{ start: number; end: number } | null>(null);
   const locusOutsidePointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -1618,6 +1622,12 @@ export default function Home() {
       ? concepts.filter((concept) => concept.defaultLabel.toLocaleLowerCase("it").includes(query))
       : concepts;
   }, [conceptQuery, concepts]);
+  const matchingEntries = useMemo(() => {
+    const query = entryQuery.trim().toLocaleLowerCase("it");
+    return query
+      ? lexicalEntries.filter((entry) => entry.label.toLocaleLowerCase("it").includes(query))
+      : lexicalEntries;
+  }, [entryQuery, lexicalEntries]);
   const selectedConceptsConfigured = selectedConcepts.length > 0 && selectedConcepts.every((lexicalConcept) => {
     const conceptSelection = conceptSelections[lexicalConcept];
     return Boolean(conceptSelection?.lexicalEntry && conceptSelection.sensesReady && (
@@ -2560,6 +2570,17 @@ export default function Home() {
   }, [conceptListOpen]);
 
   useEffect(() => {
+    if (!entryListOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && entryComboRef.current?.contains(target)) return;
+      setEntryListOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [entryListOpen]);
+
+  useEffect(() => {
     const wrap = annotatedWrapRef.current;
     if (!wrap) return;
     const observer = new ResizeObserver(() => setLayerTick((tick) => tick + 1));
@@ -3243,6 +3264,62 @@ export default function Home() {
     }
   }
 
+  async function runEntrySearch(entry: LexicalEntryOption) {
+    if (searchLoading || entry.senses.length === 0) return;
+    setSearchLoading(true);
+    setGrowlMessage("");
+    try {
+      const responses = await Promise.all(entry.senses.map(async (sense) => {
+        const parameters = new URLSearchParams({ observable: sense, limit: "500" });
+        const response = await fetch(`${attestationsByObservableEndpoint}?${parameters.toString()}`, {
+          method: "POST",
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error(await readErrorDetail(response));
+        return await response.json() as { list?: unknown };
+      }));
+      const items = responses.flatMap((payload) => Array.isArray(payload.list) ? payload.list : []);
+      const docIndex = new Map(interviews.map((interview, index) => [interview.id, index]));
+      const parsed = items.flatMap((rawItem) => {
+        if (!rawItem || typeof rawItem !== "object") return [];
+        const item = rawItem as Record<string, unknown>;
+        const fileId = typeof item.fileId === "string" ? item.fileId : "";
+        const value = typeof item.value === "string" ? item.value : "";
+        const start = Number(item.start);
+        const end = Number(item.end);
+        if (!fileId || !value || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) return [];
+        if (!docIndex.has(fileId)) return [];
+        return [{ fileId, value, start, end }];
+      });
+      parsed.sort((a, b) => (docIndex.get(a.fileId) ?? 0) - (docIndex.get(b.fileId) ?? 0) || a.start - b.start);
+      const corpus = await ensureCorpusTexts();
+      const rows: SearchRow[] = parsed.map((item) => {
+        const interview = interviews.find((candidate) => candidate.id === item.fileId);
+        const withContext = item.value.length < SEARCH_KEYWORD_CONTEXT_MIN;
+        const text = withContext ? corpus.get(item.fileId) : undefined;
+        const [left, right] = text ? kwicContext(text, item.start, item.end) : ["", ""];
+        return {
+          fileId: item.fileId,
+          docLabel: interview?.metadataId || interview?.name || item.fileId,
+          docTitle: interview?.name ?? item.fileId,
+          left,
+          keyword: item.value,
+          right,
+          start: item.start,
+          end: item.end,
+        };
+      });
+      setLastSearch({ type: "termine", query: entry.label, rows });
+      setSearchFilters({ doc: "", left: "", keyword: "", right: "" });
+      setSearchPage(0);
+    } catch (error) {
+      showError(t.search.error(error instanceof Error ? error.message : t.concepts.unknownError));
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
   function toggleSearchView(type: SearchType) {
     if (searchView === type) {
       setSearchView(null);
@@ -3250,6 +3327,7 @@ export default function Home() {
     }
     resetSelectionFlow();
     clearSearchFlashes();
+    if (type === "termine") void loadLexicalEntries();
     setSearchView(type);
   }
 
@@ -4275,10 +4353,12 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      className="toolbar-search"
-                      disabled
+                      className={`toolbar-search ${searchView === "termine" ? "active" : ""}`}
+                      onClick={() => toggleSearchView("termine")}
+                      disabled={Boolean(selection) || textLoading || Boolean(textError) || lexicalEntriesLoading || Boolean(lexicalEntriesError)}
                       aria-label={t.search.entryTitle}
-                      title={t.search.soon}
+                      aria-pressed={searchView === "termine"}
+                      title={t.search.entryTitle}
                     >
                       {t.search.entryButton}
                     </button>
@@ -4313,7 +4393,7 @@ export default function Home() {
                       </button>
                       <small className="search-hint">{t.search.formaHint}</small>
                     </div>
-                    ) : (
+                    ) : searchView === "concetto" ? (
                     <div className="search-fields">
                       <span className="search-kicker">{t.search.conceptTitle}</span>
                       <div className="search-combo" ref={conceptComboRef}>
@@ -4365,6 +4445,58 @@ export default function Home() {
                         {t.search.run}
                       </button>
                       <small className="search-hint">{t.search.conceptHint}</small>
+                    </div>
+                    ) : (
+                    <div className="search-fields">
+                      <span className="search-kicker">{t.search.entryTitle}</span>
+                      <div className="search-combo" ref={entryComboRef}>
+                        <input
+                          type="search"
+                          className="search-input"
+                          value={entryQuery}
+                          onChange={(event) => {
+                            setEntryQuery(event.target.value);
+                            setEntrySelected(null);
+                            setEntryListOpen(true);
+                          }}
+                          onFocus={() => setEntryListOpen(true)}
+                          placeholder={t.search.entryPlaceholder}
+                          aria-label={t.search.entryTitle}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        {entryListOpen && (
+                          <div className="search-combo-list">
+                            {matchingEntries.length === 0 ? (
+                              <div className="search-combo-empty">{t.search.noMatch}</div>
+                            ) : (
+                              matchingEntries.map((entry) => (
+                                <button
+                                  type="button"
+                                  key={entry.entry}
+                                  className={`search-combo-item ${entrySelected?.entry === entry.entry ? "selected" : ""}`}
+                                  onClick={() => {
+                                    setEntrySelected(entry);
+                                    setEntryQuery(entry.label);
+                                    setEntryListOpen(false);
+                                  }}
+                                >
+                                  <span>{entry.label}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="search-run"
+                        onClick={() => { if (entrySelected) void runEntrySearch(entrySelected); }}
+                        disabled={!entrySelected || entrySelected.senses.length === 0 || searchLoading}
+                      >
+                        {t.search.run}
+                      </button>
+                      <small className="search-hint">{t.search.entryHint}</small>
                     </div>
                     )}
                     <div className="search-results">
