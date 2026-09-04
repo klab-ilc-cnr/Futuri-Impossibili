@@ -107,6 +107,7 @@ const it = {
     relationNarrative: "Solo narrative",
     relationParadigmatic: "Solo paradigmatiche",
     clearAria: "Cancella il contenuto del campo",
+    onlyAnnotations: "Solo occorrenze in annotazioni",
   },
   document: {
     noInterview: "Nessuna intervista",
@@ -386,6 +387,7 @@ const en: Dict = {
     relationNarrative: "Narrative only",
     relationParadigmatic: "Paradigmatic only",
     clearAria: "Clear the field",
+    onlyAnnotations: "Only occurrences within annotations",
   },
   document: {
     noInterview: "No interview",

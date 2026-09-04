@@ -208,7 +208,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.16.2";
+const appVersion = "0.16.3";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1514,6 +1514,7 @@ export default function Home() {
   const [entrySelected, setEntrySelected] = useState<LexicalEntryOption | null>(null);
   const [entryListOpen, setEntryListOpen] = useState(false);
   const [relationFilter, setRelationFilter] = useState<"tutte" | "narrativo" | "paradigmatico">("tutte");
+  const [formInAnnotation, setFormInAnnotation] = useState(false);
   const [concepts, setConcepts] = useState<LexicalConcept[]>([]);
   const [conceptTotalHits, setConceptTotalHits] = useState(0);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -3200,16 +3201,27 @@ export default function Home() {
     setGrowlMessage("");
     try {
       const corpus = await ensureCorpusTexts();
+      const annotationSpans = formInAnnotation
+        ? new Map((await ensureAttestationsCorpus()).entries())
+        : null;
       const regex = wildcardToRegex(query);
       const rows: SearchRow[] = [];
       for (const interview of interviews) {
         if (interview.source !== "server") continue;
         const text = corpus.get(interview.id);
         if (!text) continue;
+        const spans = annotationSpans?.get(interview.id);
         for (const match of text.matchAll(regex)) {
           const start = match.index ?? 0;
           const end = start + match[0].length;
           if (end <= start) continue;
+          if (spans && !spans.some((rawItem) => {
+            if (!rawItem || typeof rawItem !== "object") return false;
+            const item = rawItem as Record<string, unknown>;
+            const spanStart = Number(item.start);
+            const spanEnd = Number(item.end);
+            return Number.isInteger(spanStart) && Number.isInteger(spanEnd) && spanStart <= start && end <= spanEnd;
+          })) continue;
           const [left, right] = kwicContext(text, start, end);
           rows.push({
             fileId: interview.id,
@@ -4493,6 +4505,14 @@ export default function Home() {
                           </button>
                         )}
                       </div>
+                      <label className="search-check">
+                        <input
+                          type="checkbox"
+                          checked={formInAnnotation}
+                          onChange={(event) => setFormInAnnotation(event.target.checked)}
+                        />
+                        <span>{t.search.onlyAnnotations}</span>
+                      </label>
                       <button
                         type="button"
                         className="search-run"

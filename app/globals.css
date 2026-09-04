@@ -306,6 +306,8 @@ main { height: calc(100vh - 176px); min-height: 520px; }
   background: #fff; font: inherit; font-size: 11px; color: #29342f;
 }
 .search-relation:focus { outline: 2px solid #86d2ae; outline-offset: 1px; border-color: #97bda9; }
+.search-check { flex: none; display: flex; align-items: center; gap: 6px; cursor: pointer; color: #5a6560; font-size: 11px; }
+.search-check input { width: 15px; height: 15px; accent-color: var(--green); cursor: pointer; }
 .search-run { padding: 8px 18px; border: 1px solid #97bda9; border-radius: 9px; background: var(--green); color: #fff; cursor: pointer; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
 .search-run:hover:not(:disabled) { background: var(--green-dark); border-color: #35664e; }
 .search-run:disabled { opacity: .55; cursor: default; }
