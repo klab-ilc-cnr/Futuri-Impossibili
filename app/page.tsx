@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.18";
+const appVersion = "0.14.19";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1125,7 +1125,6 @@ function wildcardToRegex(pattern: string) {
 }
 
 const SEARCH_CONTEXT_CHARS = 50;
-const SEARCH_KEYWORD_CONTEXT_MIN = 40;
 const SEARCH_PAGE_SIZE = 20;
 
 function kwicContext(text: string, start: number, end: number) {
@@ -3245,8 +3244,7 @@ export default function Home() {
       const corpus = await ensureCorpusTexts();
       const rows: SearchRow[] = parsed.map((item) => {
         const interview = interviews.find((entry) => entry.id === item.fileId);
-        const withContext = item.value.length < SEARCH_KEYWORD_CONTEXT_MIN;
-        const text = withContext ? corpus.get(item.fileId) : undefined;
+        const text = corpus.get(item.fileId);
         const [left, right] = text ? kwicContext(text, item.start, item.end) : ["", ""];
         return {
           fileId: item.fileId,
@@ -3301,8 +3299,7 @@ export default function Home() {
       const corpus = await ensureCorpusTexts();
       const rows: SearchRow[] = parsed.map((item) => {
         const interview = interviews.find((candidate) => candidate.id === item.fileId);
-        const withContext = item.value.length < SEARCH_KEYWORD_CONTEXT_MIN;
-        const text = withContext ? corpus.get(item.fileId) : undefined;
+        const text = corpus.get(item.fileId);
         const [left, right] = text ? kwicContext(text, item.start, item.end) : ["", ""];
         return {
           fileId: item.fileId,
