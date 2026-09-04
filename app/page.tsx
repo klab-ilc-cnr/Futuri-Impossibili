@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.0";
+const appVersion = "0.14.1";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1114,9 +1114,9 @@ function wildcardToRegex(pattern: string) {
   const escaped = pattern
     .trim()
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/\\\*/g, ".*")
-    .replace(/\\\?/g, ".");
-  return new RegExp(escaped, "gi");
+    .replace(/\\\*/g, "[^\\s\\p{P}\\p{S}]*")
+    .replace(/\\\?/g, "[^\\s\\p{P}\\p{S}]");
+  return new RegExp(escaped, "giu");
 }
 
 const SEARCH_CONTEXT_CHARS = 60;
