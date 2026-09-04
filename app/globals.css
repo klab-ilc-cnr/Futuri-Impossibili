@@ -335,7 +335,8 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .kwic-row > span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .kwic-row .kwic-left { text-overflow: clip; }
 .kwic-doc { font-family: Arial, Helvetica, sans-serif; font-size: 10px; font-weight: 700; color: var(--green-dark); }
-.kwic-left { text-align: right; color: #5a6560; }
+.kwic-left { color: #5a6560; }
+.kwic-row .kwic-left { display: flex; justify-content: flex-end; }
 .kwic-keyword { text-align: center; font-weight: 700; max-width: 320px; margin: 0 auto; }
 .kwic-right { color: #5a6560; }
 .kwic-empty { flex: 1; display: grid; place-items: center; padding: 26px; color: #7d8782; font-size: 11px; text-align: center; }
