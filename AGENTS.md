@@ -319,6 +319,12 @@ The workaround is in place (post-build move + reverse proxy rewrite). **Do NOT t
 
 ## Known Limitations & Next Steps
 
+- **Dependency audit**: `npm audit` reports dev/build-only advisories (vite, ws, undici — two
+  of them Windows-specific) that are accepted: they do not run on the server and are pinned by
+  the frozen vinext beta toolchain. Runtime runtime advisories fixed by in-range `npm audit fix`
+  (nanoid, root postcss). The `next` pin (see next step) keeps `next/node_modules/postcss` and
+  `sharp` advisory-tainted until next is bumped.
+
 - **Imported term lost on re-save**: re-saving an imported annotation in the app rebuilds
   attestation metadata from `narrativeMetadata(options)` only, so the producer's
   `rdfs:comment` term (see v0.12.0) disappears after the first edit. Planned: re-emit
