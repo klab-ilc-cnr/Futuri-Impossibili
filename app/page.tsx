@@ -205,7 +205,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.14.17";
+const appVersion = "0.14.18";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1112,12 +1112,16 @@ function locusBarY(relTop: number, annotationHeight: number, wrapHeight: number 
 }
 
 function wildcardToRegex(pattern: string) {
-  const escaped = pattern
-    .trim()
+  const raw = pattern.trim();
+  const leading = raw.startsWith("*");
+  const trailing = raw.endsWith("*");
+  const escaped = raw
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\\\*/g, "[^\\s\\p{P}\\p{S}]*")
     .replace(/\\\?/g, "[^\\s\\p{P}\\p{S}]");
-  return new RegExp(escaped, "giu");
+  const left = leading ? "" : "(?<![\\p{L}\\p{N}])";
+  const right = trailing ? "" : "(?![\\p{L}\\p{N}])";
+  return new RegExp(left + escaped + right, "giu");
 }
 
 const SEARCH_CONTEXT_CHARS = 50;
