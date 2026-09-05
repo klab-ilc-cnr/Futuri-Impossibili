@@ -165,8 +165,11 @@ delete, reload.
   navigates to page 4 and loads concepts. Wrong password → inline `.password-error`, field
   cleared and refocused. Esc / Annulla / overlay close without navigating.
 - The secret is stored ONLY as a SHA-256 hex digest in the `workspacePasswordHash` constant
-  (app/page.tsx) and verified with `crypto.subtle.digest`; the plaintext password never appears
-  in the source or the bundle. To change it:
+  (app/page.tsx) and verified with `crypto.subtle.digest` — with a pure-JS `sha256Hex` fallback
+  (v0.16.7, output verified bit-per-bit against the reference hash) for non-secure contexts
+  (plain HTTP via machine IP, where `crypto.subtle` is undefined); verification failures show a
+  `passwordUnavailable` inline message instead of a silent console error. The plaintext
+  password never appears in the source or the bundle. To change it:
   `printf %s 'newpassword' | sha256sum` → replace the constant (no redeploy of the backend
   needed; it is a deterrent, NOT real authentication — the LexO API proxies remain open).
 - Unlock state persists in `sessionStorage["fi-workspace-unlocked"]` (per browser tab): reload
@@ -255,10 +258,19 @@ delete, reload.
   clear button; forma has a "Solo occorrenze in annotazioni" checkbox (match contained in an
   attestation span of the same document, via attestations corpus).
 - **Click-through**: row click opens the row's interview (`selectInterview`) then
-  `pendingScroll` scrolls the text area to the match and drops persistent `.search-flash`
-  overlays (removed on the next pointerdown anywhere, or when reopening a search view).
-  `drawAnnotationsLayer` re-runs on search-view swap (deps include `searchView`). Search
-  buttons are disabled while an annotation/creation session is open (`selection !== null`).
+  `pendingScroll` scrolls the text area to the match. `drawAnnotationsLayer` re-runs on
+  search-view swap (deps include `searchView`). Search buttons are disabled while an
+  annotation/creation session is open (`selection !== null`).
+- **Flash & scroll robustness (v0.16.6)**: the search-flash target lives in `searchFlashRef`
+  ({start, end}) and `drawAnnotationsLayer` draws the green boxes at EVERY redraw (same
+  `getAnnotationTextSegments` segmentation as the saved highlights — multi-paragraph matches
+  flash all their segments), so machine-dependent timing/font/DPI differences can neither wipe
+  nor misplace them (the X1-Carbon bug: flashes were imperative divs wiped by the next
+  `layer.replaceChildren()`). Measurement waits for `document.fonts.ready` + double
+  requestAnimationFrame (no fixed 60ms timer) and the jump is a custom `animateScrollTo` (rAF,
+  320ms ease-out — machine-independent feel, replaces `behavior: "smooth"`). Flashes are
+  cleared on any pointerdown (permanent listener, no-op when empty), when reopening the search
+  view and on interview switch (`selectInterview`).
 
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
