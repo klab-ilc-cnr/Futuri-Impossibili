@@ -210,7 +210,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.16.5";
+const appVersion = "0.16.6";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -1143,6 +1143,20 @@ function metadataPropertyValues(metadata: unknown, property: string) {
   });
 }
 
+function animateScrollTo(container: HTMLElement, top: number) {
+  const startTop = container.scrollTop;
+  const delta = top - startTop;
+  if (Math.abs(delta) < 1) return;
+  const duration = 320;
+  const startTime = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - startTime) / duration);
+    container.scrollTop = startTop + delta * (1 - Math.pow(1 - t, 3));
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function wildcardToRegex(pattern: string) {
   const raw = pattern.trim();
   const leading = raw.startsWith("*");
@@ -1590,7 +1604,7 @@ export default function Home() {
   const growlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const corpusTextsRef = useRef<Map<string, string> | null>(null);
   const attestationsCorpusRef = useRef<Map<string, Record<string, unknown>[]> | null>(null);
-  const searchFlashRef = useRef<HTMLDivElement[]>([]);
+  const searchFlashRef = useRef<{ start: number; end: number } | null>(null);
   const conceptComboRef = useRef<HTMLDivElement>(null);
   const entryComboRef = useRef<HTMLDivElement>(null);
   const locusDragEndpoint = useRef<"start" | "end" | null>(null);
@@ -2549,6 +2563,24 @@ export default function Home() {
       };
       layer.appendChild(endHandle);
     }
+
+    const searchFlash = searchFlashRef.current;
+    if (searchFlash) {
+      const flashSegments = getAnnotationTextSegments(text, searchFlash.start, searchFlash.end);
+      for (const segment of flashSegments.slice(0, 12)) {
+        const flashRange = createRangeForOffsets(entries, segment.start, segment.end);
+        for (const flashRect of Array.from(flashRange.getClientRects())) {
+          if (flashRect.width <= 0 && flashRect.height <= 0) continue;
+          const flash = document.createElement("div");
+          flash.className = "search-flash";
+          flash.style.left = `${flashRect.left - wrapRect.left}px`;
+          flash.style.top = `${flashRect.top - wrapRect.top}px`;
+          flash.style.width = `${flashRect.width}px`;
+          flash.style.height = `${flashRect.height}px`;
+          layer.appendChild(flash);
+        }
+      }
+    }
   }, [annotations, conceptFilter, dragging, editAnnotation, editingAnnotationIndex, locusDragging, locusEditing, nudgeLocusEndpoint, selection, text, textError, textLoading]);
 
   useLayoutEffect(() => {
@@ -2562,42 +2594,38 @@ export default function Home() {
   useEffect(() => {
     if (!pendingScroll || searchView || textLoading || textError) return;
     let cancelled = false;
-    const timeout = setTimeout(() => {
+    let rafId = 0;
+    const measureAndScroll = () => {
       if (cancelled || !pendingScroll) return;
       const wrap = annotatedWrapRef.current;
       const area = textRef.current;
       if (!wrap || !area) return;
       const entries = getTextNodeEntries(wrap);
       if (entries.length === 0) return;
-      const range = createRangeForOffsets(entries, pendingScroll.start, pendingScroll.end);
-      const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
-      if (rects.length === 0) return;
+      const segments = getAnnotationTextSegments(text, pendingScroll.start, pendingScroll.end);
+      if (segments.length === 0) return;
       const areaRect = area.getBoundingClientRect();
-      const targetTop = rects[0].top - areaRect.top + area.scrollTop - 90;
-      area.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
-      const layer = annotationLayerRef.current;
-      if (layer) {
-        const wrapRect = wrap.getBoundingClientRect();
-        const flashes: HTMLDivElement[] = [];
-        for (const rect of rects.slice(0, 12)) {
-          const flash = document.createElement("div");
-          flash.className = "search-flash";
-          flash.style.left = `${rect.left - wrapRect.left}px`;
-          flash.style.top = `${rect.top - wrapRect.top}px`;
-          flash.style.width = `${rect.width}px`;
-          flash.style.height = `${rect.height}px`;
-          layer.appendChild(flash);
-          flashes.push(flash);
-        }
-        clearSearchFlashes();
-        searchFlashRef.current = flashes;
-        document.addEventListener("pointerdown", clearSearchFlashes, { once: true });
+      let targetTop: number | null = null;
+      for (const segment of segments) {
+        const range = createRangeForOffsets(entries, segment.start, segment.end);
+        const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
+        if (rects.length === 0) continue;
+        if (targetTop === null) targetTop = rects[0].top - areaRect.top + area.scrollTop - 90;
       }
+      if (targetTop === null) return;
+      animateScrollTo(area, Math.max(0, targetTop));
       setPendingScroll(null);
-    }, 60);
+    };
+    rafId = requestAnimationFrame(() => {
+      rafId = requestAnimationFrame(() => {
+        void document.fonts?.ready.then(() => {
+          if (!cancelled) measureAndScroll();
+        });
+      });
+    });
     return () => {
       cancelled = true;
-      clearTimeout(timeout);
+      cancelAnimationFrame(rafId);
     };
   }, [pendingScroll, searchView, text, textLoading, textError]);
 
@@ -2611,6 +2639,16 @@ export default function Home() {
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [conceptListOpen]);
+
+  useEffect(() => {
+    function onPointerDown() {
+      if (searchFlashRef.current === null) return;
+      searchFlashRef.current = null;
+      annotationLayerRef.current?.querySelectorAll(".search-flash").forEach((flash) => flash.remove());
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, []);
 
   useEffect(() => {
     if (!entryListOpen) return;
@@ -3164,6 +3202,7 @@ export default function Home() {
     setConceptFilter(null);
     closeConceptContextMenu();
     setSearchView(null);
+    clearSearchFlashes();
 
     if (interview.source !== "server") {
       textRequestId.current += 1;
@@ -3194,8 +3233,9 @@ export default function Home() {
   }
 
   function clearSearchFlashes() {
-    searchFlashRef.current.forEach((flash) => flash.remove());
-    searchFlashRef.current = [];
+    if (searchFlashRef.current === null) return;
+    searchFlashRef.current = null;
+    annotationLayerRef.current?.querySelectorAll(".search-flash").forEach((flash) => flash.remove());
   }
 
   async function ensureCorpusTexts() {
@@ -3494,6 +3534,7 @@ export default function Home() {
       const target = interviews.find((interview) => interview.id === row.fileId);
       if (target) void selectInterview(target);
     }
+    searchFlashRef.current = { start: row.start, end: row.end };
     setPendingScroll({ start: row.start, end: row.end });
   }
 
