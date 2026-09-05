@@ -245,6 +245,7 @@ const it = {
     passwordAria: "Password dell’area riservata",
     passwordConfirm: "Accedi",
     passwordError: "Password non corretta.",
+    passwordUnavailable: "Verifica non disponibile: apri il sito in HTTPS o da localhost.",
   },
   messages: {
     attestationsLoadError: (detail: string) => `Impossibile caricare le attestazioni: ${detail}`,
@@ -527,6 +528,7 @@ const en: Dict = {
     passwordAria: "Restricted area password",
     passwordConfirm: "Sign in",
     passwordError: "Incorrect password.",
+    passwordUnavailable: "Verification unavailable: open the site over HTTPS or from localhost.",
   },
   messages: {
     attestationsLoadError: (detail: string) => `Unable to load attestations: ${detail}`,
