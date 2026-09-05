@@ -359,12 +359,13 @@ main { height: calc(100vh - 176px); min-height: 520px; }
 .kwic-right { color: #5a6560; }
 .kwic-empty { flex: 1; display: grid; place-items: center; padding: 26px; color: #7d8782; font-size: 11px; text-align: center; }
 .kwic-empty-row { grid-column: 1 / -1; padding: 22px 16px; display: block; }
-.kwic-anno { display: flex; overflow: hidden; white-space: nowrap; }
+.kwic-row > span.kwic-anno { display: flex; gap: 0.35em; overflow: hidden; white-space: nowrap; }
 .kwic-anno > * { min-width: 0; }
-.kwic-anno .kwic-context { color: #5a6560; flex: 0 1000 auto; overflow: hidden; text-overflow: ellipsis; }
-.kwic-anno .kwic-context-left { display: flex; justify-content: flex-end; }
+.kwic-anno .kwic-context { color: #5a6560; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.kwic-anno .kwic-context-left { display: flex; justify-content: flex-end; text-overflow: clip; }
 .kwic-anno .kwic-dots { flex: none; color: #5a6560; }
-.kwic-anno strong { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.kwic-anno strong { flex: none; max-width: calc(100% - 1em - (0.35em * 3)); overflow: hidden; text-overflow: ellipsis; }
+.kwic-anno.solo strong { max-width: 100%; }
 .kwic-pager { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-top: 1px solid #e8ebe6; color: #727b77; font-size: 10px; font-weight: 700; }
 .kwic-pager-nav { display: flex; align-items: center; gap: 8px; }
 .kwic-pager-nav button { padding: 3px 10px; border: 1px solid #dfe3dc; border-radius: 7px; background: #fff; color: var(--green); cursor: pointer; font: inherit; }

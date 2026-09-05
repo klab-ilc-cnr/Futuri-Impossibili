@@ -271,6 +271,22 @@ delete, reload.
   320ms ease-out — machine-independent feel, replaces `behavior: "smooth"`). Flashes are
   cleared on any pointerdown (permanent listener, no-op when empty), when reopening the search
   view and on interview switch (`selectInterview`).
+- **Anno-mode cell rendering (v0.16.10)**: the concetto/termine result cell (`.kwic-anno`,
+  flex + `gap: 0.35em` + `white-space: nowrap`) renders contexts ALWAYS (no length threshold —
+  a fixed char gate left a blank band for long annotations). Priority is structural, not
+  flex-weight based (weight ratios + `text-overflow` all-or-nothing caused 1-char squeezes like
+  "insulta…" from 0.1px overflows): contexts are `flex: 0 1 auto; min-width: 0` (absorb the
+  deficit first, left one right-aligned with hard clip, right one with CSS ellipsis); the
+  annotation `strong` is `flex: none` (never compressed) with
+  `max-width: calc(100% - 2.05em)` (left dots ~1em + 3 gaps) so its own ellipsis lands INSIDE
+  the container clip — at `max-width: 100%` the box extended past the clip edge (it sits after
+  the unshrinkable left dots) and the container cut the text mid-character with NO dots.
+  `.kwic-anno.solo` (both contexts empty) restores `max-width: 100%`. Data truncation dots:
+  right-side `…` stays INSIDE the context string (CSS ellipsis replaces it when squeezed →
+  never doubled); left-side `…` is a separate `.kwic-dots` span with `flex: none` BEFORE the
+  context span (hard clip would eat an inline leading `…` first — separate span survives).
+  Known cosmetic leftovers: data-complete left contexts clipped by CSS show no dots;
+  single-context rows ellipsize ~1em early. `title` always carries the full row text.
 
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 

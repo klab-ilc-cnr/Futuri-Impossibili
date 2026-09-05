@@ -210,7 +210,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.16.9";
+const appVersion = "0.16.10";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -4951,10 +4951,6 @@ export default function Home() {
                             filteredSearchRows
                               .slice(safeSearchPage * SEARCH_PAGE_SIZE, (safeSearchPage + 1) * SEARCH_PAGE_SIZE)
                               .map((row, index) => {
-                                const leftDots = row.left.startsWith("…");
-                                const rightDots = row.right.endsWith("…");
-                                const leftText = leftDots ? row.left.replace(/^…\s?/, "") : row.left;
-                                const rightText = rightDots ? row.right.replace(/\s?…$/, "") : row.right;
                                 return (
                                 <button
                                   type="button"
@@ -4972,22 +4968,17 @@ export default function Home() {
                                   ) : (
                                     <>
                                       <span
-                                        className="kwic-anno"
+                                        className={`kwic-anno${!row.left && !row.right ? " solo" : ""}`}
                                         title={`${row.left} ${row.keyword} ${row.right}`.trim()}
                                       >
                                         {row.left && (
                                           <>
-                                            {leftDots && <span className="kwic-dots" aria-hidden="true">… </span>}
-                                            <span className="kwic-context kwic-context-left">{leftText} </span>
+                                            {row.left.startsWith("…") && <span className="kwic-dots" aria-hidden="true">…</span>}
+                                            <span className="kwic-context kwic-context-left">{row.left.replace(/^…\s?/, "")} </span>
                                           </>
                                         )}
                                         <strong>{row.keyword}</strong>
-                                        {row.right && (
-                                          <>
-                                            <span className="kwic-context"> {rightText}</span>
-                                            {rightDots && <span className="kwic-dots" aria-hidden="true"> …</span>}
-                                          </>
-                                        )}
+                                        {row.right && <span className="kwic-context"> {row.right}</span>}
                                       </span>
                                       <span
                                         className="kwic-extra"
