@@ -210,7 +210,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.16.7";
+const appVersion = "0.16.8";
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
@@ -5124,6 +5124,7 @@ export default function Home() {
                   </div>
                 </div>
                 )}
+                {!searchView && (
                 <div className="document-foot">
                   {attestationSaving ? (
                     <div className="annotation-progress" role="status" aria-live="polite" aria-label={t.document.savingAria}>
@@ -5155,6 +5156,7 @@ export default function Home() {
                     )}
                   </div>
                 </div>
+                )}
               </div>
 
               <aside
