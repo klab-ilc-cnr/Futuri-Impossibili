@@ -189,9 +189,9 @@ delete, reload.
   target term (e.g. "femmina") as an `rdfs:comment` literal metadata (producer pipeline). It is
   read into the display-only `AnnotationConcept.term` and shown as the italic entry in the
   tooltip and the read-only "Entrata lessicale" panel, as fallback when
-  `resolveLexicalEntryLabel` resolves nothing (real entry IRI still wins). NOTE: re-saving an
-  imported annotation in the app drops unknown metadata (term disappears) — preservation via
-  `narrativeMetadata` is planned but NOT implemented.
+  `resolveLexicalEntryLabel` resolves nothing (real entry IRI still wins). Since v0.17.0 the
+  term is also RE-EMITTED by the app on save (see "Term emission in rdfs:comment" below), so
+  re-saving no longer drops it.
 - **Upload progress + count row (v0.12.1)**: the bulk conversion poller takes an `onProgress`
   callback ("Caricati X di Y…" in the interview list, like bulk deletion); the
   "N interviste"/"X selezionate" counter moved from the 4-button heading row to its own
@@ -288,6 +288,53 @@ delete, reload.
   Known cosmetic leftovers: data-complete left contexts clipped by CSS show no dots;
   single-context rows ellipsize ~1em early. `title` always carries the full row text.
 
+## Competency Questions — Area «Interrogazioni» (v0.18.0 – v0.20.4)
+
+- Nav item esistente «Interrogazioni/Queries» (index 3): `activePage === 3` renderizza
+  `CqPanel` (`app/cq/panel.tsx`), il primo componente estratto dal monolite `page.tsx`.
+  Pannello iniziale: 3 card CQ (CQ3 disabilitata, query SPARQL in fase di definizione),
+  preview con SPARQL via parametri d'esempio, box «About these queries».
+  Stringhe in `strings.ts` sezioni `cq`/`cq1` (it/en). Decisioni e contratti: `queries/DECISIONS.md`.
+- **CQ1 (v0.19.0)**: `app/cq/cq1.tsx` — list view completa: selettore entry (auto-select
+  prima), chips polarità (multi-toggle, min 1), sort (Intervistati/Occorrenze/A–Z/Z–A),
+  pannelli polarità + pannello paradigmatico (barre, troncamento a 8), donut SVG
+  Distribuzione complessiva, dettaglio concetto e tabella passaggi con esportazione CSV.
+  Network graph riviato (manca la query co-occorrenze). I concetti paradigmatici non usano
+  la SPARQL di dettaglio: dettagli e passaggi calcolati client-side dalla cache
+  `attestations/corpus` (observable ∈ senses dell'entry + `referringConcept`), demografia
+  (età/sesso/residenza) parsed dalle description con le stesse regex della SPARQL.
+  La query narrativa restituisce anche righe a conteggio zero → scartate client-side.
+  `basePath` condiviso: `app/base-path.ts` (importato anche da `page.tsx`).
+- **CQ2 (v0.20.0, rifinita fino a v0.20.4)**: `app/cq/cq2.tsx` — ZERO query
+  GraphDB: result set calcolato client-side dalla cache `attestations/corpus`
+  (match narrativo `rdfs:comment` = label case-insensitive OR metadata
+  `lexicalEntry` = entry IRI, polarità MARL uguale a quella selezionata — stessa
+  logica della ricerca «Termine»), età/genere dalle description delle
+  interviste. Frase-query con selettori inline, filtri età (per anno)/genere,
+  sort (età crescente/decrescente/ID), box Search configuration, «Concetti nei
+  risultati» (display-only, barre colorate per polarità), tabella passaggi con
+  paginazione 20/pagina, filtri «contiene» per colonna (sticky, esclusa la
+  colonna Polarità costante), export CSV, riga espansa con contesto KWIC +
+  metadati parlante. I conteggi differiscono leggermente dalla controparte
+  SPARQL perché il client è l'unione comment+lexicalEntry (differenza attesa).
+- **Rifiniture v0.20.1–v0.20.3**: «Apri pannello di analisi» sempre attivo nel
+  pannello iniziale (seleziona anche la card); donut CQ1 nella colonna laterale
+  sopra «Dettaglio concetto»; cursore `progress` durante i caricamenti.
+- **Utility condivise**: `app/cq/shared.ts` (endpoint, parsing entries/interviste/
+  concetti, demografia dalle description, normalizzazione M/F, KWIC windowing,
+  CSV download, costanti polarità) — usate da cq1 e cq2.
+- **Proxy SPARQL**: `POST /api/lexo/cq/[queryId]` (`app/api/lexo/cq/[queryId]/route.ts`)
+  esegue SOLO le query SELECT template in `app/cq/sparql.ts` (fedeli alle tre SPARQL
+  consegnate, parametrizzate via `{{TOKEN}}`) contro GraphDB
+  (`GRAPHDB_SPARQL_URL`, default `http://localhost:7200/repositories/LexOLexica`,
+  stessa VM in produzione, loopback). Per testare da locale contro il server
+  di test: `GRAPHDB_SPARQL_URL={{GRAPHDB_TEST_URL}}/repositories/LexOLexica`
+  (porta pubblica della macchina di test, raggiungibile anche da `vinext start`). Il client NON invia mai SPARQL arbitraria:
+  solo `queryId` + parametri JSON (term/polarity/concept/sex/ageMode/age1/age2/residence),
+  tutti sanitizzati/validati; risposta normalizzata `{queryId, variables, rows}`.
+  `queryId` validi: `cq1-narrative-concepts-by-polarity`, `cq1-paradigmatic-concepts`,
+  `cq1-concept-detail`.
+
 ## In-Text Annotation Rendering (Solution B - Decoupled Pure Text & Graphic Layer v0.6.0)
 
 - **100% Pure Text in DOM**: Interview transcript text in `.text-area` NEVER contains `<mark>` or `<span>` inline splitting tags.
@@ -313,6 +360,16 @@ delete, reload.
   which have no persisted entry). No `cursor: wait` in read-only state (that CSS is reserved for loading).
 - **Timing**: `editAnnotation` never stores raw non-resolvable IRIs into `lexicalEntry`; resolution
   happens at render time when `lexicalEntries` finish loading.
+- **Term emission in rdfs:comment (v0.17.0)**: `narrativeMetadata` also emits
+  `http://www.w3.org/2000/01/rdf-schema#comment` = `TERMINE@it` (same shape as the producer's
+  JSON import), so narrative attestations carry the target term whatever their origin. The term
+  lives in `ConceptAnnotationOptions.term`: set from the chosen entry's label in
+  `selectLexicalEntryOption`, seeded from the parsed comment at edit open (original preserved
+  verbatim on re-save — the v0.12.0 limitation is closed), and at creation it falls back to the
+  concept's `defaultLabel` when no entry is chosen (option A). The property block is included
+  only when a term exists (always with `includeEmptyOptional=true` in the metadata PATCH, where
+  empty values are a no-op). Paradigmatic attestations keep only `referringConcept`.
+  Side effect: term search by comment now matches in-app annotations too.
 
 ### Localization (v0.8.0 — Phase 1: the annotation tool)
 
@@ -367,10 +424,6 @@ The workaround is in place (post-build move + reverse proxy rewrite). **Do NOT t
   and are accepted: they do not run on the server and are pinned by the frozen vinext beta
   toolchain.
 
-- **Imported term lost on re-save**: re-saving an imported annotation in the app rebuilds
-  attestation metadata from `narrativeMetadata(options)` only, so the producer's
-  `rdfs:comment` term (see v0.12.0) disappears after the first edit. Planned: re-emit
-  `rdfs:comment` in `narrativeMetadata` when the parsed `term` is present.
 - **Localization phase 2**: the static pages (Il Progetto, Pubblicazioni, Contatti), the
   statistics placeholder aria, and the module-scope bulk-conversion timeout string
   ("Tempo massimo superato durante l'importazione bulk", page.tsx) are still Italian-only.
