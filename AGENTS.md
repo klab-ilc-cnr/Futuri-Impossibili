@@ -350,9 +350,12 @@ delete, reload.
   "Paradigmatici" (i concetti paradigmatici non hanno polarità nel lessico).
   Layout radiale deterministico (anelli, nessun force), parametri interni
   soglia 1 / Top-K 5 vicini / Top-8 nodi per settore con nota dei non mostrati.
-  Interazioni: hover nodo/arco con tooltip (forza, unità, documenti), click nodo →
-  concept detail + passaggi, «Evidenzia concetti co-occorrenti» dal dettaglio,
-  zoom/pan/Adatta, «Torna alla lista», sort nascosto nel grafo. Dettagli in
+  Interazioni: layer di hit invisibile (16 px) per gli archi; hover arco/nodo con
+  tooltip + illuminazione di arco/nodi collegati (hover nodo = nodo + archi
+  incidenti + vicini); click sull'arco fissa il tooltip (×, click sfondo, Esc,
+  riclick per chiudere) e l'evidenza, senza toccare la selezione; click nodo →
+  concept detail + passaggi; «Evidenzia concetti co-occorrenti» dal dettaglio;
+  zoom/pan/Adatta; «Torna alla lista»; sort nascosto nel grafo (v0.22.1–v0.22.2). Dettagli in
   `queries/DECISIONS.md` (sezione Network Graph CQ1).
 - **Proxy SPARQL**: `POST /api/lexo/cq/[queryId]` (`app/api/lexo/cq/[queryId]/route.ts`)
   esegue SOLO le query SELECT template in `app/cq/sparql.ts` (fedeli alle tre SPARQL

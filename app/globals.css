@@ -1175,3 +1175,24 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 }
 .cq-view-toggle button + button { border-left: 1px solid var(--line); }
 .cq-view-toggle button.active { background: var(--green); color: #fff; }
+
+.cq-graph-edge { pointer-events: none; }
+.cq-graph-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16;
+  stroke-linecap: round;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.cq-graph-edge.active { stroke: #35543f; }
+.cq-graph-edge.active.dimmed { opacity: .5 !important; }
+.cq-graph-node.lit circle { stroke: #35543f; stroke-width: 2.5; }
+.cq-graph-node.lit text { font-weight: 800; }
+.cq-graph-tooltip.pinned { pointer-events: auto; border-color: #9fb8ab; padding-right: 22px; }
+.cq-graph-tooltip-close {
+  position: absolute; top: 3px; right: 5px;
+  border: 0; background: transparent; padding: 2px 4px;
+  font: inherit; font-size: 15px; line-height: 1; color: #6d7b75; cursor: pointer;
+}
+.cq-graph-tooltip-close:hover { color: #1f2b26; }

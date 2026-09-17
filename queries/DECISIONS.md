@@ -300,6 +300,21 @@ documenti); "Highlight co-occurring concepts" dal pannello dettaglio (evidenzia
 vicini e archi, attenua il resto, reversibile); zoom (rotella, 0.4–4×) + pan +
 "Adatta"; "Torna alla lista". In modalità grafo il sort è nascosto (§11).
 
+**Rifiniture v0.22.1–v0.22.2 (usabilità archi).**
+- **Area di click archi**: layer di hit invisibile (`stroke-width: 16`,
+  `pointer-events: stroke`, cursore pointer) sopra il path visibile, che resta
+  `pointer-events: none`; gli hit stanno sotto i nodi. L'encoding dello spessore
+  non cambia.
+- **Evidenza su hover** (arco **e** nodo): l'elemento in hover + i nodi collegati
+  si "illuminano" (arco più marcato, anello sui nodi) e il resto viene attenuato.
+  Hover su nodo = nodo + archi incidenti + vicini.
+- **Tooltip fissato su click** (persistente): resta finché non lo si chiude con
+  click sullo stesso arco, click sullo sfondo, Esc o la ×; non segue il mouse
+  (posizione fissa al punto del click). Mentre è fissato, l'hover altrove non lo
+  sostituisce (scelta 1a): restano tooltip ed evidenza dell'arco fissato.
+- Precedenza evidenze: arco attivo (hover/fissato) > highlight del concetto
+  selezionato > nessuna. Il click sull'arco non modifica la selezione del concetto.
+
 ### Costi accettati
 `texts/corpus` caricato **solo alla prima apertura della vista Grafo** (~120 KB
 nei test), cache per montaggio del componente; resta il rischio noto di memoria
