@@ -499,7 +499,7 @@ export function Cq1NetworkGraph({
 
       <svg
         ref={svgRef}
-        viewBox="-430 -360 860 720"
+        viewBox="-460 -400 920 800"
         className="cq-graph-svg"
         role="img"
         aria-label={t.cq1.graphTitle}

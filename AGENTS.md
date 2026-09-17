@@ -360,7 +360,12 @@ delete, reload.
   concept detail + passaggi; «Evidenzia concetti co-occorrenti» dal dettaglio
   (v0.22.6: mostrato solo in vista Lista, ponte lista→grafo; in grafo è
   ridondante col click sul nodo);
-  zoom/pan/Adatta; «Torna alla lista»; sort nascosto nel grafo (v0.22.1–v0.22.2). Dettagli in
+  zoom/pan/Adatta; «Torna alla lista»; sort nascosto nel grafo (v0.22.1–v0.22.2).
+  **Colori (v0.22.7)**: la polarità nei dati usa token dedicati `--pos-fill`
+  `#4ea36a` / `--pos-ink` `#2f7a4c` / `--neu-fill` `#e6c33c` / `--neu-ink`
+  `#756414`, separati dal verde UI (`--green`, per menu/toggle/bottoni) e
+  allineati al verde chiaro delle faccine di annotazione; il chip neutro resta
+  chiaro con testo scuro. Dettagli e contrasti in `queries/DECISIONS.md`. Dettagli in
   `queries/DECISIONS.md` (sezione Network Graph CQ1).
 - **Proxy SPARQL**: `POST /api/lexo/cq/[queryId]` (`app/api/lexo/cq/[queryId]/route.ts`)
   esegue SOLO le query SELECT template in `app/cq/sparql.ts` (fedeli alle tre SPARQL

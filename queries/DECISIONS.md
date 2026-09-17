@@ -340,3 +340,31 @@ proporzionale al corpus (già accettato per CQ2/CQ3).
 - evoluzione a finestra di caratteri dagli offset (alternativa C);
 - comportamento con 1/2 polarità selezionate (al momento: distribuzione uniforme
   dei settori visibili).
+
+
+## Palette della polarità — verde "dato" distinto dal verde UI (v0.22.7)
+
+**Problema**: il positivo usava `var(--green)` (`#174f3b`), lo **stesso token**
+dell'accent UI (toggle Lista/Grafo attivo, bottoni) e quasi identico alla barra
+del menu (`--green-dark` `#103a2c`): i nodi "dati" del grafo sembravano elementi
+di interfaccia, e la palette era squilibrata (9.0 / 6.8 / 1.3 di contrasto).
+
+**Scelta (A2)**: introdurre token dedicati per la **polarità nei dati**, separati
+dal verde UI (che resta per menu, bottoni, toggle, focus):
+- `--pos-fill: #4ea36a` — riempimenti (nodi grafo, donut, pallini, barre, sfondo chip): 2.95:1 sul fondo del grafo;
+- `--pos-ink: #2f7a4c` — testi/bordi (etichette di settore, titoli pannelli, chip): 4.98:1;
+- `--neu-fill: #e6c33c` — giallo "dato" (donut, pallini, nodi, barre): 1.63:1 (era 1.29);
+- `--neu-ink: #756414` — testi neutri: 5.57:1 (prima `#8a761d` = 4.26:1, sotto AA).
+
+**Perché non il blu**: tecnicamente ottimo (nessun blu nell'app → separazione
+massima; blu/rosso/giallo è la terna più sicura per il daltonismo rosso-verde),
+ma avrebbe divergato dalle **faccine di `sentiment.webp`** usate dall'annotazione,
+il cui positivo è verde `#74be55`: A2 allinea invece le CQ all'annotazione.
+
+**Giallo e scritte**: chip e "dato" hanno ruoli diversi. Il chip neutro resta
+chiaro (`#ffe066`, testo `#5d4f10` intatto a 6.22:1); si scurisce solo il giallo
+"dato", su cui non c'è testo. Non si insegue il 3:1 per il neutro: servirebbe
+`#a88b1f`, un senape/marrone che snatura il "neutro".
+
+**Bonus (v0.22.7)**: le etichette di settore `Positive`/`Negative` uscivano dal
+`viewBox` del grafo e venivano tagliate; `viewBox` portato a `-460 -400 920 800`.

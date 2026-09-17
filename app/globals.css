@@ -9,6 +9,12 @@
   --cream: #f5f3ed;
   --line: #dfe3dc;
   --yellow: #ffdb58;
+  /* Palette dati per la polarità (distinta dal verde UI): allineata alle faccine
+     dell'annotazione per il positivo, con inchiostri dedicati per i testi. */
+  --pos-fill: #4ea36a;
+  --pos-ink: #2f7a4c;
+  --neu-fill: #e6c33c;
+  --neu-ink: #756414;
   --bar-step: 14px;
 }
 
@@ -827,7 +833,7 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
   font-size: 11px; font-weight: 800; cursor: pointer; transition: border-color .2s, background .2s, color .2s;
 }
 .cq-chip:hover { border-color: #97bda9; background: #f6faf8; }
-.cq-chip.active.cq-chip-positive { border-color: var(--green); background: var(--green); color: #fff; }
+.cq-chip.active.cq-chip-positive { border-color: var(--pos-ink); background: var(--mint); color: var(--pos-ink); }
 .cq-chip.active.cq-chip-neutral { border-color: #cbb02c; background: #ffe066; color: #5d4f10; }
 .cq-chip.active.cq-chip-negative { border-color: #87271e; background: #a12f25; color: #fff; }
 .cq-status { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
@@ -844,15 +850,15 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 }
 .cq-distribution-body { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
 .cq-donut { width: 108px; height: 108px; flex: none; transform: rotate(-90deg); }
-.cq-donut-segment.cq-donut-positive { stroke: var(--green); }
-.cq-donut-segment.cq-donut-neutral { stroke: #ffdb58; }
+.cq-donut-segment.cq-donut-positive { stroke: var(--pos-fill); }
+.cq-donut-segment.cq-donut-neutral { stroke: var(--neu-fill); }
 .cq-donut-segment.cq-donut-negative { stroke: #a12f25; }
 .cq-distribution-legend { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
 .cq-distribution-legend li { display: flex; align-items: center; gap: 9px; font-size: 12px; color: #45534d; }
 .cq-distribution-legend strong { font-size: 13px; }
 .cq-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-.cq-dot-positive { background: var(--green); }
-.cq-dot-neutral { background: #ffdb58; }
+.cq-dot-positive { background: var(--pos-fill); }
+.cq-dot-neutral { background: var(--neu-fill); }
 .cq-dot-negative { background: #a12f25; }
 .cq-percent { color: var(--muted); margin-left: 4px; }
 .cq-polarity-grid { display: grid; gap: 16px; }
@@ -861,8 +867,8 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
   padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #e8ebe6;
 }
 .cq-polarity-heading span { color: var(--muted); font-size: 11px; font-weight: 700; }
-.cq-polarity-panel.cq-positive .cq-polarity-heading h3 { color: var(--green); }
-.cq-polarity-panel.cq-neutral .cq-polarity-heading h3 { color: #8a761d; }
+.cq-polarity-panel.cq-positive .cq-polarity-heading h3 { color: var(--pos-ink); }
+.cq-polarity-panel.cq-neutral .cq-polarity-heading h3 { color: var(--neu-ink); }
 .cq-polarity-panel.cq-negative .cq-polarity-heading h3 { color: #a12f25; }
 .cq-concept-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .cq-concept-row.selected .cq-concept-button { border-color: #86d2ae; background: #f2faf5; }
@@ -878,8 +884,8 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .cq-concept-bar {
   display: block; margin-top: 6px; height: 5px; border-radius: 4px; background: #eef1ee; overflow: hidden;
 }
-.cq-concept-bar > span { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #4e806d, var(--green)); }
-.cq-concept-bar.cq-bar-positive > span { background: linear-gradient(90deg, #4e806d, var(--green)); }
+.cq-concept-bar > span { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #7cc48d, var(--pos-fill)); }
+.cq-concept-bar.cq-bar-positive > span { background: linear-gradient(90deg, #7cc48d, var(--pos-fill)); }
 .cq-concept-bar.cq-bar-neutral > span { background: linear-gradient(90deg, #d9c150, #cbb02c); }
 .cq-concept-bar.cq-bar-negative > span { background: linear-gradient(90deg, #b85548, #a12f25); }
 .cq-page.is-loading, .cq-page.is-loading * { cursor: progress !important; }
@@ -1012,8 +1018,8 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
   padding: 3px 8px; border-radius: 999px; font-size: 8.5px; font-weight: 900;
   text-transform: uppercase; letter-spacing: .1em;
 }
-.cq-polarity-tag.cq-polarity-positive { background: var(--mint); color: var(--green); }
-.cq-polarity-tag.cq-polarity-neutral { background: #fff3c4; color: #8a761d; }
+.cq-polarity-tag.cq-polarity-positive { background: var(--mint); color: var(--pos-ink); }
+.cq-polarity-tag.cq-polarity-neutral { background: #fff3c4; color: var(--neu-ink); }
 .cq-polarity-tag.cq-polarity-negative { background: #f9e3e0; color: #a12f25; }
 .cq3-bars { display: grid; gap: 5px; }
 .cq3-bar-row {
@@ -1125,8 +1131,8 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 }
 .cq-graph-svg:active { cursor: grabbing; }
 .cq-graph-sector { font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.cq-graph-sector-positive { fill: var(--green); }
-.cq-graph-sector-neutral { fill: #8a761d; }
+.cq-graph-sector-positive { fill: var(--pos-ink); }
+.cq-graph-sector-neutral { fill: var(--neu-ink); }
 .cq-graph-sector-negative { fill: #a12f25; }
 .cq-graph-sector-paradigmatic { fill: #6d7b75; }
 .cq-graph-entry circle { fill: #2d3a34; stroke: #fff; stroke-width: 2.5; }
@@ -1142,8 +1148,8 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .cq-graph-node { cursor: pointer; }
 .cq-graph-node text { font-size: 9.5px; fill: #2d3a34; }
 .cq-graph-node circle { stroke: #fff; stroke-width: 1.5; transition: opacity .15s ease; }
-.cq-graph-node-positive circle { fill: var(--green); }
-.cq-graph-node-neutral circle { fill: #ffdb58; }
+.cq-graph-node-positive circle { fill: var(--pos-fill); }
+.cq-graph-node-neutral circle { fill: var(--neu-fill); }
 .cq-graph-node-negative circle { fill: #a12f25; }
 .cq-graph-node-paradigmatic circle { fill: #8d9a94; stroke-dasharray: 2.5 1.8; }
 .cq-graph-node.selected circle { stroke: #1f2b26; stroke-width: 2.5; }
@@ -1163,8 +1169,8 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .cq-graph-tooltip p { margin: 0; color: #3c4a44; font-size: 11.5px; line-height: 1.45; }
 .cq-graph-tooltip-title { margin-bottom: 4px !important; color: #1f2b26 !important; font-size: 12.5px !important; font-weight: 900; }
 .cq-graph-tooltip-edge { border-left: 3px solid #9fb8ab; }
-.cq-graph-tooltip-positive { border-left: 3px solid var(--green); }
-.cq-graph-tooltip-neutral { border-left: 3px solid #ffdb58; }
+.cq-graph-tooltip-positive { border-left: 3px solid var(--pos-fill); }
+.cq-graph-tooltip-neutral { border-left: 3px solid var(--neu-fill); }
 .cq-graph-tooltip-negative { border-left: 3px solid #a12f25; }
 .cq-graph-tooltip-paradigmatic { border-left: 3px solid #8d9a94; }
 
