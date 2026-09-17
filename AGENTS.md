@@ -350,10 +350,11 @@ delete, reload.
   "Paradigmatici" (i concetti paradigmatici non hanno polarità nel lessico).
   Layout radiale deterministico (anelli, nessun force), parametri interni
   soglia 1 / Top-K 5 vicini / Top-8 nodi per settore con nota dei non mostrati.
-  Interazioni: layer di hit invisibile (16 px) per gli archi; hover arco/nodo con
-  tooltip + illuminazione di arco/nodi collegati (hover nodo = nodo + archi
-  incidenti + vicini); click sull'arco fissa il tooltip (×, click sfondo, Esc,
-  riclick per chiudere) e l'evidenza, senza toccare la selezione; click nodo →
+  Interazioni: layer di hit invisibile (16 px) per gli archi; hover arco/nodo =
+  SOLO illuminazione del sottografo (hover nodo = nodo + archi incidenti + vicini),
+  niente tooltip per non coprire l'evidenza; tooltip solo al click, agganciato
+  nell'angolo alto-destro del pannello (×, click sfondo, Esc, riclick per
+  chiudere) insieme all'evidenza; click sull'arco non tocca la selezione; click nodo →
   concept detail + passaggi; «Evidenzia concetti co-occorrenti» dal dettaglio;
   zoom/pan/Adatta; «Torna alla lista»; sort nascosto nel grafo (v0.22.1–v0.22.2). Dettagli in
   `queries/DECISIONS.md` (sezione Network Graph CQ1).

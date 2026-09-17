@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dictionaries, type Lang } from "../strings";
 import {
   type CqEntry,
@@ -85,8 +85,6 @@ interface GraphPayload {
 }
 
 interface GraphTooltip {
-  x: number;
-  y: number;
   title: string;
   lines: string[];
   tone: string;
@@ -308,10 +306,9 @@ export function Cq1NetworkGraph({
   const [payload, setPayload] = useState<GraphPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [hoverTooltip, setHoverTooltip] = useState<GraphTooltip | null>(null);
   const [pinnedTooltip, setPinnedTooltip] = useState<GraphTooltip | null>(null);
   const [hoverTarget, setHoverTarget] = useState<{ kind: "edge" | "node"; key: string } | null>(null);
-  const [pinnedEdge, setPinnedEdge] = useState<string | null>(null);
+  const [pinnedTarget, setPinnedTarget] = useState<{ kind: "edge" | "node"; key: string } | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -335,10 +332,9 @@ export function Cq1NetworkGraph({
         }
         if (cancelled) return;
         setPayload(buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts }));
-        setPinnedEdge(null);
+        setPinnedTarget(null);
         setPinnedTooltip(null);
         setHoverTarget(null);
-        setHoverTooltip(null);
       } catch (caught) {
         if (!cancelled) setError(caught instanceof Error ? caught.message : t.cq1.loading);
       } finally {
@@ -381,8 +377,10 @@ export function Cq1NetworkGraph({
   }, [payload]);
 
   const pinnedEdgeData = useMemo(
-    () => (pinnedEdge ? (payload?.edges ?? []).find((edge) => edgeKeyOf(edge) === pinnedEdge) ?? null : null),
-    [payload, pinnedEdge],
+    () => (pinnedTarget?.kind === "edge"
+      ? (payload?.edges ?? []).find((edge) => edgeKeyOf(edge) === pinnedTarget.key) ?? null
+      : null),
+    [payload, pinnedTarget],
   );
 
   const hoverEdgeData = useMemo(
@@ -397,8 +395,11 @@ export function Cq1NetworkGraph({
     if (edge) {
       return { nodes: new Set([edge.a, edge.b]), edges: new Set([edgeKeyOf(edge)]), accent: true };
     }
-    if (hoverTarget?.kind === "node") {
-      const concept = hoverTarget.key;
+    const activeNode = pinnedTarget?.kind === "node"
+      ? pinnedTarget.key
+      : hoverTarget?.kind === "node" ? hoverTarget.key : null;
+    if (activeNode) {
+      const concept = activeNode;
       const incident = (payload?.edges ?? []).filter((item) => item.a === concept || item.b === concept);
       const nodes = new Set<string>([concept]);
       for (const item of incident) {
@@ -420,7 +421,7 @@ export function Cq1NetworkGraph({
       return { nodes, edges, accent: false };
     }
     return null;
-  }, [pinnedEdgeData, hoverEdgeData, hoverTarget, highlightConcept, neighbors, payload]);
+  }, [pinnedEdgeData, hoverEdgeData, hoverTarget, pinnedTarget, highlightConcept, neighbors, payload]);
 
   const nodeLines = useCallback((node: GraphNode) => {
     const lines: string[] = [];
@@ -438,54 +439,37 @@ export function Cq1NetworkGraph({
         lines.push(`${nodeByConcept.get(item.concept)?.label ?? item.concept} · ${item.weight.toLocaleString(numberLocale)}`);
       }
     }
-    lines.push(t.cq1.graphNodeHint);
     return lines;
   }, [neighbors, nodeByConcept, numberLocale, t]);
 
-  const tooltipPosition = (event: ReactMouseEvent) => {
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    const width = rect?.width ?? 900;
-    const x = event.clientX - (rect?.left ?? 0);
-    const y = event.clientY - (rect?.top ?? 0);
-    return { x: Math.min(Math.max(x + 14, 8), Math.max(8, width - 268)), y: y + 14 };
-  };
-
-  const showHoverTooltip = (event: ReactMouseEvent, title: string, lines: string[], tone: string) => {
-    if (pinnedEdge) return;
-    setHoverTooltip({ ...tooltipPosition(event), title, lines, tone });
-  };
-
   const clearHover = () => {
     setHoverTarget(null);
-    setHoverTooltip(null);
   };
 
-  const togglePin = (event: ReactMouseEvent, key: string, title: string, lines: string[], tone: string) => {
+  const togglePin = (kind: "edge" | "node", key: string, title: string, lines: string[], tone: string) => {
     if (dragRef.current.moved) return;
-    if (pinnedEdge === key) {
-      setPinnedEdge(null);
+    if (pinnedTarget?.kind === kind && pinnedTarget.key === key) {
+      setPinnedTarget(null);
       setPinnedTooltip(null);
       return;
     }
-    setPinnedEdge(key);
-    setPinnedTooltip({ ...tooltipPosition(event), title, lines, tone });
-    setHoverTarget(null);
-    setHoverTooltip(null);
+    setPinnedTarget({ kind, key });
+    setPinnedTooltip({ title, lines, tone });
   };
 
   const unpin = () => {
-    setPinnedEdge(null);
+    setPinnedTarget(null);
     setPinnedTooltip(null);
   };
 
   useEffect(() => {
-    if (!pinnedEdge) return;
+    if (!pinnedTarget) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") unpin();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [pinnedEdge]);
+  }, [pinnedTarget]);
 
   if (loading) return <p className="cq-status">{t.cq1.graphLoading}</p>;
   if (error) return <p className="cq-status cq-status-error">{t.cq1.errorPrefix}{error}</p>;
@@ -493,8 +477,6 @@ export function Cq1NetworkGraph({
 
   const maxRadius = payload.nodes.reduce((max, node) => Math.max(max, Math.hypot(node.x, node.y)), ringBaseRadius);
   const labelRadius = maxRadius + 46;
-  const visibleTooltip = hoverTooltip ?? pinnedTooltip;
-  const tooltipPinned = !hoverTooltip && Boolean(pinnedTooltip);
 
   return (
     <div className="cq-graph" ref={wrapperRef}>
@@ -546,7 +528,7 @@ export function Cq1NetworkGraph({
         }}
         onPointerLeave={() => { dragRef.current.active = false; }}
         onClick={(event) => {
-          if (event.target !== event.currentTarget || !pinnedEdge) return;
+          if (event.target !== event.currentTarget || !pinnedTarget) return;
           unpin();
         }}
       >
@@ -599,14 +581,12 @@ export function Cq1NetworkGraph({
                 <path
                   className="cq-graph-edge-hit"
                   d={path}
-                  onMouseEnter={(event) => {
-                    if (pinnedEdge) return;
+                  onMouseEnter={() => {
+                    if (pinnedTarget) return;
                     setHoverTarget({ kind: "edge", key });
-                    showHoverTooltip(event, title, lines, "edge");
                   }}
-                  onMouseMove={(event) => showHoverTooltip(event, title, lines, "edge")}
-                  onMouseLeave={() => { if (!pinnedEdge) clearHover(); }}
-                  onClick={(event) => togglePin(event, key, title, lines, "edge")}
+                  onMouseLeave={() => { if (!pinnedTarget) clearHover(); }}
+                  onClick={() => togglePin("edge", key, title, lines, "edge")}
                 />
               </g>
             );
@@ -634,12 +614,10 @@ export function Cq1NetworkGraph({
                   lit ? "lit" : "",
                   dimmed ? "dimmed" : "",
                 ].filter(Boolean).join(" ")}
-                onMouseEnter={(event) => {
-                  if (pinnedEdge) return;
+                onMouseEnter={() => {
+                  if (pinnedTarget) return;
                   setHoverTarget({ kind: "node", key: node.concept });
-                  showHoverTooltip(event, node.label, nodeLines(node), node.polarity ?? "paradigmatic");
                 }}
-                onMouseMove={(event) => showHoverTooltip(event, node.label, nodeLines(node), node.polarity ?? "paradigmatic")}
                 onMouseLeave={clearHover}
                 onClick={() => {
                   if (dragRef.current.moved) return;
@@ -649,6 +627,7 @@ export function Cq1NetworkGraph({
                     kind: node.kind,
                     polarity: node.polarity,
                   });
+                  togglePin("node", node.concept, node.label, nodeLines(node), node.polarity ?? "paradigmatic");
                 }}
               >
                 <circle cx={node.x} cy={node.y} r={node.radius} />
@@ -663,27 +642,18 @@ export function Cq1NetworkGraph({
 
       {payload.edges.length === 0 && <p className="cq-panel-empty">{t.cq1.graphNoEdges}</p>}
 
-      {visibleTooltip && (
-        <div
-          className={`cq-graph-tooltip cq-graph-tooltip-${visibleTooltip.tone}${tooltipPinned ? " pinned" : ""}`}
-          style={{
-            left: visibleTooltip.x,
-            top: visibleTooltip.y,
-          }}
-          role="tooltip"
-        >
-          {tooltipPinned && (
-            <button
-              type="button"
-              className="cq-graph-tooltip-close"
-              aria-label={t.cq1.graphTooltipClose}
-              onClick={unpin}
-            >
-              ×
-            </button>
-          )}
-          <p className="cq-graph-tooltip-title">{visibleTooltip.title}</p>
-          {visibleTooltip.lines.map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}
+      {pinnedTooltip && (
+        <div className={`cq-graph-tooltip pinned cq-graph-tooltip-${pinnedTooltip.tone}`} role="tooltip">
+          <button
+            type="button"
+            className="cq-graph-tooltip-close"
+            aria-label={t.cq1.graphTooltipClose}
+            onClick={unpin}
+          >
+            ×
+          </button>
+          <p className="cq-graph-tooltip-title">{pinnedTooltip.title}</p>
+          {pinnedTooltip.lines.map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}
         </div>
       )}
     </div>

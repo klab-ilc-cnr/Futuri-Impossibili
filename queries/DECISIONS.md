@@ -305,13 +305,15 @@ vicini e archi, attenua il resto, reversibile); zoom (rotella, 0.4–4×) + pan 
   `pointer-events: stroke`, cursore pointer) sopra il path visibile, che resta
   `pointer-events: none`; gli hit stanno sotto i nodi. L'encoding dello spessore
   non cambia.
-- **Evidenza su hover** (arco **e** nodo): l'elemento in hover + i nodi collegati
-  si "illuminano" (arco più marcato, anello sui nodi) e il resto viene attenuato.
-  Hover su nodo = nodo + archi incidenti + vicini.
-- **Tooltip fissato su click** (persistente): resta finché non lo si chiude con
-  click sullo stesso arco, click sullo sfondo, Esc o la ×; non segue il mouse
-  (posizione fissa al punto del click). Mentre è fissato, l'hover altrove non lo
-  sostituisce (scelta 1a): restano tooltip ed evidenza dell'arco fissato.
+- **Hover = solo evidenza, niente tooltip** (v0.22.3): l'elemento in hover + i
+  nodi collegati si "illuminano" (arco più marcato, anello sui nodi) e il resto
+  viene attenuato; il tooltip non appare, per non coprire il sottografo
+  evidenziato. Hover su nodo = nodo + archi incidenti + vicini.
+- **Tooltip solo al click** (v0.22.3), agganciato nell'angolo alto-destro del
+  pannello (dove il grafo radiale non arriva) e non al punto del click, così non
+  copre nodi/archi. Vale per archi e nodi; resta finché non lo si chiude con
+  click sullo stesso elemento, click sullo sfondo, Esc o la ×. Mentre è fissato,
+  l'hover altrove non lo sostituisce (scelta 1a) e l'evidenza resta.
 - Precedenza evidenze: arco attivo (hover/fissato) > highlight del concetto
   selezionato > nessuna. Il click sull'arco non modifica la selezione del concetto.
 
