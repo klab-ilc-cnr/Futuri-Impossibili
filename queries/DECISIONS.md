@@ -314,6 +314,12 @@ vicini e archi, attenua il resto, reversibile); zoom (rotella, 0.4–4×) + pan 
   copre nodi/archi. Vale per archi e nodi; resta finché non lo si chiude con
   click sullo stesso elemento, click sullo sfondo, Esc o la ×. Mentre è fissato,
   l'hover altrove non lo sostituisce (scelta 1a) e l'evidenza resta.
+- **Pulsante «Evidenzia concetti co-occorrenti» (v0.22.6)**: mostrato **solo in
+  vista Lista** (è il ponte lista→grafo con il vicinato già evidenziato, non
+  essendoci hover nella lista); in vista Grafo è nascosto perché ridondante (il
+  click sul nodo fa lo stesso). Per togliere l'evidenza in grafo resta il
+  pulsante «Rimuovi evidenziazione» nella barra del grafo. L'azione resta nel
+  pannello dettaglio come da specifica §12.
 - Precedenza evidenze: arco attivo (hover/fissato) > highlight del concetto
   selezionato > nessuna. Il click sull'arco non modifica la selezione del concetto.
 - **Bug del pointer capture (v0.22.5)**: il `pointerdown` sull'SVG catturava

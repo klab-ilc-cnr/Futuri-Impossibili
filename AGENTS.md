@@ -357,7 +357,9 @@ delete, reload.
   niente tooltip per non coprire l'evidenza; tooltip solo al click, agganciato
   nell'angolo alto-destro del pannello (×, click sfondo, Esc, riclick per
   chiudere) insieme all'evidenza; click sull'arco non tocca la selezione; click nodo →
-  concept detail + passaggi; «Evidenzia concetti co-occorrenti» dal dettaglio;
+  concept detail + passaggi; «Evidenzia concetti co-occorrenti» dal dettaglio
+  (v0.22.6: mostrato solo in vista Lista, ponte lista→grafo; in grafo è
+  ridondante col click sul nodo);
   zoom/pan/Adatta; «Torna alla lista»; sort nascosto nel grafo (v0.22.1–v0.22.2). Dettagli in
   `queries/DECISIONS.md` (sezione Network Graph CQ1).
 - **Proxy SPARQL**: `POST /api/lexo/cq/[queryId]` (`app/api/lexo/cq/[queryId]/route.ts`)

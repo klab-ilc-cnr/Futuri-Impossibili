@@ -685,16 +685,18 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
                   {selectedConcept.kind === "paradigmatic" && (
                     <p className="cq-detail-note">{t.cq1.detailParadigmaticNote}</p>
                   )}
-                  <button
-                    type="button"
-                    className="cq-show-toggle"
-                    onClick={() => {
-                      setViewMode("graph");
-                      setGraphHighlight((current) => (current === selectedConcept.concept ? null : selectedConcept.concept));
-                    }}
-                  >
-                    {graphHighlight === selectedConcept.concept ? t.cq1.clearHighlight : t.cq1.highlightCooccurring}
-                  </button>
+                  {viewMode === "list" && (
+                    <button
+                      type="button"
+                      className="cq-show-toggle"
+                      onClick={() => {
+                        setViewMode("graph");
+                        setGraphHighlight(selectedConcept.concept);
+                      }}
+                    >
+                      {t.cq1.highlightCooccurring}
+                    </button>
+                  )}
                 </>
               )}
             </article>
