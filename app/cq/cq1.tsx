@@ -23,6 +23,7 @@ import {
   referringConceptProperty,
   textsEndpoint,
 } from "./shared";
+import { Cq1NetworkGraph, type Cq1GraphSelection } from "./cq1-graph";
 
 
 const panelTruncation = 8;
@@ -90,6 +91,9 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
   const [polarities, setPolarities] = useState<Set<CqPolarity>>(new Set(polarityOrder));
   const [sort, setSort] = useState<SortMode>("interviewees");
 
+  const [viewMode, setViewMode] = useState<"list" | "graph">("list");
+  const [graphHighlight, setGraphHighlight] = useState<string | null>(null);
+
   const [narrative, setNarrative] = useState<NarrativeConcept[]>([]);
   const [paradigmatic, setParadigmatic] = useState<ParadigmaticConcept[]>([]);
   const [conceptsLoading, setConceptsLoading] = useState(false);
@@ -111,6 +115,7 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
     setPassages([]);
     setDetailsError("");
     setShowAllPanels({});
+    setGraphHighlight(null);
     setSelectedEntry(entry);
   }, []);
 
@@ -491,15 +496,39 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
           </div>
         </div>
 
-        <label className="cq-control">
-          <span>{t.cq1.sortLabel}</span>
-          <select value={sort} onChange={(event) => setSort(event.target.value as SortMode)}>
-            <option value="interviewees">{t.cq1.sortInterviewees}</option>
-            <option value="occurrences">{t.cq1.sortOccurrences}</option>
-            <option value="az">{t.cq1.sortAZ}</option>
-            <option value="za">{t.cq1.sortZA}</option>
-          </select>
-        </label>
+        <div className="cq-control">
+          <span>{t.cq1.viewLabel}</span>
+          <div className="cq-view-toggle">
+            <button
+              type="button"
+              className={viewMode === "list" ? "active" : ""}
+              aria-pressed={viewMode === "list"}
+              onClick={() => setViewMode("list")}
+            >
+              {t.cq1.viewList}
+            </button>
+            <button
+              type="button"
+              className={viewMode === "graph" ? "active" : ""}
+              aria-pressed={viewMode === "graph"}
+              onClick={() => setViewMode("graph")}
+            >
+              {t.cq1.viewGraph}
+            </button>
+          </div>
+        </div>
+
+        {viewMode === "list" && (
+          <label className="cq-control">
+            <span>{t.cq1.sortLabel}</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value as SortMode)}>
+              <option value="interviewees">{t.cq1.sortInterviewees}</option>
+              <option value="occurrences">{t.cq1.sortOccurrences}</option>
+              <option value="az">{t.cq1.sortAZ}</option>
+              <option value="za">{t.cq1.sortZA}</option>
+            </select>
+          </label>
+        )}
       </div>
 
       {entriesLoading && <p className="cq-status">{t.cq1.entryLoading}</p>}
@@ -510,6 +539,25 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
       {selectedEntry && !conceptsLoading && !conceptsError && (
         <div className="cq-analysis-layout">
           <div className="cq-analysis-main">
+            {viewMode === "graph" ? (
+              <Cq1NetworkGraph
+                entry={selectedEntry}
+                narrative={narrative}
+                paradigmatic={paradigmatic}
+                polarities={polarities}
+                lang={lang}
+                selectedConcept={selectedConcept}
+                highlightConcept={graphHighlight}
+                ensureCaches={ensureCaches}
+                onSelectConcept={(selection: Cq1GraphSelection) => {
+                  setSelectedConcept(selection);
+                  setGraphHighlight(null);
+                }}
+                onClearHighlight={() => setGraphHighlight(null)}
+                onBackToList={() => setViewMode("list")}
+              />
+            ) : (
+            <>
             <div
               className="cq-polarity-grid"
               style={{ gridTemplateColumns: `repeat(${polarities.size}, minmax(0, 1fr))` }}
@@ -536,6 +584,8 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
                 </ul>
               )}
             </article>
+            </>
+            )}
           </div>
 
           <aside className="cq-analysis-side">
@@ -635,6 +685,16 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
                   {selectedConcept.kind === "paradigmatic" && (
                     <p className="cq-detail-note">{t.cq1.detailParadigmaticNote}</p>
                   )}
+                  <button
+                    type="button"
+                    className="cq-show-toggle"
+                    onClick={() => {
+                      setViewMode("graph");
+                      setGraphHighlight((current) => (current === selectedConcept.concept ? null : selectedConcept.concept));
+                    }}
+                  >
+                    {graphHighlight === selectedConcept.concept ? t.cq1.clearHighlight : t.cq1.highlightCooccurring}
+                  </button>
                 </>
               )}
             </article>

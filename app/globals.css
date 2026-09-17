@@ -1099,3 +1099,79 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 
 .cq-card.clickable { cursor: pointer; }
 .cq-card.clickable:focus-visible { outline: 2px solid #86d2ae; outline-offset: 2px; }
+
+/* --- CQ1 network graph --- */
+.cq-graph {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+.cq-graph-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cq-graph-note { color: var(--muted); font-size: 11.5px; font-style: italic; }
+.cq-graph-svg {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  background: radial-gradient(circle at 50% 50%, #fbfdfb 0%, #f4f8f5 72%, #eef4ef 100%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.cq-graph-svg:active { cursor: grabbing; }
+.cq-graph-sector { font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.cq-graph-sector-positive { fill: var(--green); }
+.cq-graph-sector-neutral { fill: #8a761d; }
+.cq-graph-sector-negative { fill: #a12f25; }
+.cq-graph-sector-paradigmatic { fill: #6d7b75; }
+.cq-graph-entry circle { fill: #2d3a34; stroke: #fff; stroke-width: 2.5; }
+.cq-graph-entry text { fill: #fff; font-size: 10.5px; font-weight: 800; }
+.cq-graph-edge {
+  fill: none;
+  stroke: #9fb8ab;
+  stroke-linecap: round;
+  pointer-events: stroke;
+  transition: opacity .15s ease;
+}
+.cq-graph-edge.dimmed { opacity: .08 !important; }
+.cq-graph-node { cursor: pointer; }
+.cq-graph-node text { font-size: 9.5px; fill: #2d3a34; }
+.cq-graph-node circle { stroke: #fff; stroke-width: 1.5; transition: opacity .15s ease; }
+.cq-graph-node-positive circle { fill: var(--green); }
+.cq-graph-node-neutral circle { fill: #ffdb58; }
+.cq-graph-node-negative circle { fill: #a12f25; }
+.cq-graph-node-paradigmatic circle { fill: #8d9a94; stroke-dasharray: 2.5 1.8; }
+.cq-graph-node.selected circle { stroke: #1f2b26; stroke-width: 2.5; }
+.cq-graph-node.dimmed { opacity: .18; }
+.cq-graph-node:hover text { font-weight: 800; }
+.cq-graph-tooltip {
+  position: absolute;
+  z-index: 40;
+  max-width: 256px;
+  padding: 9px 11px;
+  border: 1px solid #cfd8d2;
+  border-radius: 10px;
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 14px 34px rgba(30,48,41,.18);
+  pointer-events: none;
+}
+.cq-graph-tooltip p { margin: 0; color: #3c4a44; font-size: 11.5px; line-height: 1.45; }
+.cq-graph-tooltip-title { margin-bottom: 4px !important; color: #1f2b26 !important; font-size: 12.5px !important; font-weight: 900; }
+.cq-graph-tooltip-edge { border-left: 3px solid #9fb8ab; }
+.cq-graph-tooltip-positive { border-left: 3px solid var(--green); }
+.cq-graph-tooltip-neutral { border-left: 3px solid #ffdb58; }
+.cq-graph-tooltip-negative { border-left: 3px solid #a12f25; }
+.cq-graph-tooltip-paradigmatic { border-left: 3px solid #8d9a94; }
+
+.cq-view-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.cq-view-toggle button {
+  border: 0; background: #fff; padding: 6px 14px; font: inherit; font-size: 12px;
+  font-weight: 800; color: var(--muted); cursor: pointer;
+}
+.cq-view-toggle button + button { border-left: 1px solid var(--line); }
+.cq-view-toggle button.active { background: var(--green); color: #fff; }

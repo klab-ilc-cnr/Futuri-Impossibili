@@ -1,7 +1,7 @@
 # DECISIONS.md — Schermate di ricerca NARRALEX (CQ1–CQ3)
 
 Stato: **M1–M4 + CQ3 implementate (v0.21.0)** — pannello iniziale, ponte SPARQL,
-CQ1, CQ2 e CQ3 completi (client-side). Rinviate: network graph CQ1
+CQ1, CQ2, CQ3 e network graph CQ1 completi (client-side). Rinviate: query
 (manca la query di co-occorrenze).
 Fonti: `queries/00_pannello_iniziale.md`, `01_cq1_concepts_by_polarity.md`,
 `02_cq2_corpus_evidence.md`, `03_cq3_speaker_variation.md` e le SPARQL
@@ -158,15 +158,14 @@ Fonti: `queries/00_pannello_iniziale.md`, `01_cq1_concepts_by_polarity.md`,
 | CQ | Stato | Note |
 |----|-------|------|
 | Pannello iniziale | fattibile subito | Nessun dato lessicale richiesto; SPARQL come stringhe statiche (solo preview) |
-| CQ1 – Concepts by polarity | fattibile in parte | Query narrative + paradigmatiche consegnate; **network graph e co-occorrenze RINViate**; breakdown età/genere derivabile client-side da `concept_detail` |
+| CQ1 – Concepts by polarity | completo | Query narrative + paradigmatiche consegnate; **network graph implementato** (v0.22.0, client-side, § specifica `queries/04_network_graph.md`); breakdown età/genere derivabile client-side da `concept_detail` |
 | CQ2 – Corpus evidence | fattibile in parte | Parametri entry+polarity coperti; testo passaggio via servizi esistenti (da studiare); `Sort by` da definire |
 | CQ3 – Speaker variation | **RINVIATA** | Manca la query SPARQL centrale (intervistati distinti per concetto × età × sesso) e i denominatori; si riparte appena consegnate |
 
 ### Attività rinviate
 1. **CQ3**: nessuna implementazione senza la SPARQL mancante.
-2. **Network graph CQ1**: rinviate le query di co-occorrenza; se non arriveranno,
-   le creeremo noi in un secondo momento. Layout radiale (clustering per polarità,
-   zero dipendenze) resta la decisione di design quando si farà.
+2. ~~**Network graph CQ1**~~: risolto in v0.22.0 **senza query di co-occorrenza** —
+   calcolata client-side dalle cache esistenti + testo canonico (dettagli sotto).
 
 ## Decisioni prese
 
@@ -249,3 +248,66 @@ Fonti: `queries/00_pannello_iniziale.md`, `01_cq1_concepts_by_polarity.md`,
    per network graph (entrambe rinviate come scope, ma da consegnare).
 3. Possibilità di estendere `concept_detail.sparql` con value/offset del
    passaggio (in alternativa: idratazione client-side via servizi esistenti).
+
+## Network Graph CQ1 (v0.22.0)
+
+Implementato secondo `queries/04_network_graph.md`, **senza nuove query SPARQL e
+senza nuovi endpoint**: la co-occorrenza è calcolata client-side.
+
+### Perché client-side è possibile (ricognizione sui dati reali)
+- Il payload `/service/attestations/{fileId}` espone già la mappa attestazione→concetto:
+  - **narrativa**: `observable` = IRI del concetto (`observableTypes` contiene
+    `ontolex#LexicalConcept`), `rdfs:comment` = termine della entry;
+  - **paradigmatica**: `observable` = sense della entry, `referringConcept` = concetto.
+  Sui dati di test **0 attestazioni non attribuite**: nessun match per etichetta,
+  nessuna ambiguità.
+- `texts/corpus` fornisce il testo canonico di tutti i documenti (53/53 nei test):
+  da lì si ricavano i **turni di risposta**.
+
+### Unità di co-occorrenza: turno di risposta (non frase)
+I testi hanno ogni riga etichettata `Intervistato:` / `Intervistatore:`.
+Decisione del team: "frase" = **risposta completa dell'intervistato a un quesito**,
+non la singola frase. Regola implementata (`buildRespondentTurns` in `shared.ts`):
+unità = sequenza massima di righe consecutive dell'intervistato (le righe senza
+prefisso ereditano il parlante precedente; le righe dell'intervistatore chiudono
+l'unità); un'attestazione appartiene al turno in cui **inizia** il suo span.
+Nessuna fusione attraverso backchannel brevi (regola semplice, decisa dal team).
+Se il testo manca → **fallback documento** (unità dichiarata nel tooltip).
+Sui dati di test: ~12.7 turni di risposta per intervista, **359/359 attestazioni
+dentro un turno dell'intervistato**. Densità risultante (es. femmina): 87 archi /
+18 nodi isolati (contro 54/24 a livello frase e 176/2 a livello documento).
+
+### Topologia e nodi
+- Entry al centro come **ancora visiva** (non nodo di co-occorrenza).
+- Settori per polarità (dalla selezione CQ1) + **quarto settore grigio
+  "Paradigmatici"**: i concetti paradigmatici non hanno polarità nel lessico
+  (verificato: 0/18 con `hasPolarity`), quindi non possono stare nei tre settori
+  colorati. I concetti presenti in entrambe le liste sono deduplicati (vince il
+  narrativo, che ha la polarità).
+- Peso arco = conteggio grezzo dei turni condivisi; nessuna Jaccard/PMI (§7).
+- Leggibilità (**parametri interni, nessun pannello filtri**): soglia peso ≥1,
+  **Top-K = 5** vicini più forti per nodo, **Top-8 nodi per settore** (con nota
+  "N concetti non mostrati"). Pesi reali minuscoli (max 2–3): lo spessore è
+  quasi-lineare con arrotondamento visivo.
+- Layout **radiale deterministico**: anelli concentrici per settore, nodi ordinati
+  per occorrenze decrescenti, angoli calcolati da `{start,end}` dell'attestazione
+  e dalla lista turni (ricerca binaria) — nessun force layout.
+
+### Interazioni
+Click nodo → concept detail + tabella passaggi (stessi stati CQ1, nessuna seconda
+implementazione); hover nodo/arco → tooltip (tooltip arco: forza, unità usata,
+documenti); "Highlight co-occurring concepts" dal pannello dettaglio (evidenzia
+vicini e archi, attenua il resto, reversibile); zoom (rotella, 0.4–4×) + pan +
+"Adatta"; "Torna alla lista". In modalità grafo il sort è nascosto (§11).
+
+### Costi accettati
+`texts/corpus` caricato **solo alla prima apertura della vista Grafo** (~120 KB
+nei test), cache per montaggio del componente; resta il rischio noto di memoria
+proporzionale al corpus (già accettato per CQ2/CQ3).
+
+### Punti aperti (rimandati, come da §18 della specifica)
+- raffinamento soglia/Top-K/Top-N dopo valutazione visiva del team;
+- fusione dei turni interrotti da backchannel brevi;
+- evoluzione a finestra di caratteri dagli offset (alternativa C);
+- comportamento con 1/2 polarità selezionate (al momento: distribuzione uniforme
+  dei settori visibili).

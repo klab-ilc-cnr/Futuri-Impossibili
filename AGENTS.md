@@ -288,7 +288,7 @@ delete, reload.
   Known cosmetic leftovers: data-complete left contexts clipped by CSS show no dots;
   single-context rows ellipsize ~1em early. `title` always carries the full row text.
 
-## Competency Questions — Area «Interrogazioni» (v0.18.0 – v0.21.5)
+## Competency Questions — Area «Interrogazioni» (v0.18.0 – v0.22.0)
 
 - Nav item esistente «Interrogazioni/Queries» (index 3): `activePage === 3` renderizza
   `CqPanel` (`app/cq/panel.tsx`), il primo componente estratto dal monolite `page.tsx`.
@@ -299,7 +299,7 @@ delete, reload.
   prima), chips polarità (multi-toggle, min 1), sort (Intervistati/Occorrenze/A–Z/Z–A),
   pannelli polarità + pannello paradigmatico (barre, troncamento a 8), donut SVG
   Distribuzione complessiva, dettaglio concetto e tabella passaggi con esportazione CSV.
-  Network graph riviato (manca la query co-occorrenze). I concetti paradigmatici non usano
+  Network graph completato in v0.22.0 client-side (nessuna query co-occorrenze). I concetti paradigmatici non usano
   la SPARQL di dettaglio: dettagli e passaggi calcolati client-side dalla cache
   `attestations/corpus` (observable ∈ senses dell'entry + `referringConcept`), demografia
   (età/sesso/residenza) parsed dalle description con le stesse regex della SPARQL.
@@ -340,6 +340,20 @@ delete, reload.
   il pannello (il pulsante «Apri pannello di analisi» della specifica 00 è
   stato rimosso su richiesta; resta «Visualizza query» con stopPropagation;
   card role=button, Enter/Spazio).
+- **Network graph CQ1 (v0.22.0)**: `app/cq/cq1-graph.tsx` — vista `Lista | Grafo`
+  alternativa nella CQ1 (nessun routing, nessuna query nuova: co-occorrenze
+  calcolate client-side). Attestazione→concetto diretta (narrativa `observable`
+  = concetto; paradigmatica `referringConcept`). Unità = **turno di risposta
+  dell'intervistato** (`buildRespondentTurns` in `shared.ts`: righe etichettate
+  `Intervistato:`/`Intervistatore:`, fallback documento); `texts/corpus` caricato
+  solo all'apertura del grafo. Settori per polarità + settore grigio
+  "Paradigmatici" (i concetti paradigmatici non hanno polarità nel lessico).
+  Layout radiale deterministico (anelli, nessun force), parametri interni
+  soglia 1 / Top-K 5 vicini / Top-8 nodi per settore con nota dei non mostrati.
+  Interazioni: hover nodo/arco con tooltip (forza, unità, documenti), click nodo →
+  concept detail + passaggi, «Evidenzia concetti co-occorrenti» dal dettaglio,
+  zoom/pan/Adatta, «Torna alla lista», sort nascosto nel grafo. Dettagli in
+  `queries/DECISIONS.md` (sezione Network Graph CQ1).
 - **Proxy SPARQL**: `POST /api/lexo/cq/[queryId]` (`app/api/lexo/cq/[queryId]/route.ts`)
   esegue SOLO le query SELECT template in `app/cq/sparql.ts` (fedeli alle tre SPARQL
   consegnate, parametrizzate via `{{TOKEN}}`) contro GraphDB

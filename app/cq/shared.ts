@@ -219,6 +219,37 @@ export function kwicContext(text: string, start: number, end: number): [string, 
   ];
 }
 
+const speakerLinePattern = /^\s*(Intervistato|Intervistatore)\s*:/i;
+
+export interface TextTurn {
+  start: number;
+  end: number;
+}
+
+export function buildRespondentTurns(text: string): TextTurn[] {
+  if (!text) return [];
+  const turns: TextTurn[] = [];
+  let speaker: "respondent" | "interviewer" | "" = "";
+  let open = false;
+  let offset = 0;
+  for (const line of text.split("\n")) {
+    const lineStart = offset;
+    const lineEnd = lineStart + line.length;
+    offset = lineEnd + 1;
+    const match = speakerLinePattern.exec(line);
+    if (match) speaker = match[1].toLowerCase() === "intervistato" ? "respondent" : "interviewer";
+    if (speaker === "respondent") {
+      const last = turns[turns.length - 1];
+      if (open && last) last.end = lineEnd;
+      else turns.push({ start: lineStart, end: lineEnd });
+      open = true;
+    } else {
+      open = false;
+    }
+  }
+  return turns;
+}
+
 export function downloadCsv(filename: string, header: string[], rows: string[][]) {
   const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
   const lines = [header.map(escapeCell).join(";"), ...rows.map((row) => row.map(escapeCell).join(";"))];
