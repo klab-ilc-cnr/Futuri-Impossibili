@@ -504,6 +504,7 @@ export function Cq1NetworkGraph({
         role="img"
         aria-label={t.cq1.graphTitle}
         onPointerDown={(event) => {
+          if (event.target !== event.currentTarget) return;
           dragRef.current = {
             active: true,
             moved: false,

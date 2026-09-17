@@ -350,7 +350,9 @@ delete, reload.
   "Paradigmatici" (i concetti paradigmatici non hanno polarità nel lessico).
   Layout radiale deterministico (anelli, nessun force), parametri interni
   soglia 1 / Top-K 5 vicini / Top-8 nodi per settore con nota dei non mostrati.
-  Interazioni: layer di hit invisibile (16 px) per gli archi; hover arco/nodo =
+  Interazioni: layer di hit invisibile (16 px) per gli archi; il pointer capture
+  per il pan avviene solo se il pointerdown parte dallo sfondo (altrimenti si
+  mangiava i click su nodi/archi, v0.22.5); hover arco/nodo =
   SOLO illuminazione del sottografo (hover nodo = nodo + archi incidenti + vicini),
   niente tooltip per non coprire l'evidenza; tooltip solo al click, agganciato
   nell'angolo alto-destro del pannello (×, click sfondo, Esc, riclick per

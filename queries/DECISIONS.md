@@ -316,6 +316,12 @@ vicini e archi, attenua il resto, reversibile); zoom (rotella, 0.4–4×) + pan 
   l'hover altrove non lo sostituisce (scelta 1a) e l'evidenza resta.
 - Precedenza evidenze: arco attivo (hover/fissato) > highlight del concetto
   selezionato > nessuna. Il click sull'arco non modifica la selezione del concetto.
+- **Bug del pointer capture (v0.22.5)**: il `pointerdown` sull'SVG catturava
+  sempre il puntatore (`setPointerCapture`), ritargettando gli eventi successivi
+  all'SVG: il `click` non arrivava mai a nodi/archi (nessun tooltip, nessuna
+  selezione, nessun aggiornamento di concept detail e passaggi). Ora la cattura
+  avviene **solo se il pointerdown parte dallo sfondo** (drag/pan), quindi i
+  click sugli elementi funzionano con input reale.
 
 ### Costi accettati
 `texts/corpus` caricato **solo alla prima apertura della vista Grafo** (~120 KB
