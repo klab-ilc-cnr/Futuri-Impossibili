@@ -4,6 +4,7 @@ import { useState } from "react";
 import { dictionaries, type Lang } from "../strings";
 import { Cq1Panel } from "./cq1";
 import { Cq2Panel } from "./cq2";
+import { Cq3Panel } from "./cq3";
 import {
   cqExampleParams,
   renderCqSparql,
@@ -44,7 +45,7 @@ const cqCards: Array<CqCard> = [
     title: "CQ3 – Speaker variation",
     query: "How does the distribution of one or more narrative concepts associated with a given lexical entry vary across speakers' age and gender?",
     sparqlId: "cq1-concept-detail",
-    available: false,
+    available: true,
   },
 ];
 
@@ -64,6 +65,10 @@ export function CqPanel({ lang }: { lang: Lang }) {
 
   if (openCq === "cq2") {
     return <Cq2Panel lang={lang} onBack={() => setOpenCq(null)} />;
+  }
+
+  if (openCq === "cq3") {
+    return <Cq3Panel lang={lang} onBack={() => setOpenCq(null)} />;
   }
 
   if (openCq) {
@@ -98,8 +103,22 @@ export function CqPanel({ lang }: { lang: Lang }) {
         {cqCards.map((card) => (
           <article
             key={card.id}
+            role="button"
+            tabIndex={card.available ? 0 : -1}
+            onKeyDown={(event) => {
+              if (card.available && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                setSelectedCq(card.id);
+                setOpenCq(card.id);
+              }
+            }}
+            onClick={() => {
+              setSelectedCq(card.id);
+              if (card.available) setOpenCq(card.id);
+            }}
             className={[
               "cq-card",
+              "clickable",
               selectedCq === card.id ? "selected" : "",
               card.available ? "" : "unavailable",
             ].filter(Boolean).join(" ")}
@@ -111,19 +130,13 @@ export function CqPanel({ lang }: { lang: Lang }) {
               <div className="cq-card-actions">
                 <button
                   type="button"
-                  onClick={() => setSelectedCq(card.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedCq(card.id);
+                  }}
                   aria-pressed={selectedCq === card.id}
                 >
                   {t.cq.viewQuery}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedCq(card.id);
-                    setOpenCq(card.id);
-                  }}
-                >
-                  {t.cq.openPanel}
                 </button>
               </div>
             ) : (

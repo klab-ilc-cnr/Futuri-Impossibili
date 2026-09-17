@@ -3,6 +3,10 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { dictionaries, type Lang } from "../strings";
 import {
+  type AgeBand,
+  ageBandLabel,
+  ageBandOf,
+  ageBands,
   type CqEntry,
   type CqInterview,
   type CqPolarity,
@@ -41,6 +45,7 @@ interface PassageRow {
   end: number;
   concept: string;
   age: string;
+  band: AgeBand | "";
   sex: string;
   residence: string;
 }
@@ -195,6 +200,7 @@ export function Cq2Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
           end,
           concept: conceptIri ? caches.concepts.get(conceptIri) ?? "—" : "—",
           age: demographics.age,
+          band: ageBandOf(demographics.age),
           sex: normalizeSex(demographics.sex),
           residence: demographics.residence,
         });
@@ -203,10 +209,10 @@ export function Cq2Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
     return rows;
   }, [selectedEntry, selectedPolarity, caches, interviewById]);
 
-  const availableAges = useMemo(() => {
-    const ages = new Set<string>();
-    for (const row of allRows) if (row.age) ages.add(row.age);
-    return [...ages].sort((left, right) => Number(left) - Number(right));
+  const availableBands = useMemo(() => {
+    const bands = new Set<AgeBand>();
+    for (const row of allRows) if (row.band) bands.add(row.band);
+    return ageBands.filter((band) => bands.has(band));
   }, [allRows]);
 
   const filteredRows = useMemo(() => {
@@ -214,7 +220,7 @@ export function Cq2Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
       !query || value.toLocaleLowerCase("it").includes(query.toLocaleLowerCase("it"));
     return sortPassages(
       allRows.filter((row) =>
-        (!ageFilter || row.age === ageFilter)
+        (!ageFilter || row.band === ageFilter)
         && (!sexFilter || row.sex === sexFilter)
         && contains(row.id, columnFilters.id)
         && contains(row.value, columnFilters.value)
@@ -318,8 +324,8 @@ export function Cq2Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
           <span>{t.cq2.filterAge}</span>
           <select value={ageFilter} onChange={(event) => { setAgeFilter(event.target.value); resetView(); }}>
             <option value="">{t.cq2.filterAllAges}</option>
-            {availableAges.map((age) => (
-              <option key={age} value={age}>{age}</option>
+            {availableBands.map((band) => (
+              <option key={band} value={band}>{ageBandLabel(band, lang)}</option>
             ))}
           </select>
         </label>
@@ -428,7 +434,7 @@ export function Cq2Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
                           </tr>
                           {row.key === expandedKey && (
                             <tr className="cq2-context-row">
-                              <td colSpan={6}>
+                              <td colSpan={6} className="cq2-context-cell">
                                 <p className="cq2-context-label">{t.cq2.expandedContext}</p>
                                 {expandedContext ? (
                                   <p className="cq2-context-text">

@@ -1,8 +1,8 @@
 # DECISIONS.md — Schermate di ricerca NARRALEX (CQ1–CQ3)
 
-Stato: **M1–M4 implementate (v0.20.4)** — pannello iniziale, ponte SPARQL,
-CQ1 e CQ2 completi. Rinviate: CQ3 (manca la query SPARQL), network graph
-CQ1 (manca la query di co-occorrenze).
+Stato: **M1–M4 + CQ3 implementate (v0.21.0)** — pannello iniziale, ponte SPARQL,
+CQ1, CQ2 e CQ3 completi (client-side). Rinviate: network graph CQ1
+(manca la query di co-occorrenze).
 Fonti: `queries/00_pannello_iniziale.md`, `01_cq1_concepts_by_polarity.md`,
 `02_cq2_corpus_evidence.md`, `03_cq3_speaker_variation.md` e le SPARQL
 `filterd_concept_by_polarity.sparql`, `filtered_paradigmatic_concept.sparql`,
@@ -61,6 +61,37 @@ Fonti: `queries/00_pannello_iniziale.md`, `01_cq1_concepts_by_polarity.md`,
   espansa a ogni digitazione; colonna Polarità esclusa perché costante).
   Coesistono con i select Età/Genere della specifica (il select è esatto,
   il filtro colonna è contains).
+- **v0.20.5** — corretto il wrap del contesto nella riga espansa CQ2:
+  la cella ereditava `td:first-child { white-space: nowrap }` (specificità
+  CSS) → classe dedicata `td.cq2-context-cell` con `white-space: normal`.
+- **v0.21.0** — CQ3 speaker variation (client-side): fasce d'età condivise
+  **12–16 / 17–21 / >21** (a gruppi di 5 anni, su richiesta del team; usate
+  anche dal filtro età di CQ2), denominatore = popolazione del gruppo nel
+  corpus (decisione (a), mostra anche gli 0%), colonna Età di CQ2 con anno
+  esatto (il filtro colonna «contiene» permette la selezione fine, es. «15»),
+  concetti = unione narrativi + paradigmatici dell'entry, polarità mostrata
+  ma non filtrabile, bar chart per concetto (categorie = fasce, serie F/M,
+  % sul gruppo), heatmap per multi-concetto (righe = concetti, colonne =
+  fascia × genere, cella = % sul gruppo, click → drill-down), tabella con
+  N e % sempre, 0/0% esplicito, sort per % totale decrescente o A–Z.
+- **v0.21.1–v0.21.3** — CQ3: Search configuration ristrutturata come pannello
+  laterale (mockup del progettista): entry dropdown, concetti **multi-select
+  a chip rimovibili** con combobox «Aggiungi concetto…» (digiti dentro il
+  select, la lista si restringe con startsWith, Enter/click per aggiungere,
+  Esc chiude, lista «Nessun concetto…» quando zero match), filtri Gruppi di
+  età e Genere a dropdown che riducono i gruppi confrontati (una fascia +
+  tutti i generi = confronto F/M nella fascia), vista a radio Barri/
+  Heatmap/Tabella, sort «Frequenza (decrescente)»/A–Z. Cursore invisibile
+  del text-field separato risolto (Tailwind preflight azzera gli input:
+  classe con stile completo). Sort renominato Frequenza per fedeltà al mockup.
+- **v0.21.4** — CQ3: rendering progressivo come CQ1/CQ2 (config sempre visibile
+  e interattiva durante il caricamento, risultati con «Caricamento…» inline,
+  errori non bloccanti).
+- **v0.21.5** — pannello iniziale: click su tutta la card apre direttamente il
+  pannello della CQ (deviazione dalla specifica 00, che prevedeva il pulsante
+  «Apri pannello di analisi» — rimosso su richiesta; «Visualizza query» resta
+  con stopPropagation); card role="button" con Enter/Spazio; stringhe openPanel
+  rimosse, about aggiornato.
 
 ### Contratto proxy `POST /api/lexo/cq/[queryId]`
 
@@ -184,11 +215,12 @@ Fonti: `queries/00_pannello_iniziale.md`, `01_cq1_concepts_by_polarity.md`,
 
 ## Punti aperti
 
-- **Denominatore CQ3** (per quando riprenderemo): % = N concetto-gruppo /
-  popolazione del gruppo — ma la popolazione è (a) tutti gli intervistati del
-  gruppo nel corpus o (b) solo quelli con attestazioni per la lexical entry?
-  La specifica suggerisce (b), da confermare esplicitamente.
-- **CQ2 – Sort by**: opzioni da definire (esempio nel mockup: "Age (ascending)").
+- **CQ2 – apertura full context / speaker metadata**: risolto in v0.20.0
+  (riga espansa inline); **CQ2 – Sort by**: risolto (età crescente/decrescente/
+  ID). **Denominatore CQ3**: risolto in v0.21.0 — opzione (a), popolazione
+  totale del gruppo nel corpus.
+- **Passaggio del tempo**: SPARQL pass-through di LexO in verifica — se
+  arriverà, rivalutare l'architettura (proxy → LexO invece di GraphDB diretto).
 - **CQ2 – apertura full context / speaker metadata**: forma da definire
   (drawer/modal/vista) — riusare pattern esistenti.
 - **CQ1 – click-through passaggio → intervista**: differito (non previsto

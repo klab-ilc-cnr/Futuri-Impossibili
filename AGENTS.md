@@ -288,7 +288,7 @@ delete, reload.
   Known cosmetic leftovers: data-complete left contexts clipped by CSS show no dots;
   single-context rows ellipsize ~1em early. `title` always carries the full row text.
 
-## Competency Questions — Area «Interrogazioni» (v0.18.0 – v0.20.4)
+## Competency Questions — Area «Interrogazioni» (v0.18.0 – v0.21.5)
 
 - Nav item esistente «Interrogazioni/Queries» (index 3): `activePage === 3` renderizza
   `CqPanel` (`app/cq/panel.tsx`), il primo componente estratto dal monolite `page.tsx`.
@@ -322,7 +322,24 @@ delete, reload.
   sopra «Dettaglio concetto»; cursore `progress` durante i caricamenti.
 - **Utility condivise**: `app/cq/shared.ts` (endpoint, parsing entries/interviste/
   concetti, demografia dalle description, normalizzazione M/F, KWIC windowing,
-  CSV download, costanti polarità) — usate da cq1 e cq2.
+  CSV download, costanti polarità, fasce d'età 12–16/17–21/>21) — usate da
+  cq1, cq2 e cq3.
+- **CQ3 (v0.21.0, rifinita fino a v0.21.5)**: `app/cq/cq3.tsx` — ZERO query
+  GraphDB, tutto client-side. Search configuration come pannello laterale
+  SINISTRO (mockup progettista): entry dropdown, concetti multi-select a chip
+  rimovibili con combobox «Aggiungi concetto…» (startsWith dentro il select,
+  frecce+Enter, Esc, click fuori chiude), filtri Gruppi di età/Genere a
+  dropdown che riducono i gruppi confrontati, vista a radio Barri/Heatmap/
+  Tabella, sort Frequenza (decrescente = quota di intervistati distinti) o A–Z.
+  Viste: bar chart per concetto (fasce × F/M, % sul gruppo), heatmap multi-
+  concetto (celle cliccabili → drill-down), tabella N+%; 0/0% esplicito;
+  denominatore = popolazione del gruppo nel corpus (decisione (a), nota in
+  pagina). Drill-down = tabella passaggi del gruppo (KWIC + metadati, CSV).
+  Rendering progressivo (config sempre visibile, risultati con stato inline).
+- **Pannello iniziale (v0.21.5)**: click su tutta la card CQ apre direttamente
+  il pannello (il pulsante «Apri pannello di analisi» della specifica 00 è
+  stato rimosso su richiesta; resta «Visualizza query» con stopPropagation;
+  card role=button, Enter/Spazio).
 - **Proxy SPARQL**: `POST /api/lexo/cq/[queryId]` (`app/api/lexo/cq/[queryId]/route.ts`)
   esegue SOLO le query SELECT template in `app/cq/sparql.ts` (fedeli alle tre SPARQL
   consegnate, parametrizzate via `{{TOKEN}}`) contro GraphDB

@@ -1,4 +1,4 @@
-import { dictionaries } from "../strings";
+import { dictionaries, type Lang } from "../strings";
 import { basePath } from "../base-path";
 
 export const cqEndpoint = `${basePath}/api/lexo/cq`;
@@ -82,6 +82,23 @@ export function parseDemographics(description: string): { age: string; sex: stri
     age: ageMatch ? ageMatch[1] : "",
     residence: residenceMatch ? residenceMatch[1].trim() : "",
   };
+}
+
+export type AgeBand = "12-16" | "17-21" | "gt21";
+
+export const ageBands: AgeBand[] = ["12-16", "17-21", "gt21"];
+
+export function ageBandOf(age: string): AgeBand | "" {
+  const value = Number(age);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  if (value <= 16) return "12-16";
+  if (value <= 21) return "17-21";
+  return "gt21";
+}
+
+export function ageBandLabel(band: AgeBand, lang: Lang): string {
+  const t = dictionaries[lang].cq3;
+  return band === "12-16" ? t.band12 : band === "17-21" ? t.band17 : t.bandGt21;
 }
 
 export function normalizeSex(value: string): string {
