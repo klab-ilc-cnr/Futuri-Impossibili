@@ -213,7 +213,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.25.2";
+const appVersion = "0.26.0";
 
 const textsEndpoint = `${basePath}/api/lexo/texts`;
 const textBulkUploadEndpoint = `${basePath}/api/lexo/texts/bulk`;

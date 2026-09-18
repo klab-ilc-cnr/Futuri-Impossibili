@@ -1,3 +1,4 @@
+import { useEffect, type RefObject } from "react";
 import { dictionaries, type Lang } from "../strings";
 import { basePath } from "../base-path";
 
@@ -269,3 +270,26 @@ export const emptyDemographicsParams = {
   age2: 0,
   residence: "",
 };
+
+
+/**
+ * Espone l'altezza reale del blocco input agganciato (`.cq-sticky-zone`) come
+ * variabile `--cq-sticky-h` sul contenitore `.cq-page`, cosi' la colonna sticky
+ * e le intestazioni di tabella si fermano sotto la barra anche quando l'altezza
+ * cambia (avvolgimento dei controlli, cambio lingua, etichette lunghe).
+ */
+export function useStickyHeight(ref: RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const zone = ref.current;
+    const host = zone?.closest(".cq-page");
+    if (!zone || !(host instanceof HTMLElement)) return;
+    const update = () => {
+      host.style.setProperty("--cq-sticky-h", `${Math.round(zone.getBoundingClientRect().height)}px`);
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(zone);
+    return () => observer.disconnect();
+  }, [ref]);
+}

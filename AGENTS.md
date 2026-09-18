@@ -336,6 +336,19 @@ delete, reload.
   denominatore = popolazione del gruppo nel corpus (decisione (a), nota in
   pagina). Drill-down = tabella passaggi del gruppo (KWIC + metadati, CSV).
   Rendering progressivo (config sempre visibile, risultati con stato inline).
+- **Blocco input agganciato (v0.26.0)**: in CQ1 e CQ2 il blocco di input è sticky
+  (`position: sticky; top: 0`) da 981px in su, dentro un wrapper `.cq-sticky-zone`
+  (in CQ2 avvolge frase + filtri, così c'è un solo punto di aggancio). Il wrapper
+  ha `padding-top: 18px` e sfondo `--cream`; `.cq-analysis > .cq-back` porta il
+  padding superiore (30px) come `margin-top`, così il bordo del content box
+  coincide con lo scrollport e la barra si aggancia a 0 **senza striscia di testo
+  visibile sopra** (con il padding sul contenitore lo sticky si ferma al bordo del
+  content box: misurato 30px di scarto). L'altezza reale della barra è esposta come
+  `--cq-sticky-h` sul `.cq-page` dall'hook `useStickyHeight` (`app/cq/shared.ts`,
+  ResizeObserver): la usano `.cq-analysis-side` e i `th` di `.cq-passages-table`/
+  `.cq2-table` per fermarsi sotto la barra (fallback 30px = comportamento storico
+  dei pannelli senza barra, CQ3). Sotto 981px lo sticky è spento: lì la colonna
+  laterale è già `static` e i controlli possono avvolgersi su più righe.
 - **Scorrimento e zoom del grafo (v0.25.2)**: `.cq-page` è lo scrollport e copre
   **tutta la larghezza** della finestra (contenuto centrato a 1180px via
   `padding: 46px max(20px, calc((100% - 1180px) / 2)) 54px`), così la rotella

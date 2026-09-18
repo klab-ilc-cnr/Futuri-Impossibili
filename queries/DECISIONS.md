@@ -536,3 +536,36 @@ questo tipo di edit conviene ancorare una riga distintiva (es. il selettore).
 **Resta possibile (1b)**: far scorrere il documento per la pagina 3 (`main` senza
 altezza fissa + nav sticky), per avere scrollbar nativa e PageUp/Spazio. Non
 implementato.
+
+
+## Blocco input agganciato in CQ1/CQ2 (v0.26.0)
+
+**Obiettivo**: i dati di input (entrata/polarità/vista/ordinamento in CQ1; frase +
+età/genere/ordinamento in CQ2) restano visibili mentre si scorrono i risultati.
+Non è la 1b: qui non si tocca `main` né lo scroll del documento.
+
+**Ingombri misurati** (area utile di `main` = 581px su 1400×900):
+hero 74px, CQ1 controlli 86px (+ margini = **barra 104px**, ~20%), CQ2 frase 73px
++ filtri 86px (**barra 195px**, ~30%). Da 981px in su le altezze sono **stabili**:
+l'avvolgimento dei controlli (86 → 160px) avviene solo a 760px, dove la colonna
+laterale è già `static` → lo sticky è attivo solo ≥981px.
+
+**Un solo punto di aggancio**: in CQ2 i due blocchi hanno margini propri e quote
+diverse; avvolgerli in un unico `.cq-sticky-zone` evita "scalini" e offset interni
+da indovinare. Il wrapper prende `padding-top: 18px` e il primo figlio perde il
+`margin-top`, così la spaziatura statica non cambia e la banda agganciata è opaca.
+
+**Trappola del padding sul contenitore**: `.cq-analysis { padding-top: 30px }`
+vinceva su `.cq-page` e lo sticky si agganciava **al bordo del content box**, cioè
+30px sotto lo scrollport: sopra la barra si vedeva una striscia di testo che
+scorre (verificato: zona a `top: 30` con `scrollTop` 430). Spostando quel padding
+su `.cq-analysis > .cq-back { margin-top: 30px }` il content box coincide con lo
+scrollport e la barra si aggancia a **0** (verificato). Il fallback
+`var(--cq-sticky-h, 30px)` conserva il comportamento storico di CQ3 (colonna
+laterale sticky a 30px, nessuna barra).
+
+**Altezza misurata, non costante**: `useStickyHeight` (in `shared.ts`) osserva il
+wrapper con `ResizeObserver` e scrive `--cq-sticky-h` sul `.cq-page`; la usano la
+colonna laterale e i `th` sticky delle tabelle passaggi. Verificato: CQ1 barra
+0–104 e colonna a 104; CQ2 barra 0–195 e `th` a 195 (tabella lunga, 20 righe);
+CQ3 invariata (colonna a 30px, nessun wrapper).

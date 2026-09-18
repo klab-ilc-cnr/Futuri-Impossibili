@@ -814,7 +814,11 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
   .cq-lower { grid-template-columns: 1fr; }
 }
 
-.cq-analysis { padding-top: 30px; }
+/* Il padding superiore sta sul primo figlio (e non sul contenitore): cosi' il
+   bordo del content box coincide con quello dello scrollport e il blocco sticky
+   si aggancia a 0 senza lasciare una striscia di testo visibile sopra. */
+.cq-analysis { padding-top: 0; }
+.cq-analysis > .cq-back { margin-top: 30px; }
 .cq-analysis-hero h2 { margin: 0 0 8px; }
 .cq-analysis-hero > p:last-child { margin: 0; color: var(--muted); font-size: 13px; }
 .cq-analysis-controls {
@@ -1245,3 +1249,21 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .cq-graph-leader { stroke: #b6c4bc; stroke-width: .9; }
 
 .cq-graph-legend-hint { margin-left: auto; color: #7c8783; font-size: 10.5px; }
+
+/* Blocco input agganciato in cima (CQ1/CQ2). Solo da 981px in su: sotto quella
+   soglia la colonna laterale e' gia' static e i controlli possono avvolgersi su
+   piu' righe, quindi l'altezza non sarebbe piu' prevedibile.
+   `--cq-sticky-h` (impostata con ResizeObserver sul wrapper) e' l'altezza reale
+   della barra: la usano la colonna sticky e le intestazioni di tabella per
+   fermarsi sotto di essa invece che nascondersi dietro. */
+@media (min-width: 981px) {
+  .cq-sticky-zone {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--cream); padding-top: 18px;
+    box-shadow: 0 10px 14px -12px rgba(30, 48, 41, .45);
+  }
+  .cq-sticky-zone > :first-child { margin-top: 0; }
+  /* fallback 30px = valore storico per i pannelli senza barra sticky (CQ3) */
+  .cq-analysis-side { top: var(--cq-sticky-h, 30px); }
+  .cq-passages-table th, .cq2-table th { top: var(--cq-sticky-h, 30px); }
+}

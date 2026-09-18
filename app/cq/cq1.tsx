@@ -22,6 +22,7 @@ import {
   readResourceIdentifier,
   referringConceptProperty,
   textsEndpoint,
+  useStickyHeight,
 } from "./shared";
 import { Cq1NetworkGraph, type Cq1GraphSelection } from "./cq1-graph";
 
@@ -107,8 +108,10 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
   const [showAllPanels, setShowAllPanels] = useState<Record<string, boolean>>({});
   const [passagesShowAll, setPassagesShowAll] = useState(false);
 
+  const stickyRef = useRef<HTMLDivElement>(null);
   const attestationsCorpusRef = useRef<Map<string, Record<string, unknown>[]> | null>(null);
   const interviewsRef = useRef<CqInterview[] | null>(null);
+  useStickyHeight(stickyRef);
 
   const applyEntry = useCallback((entry: CqEntry) => {
     setSelectedConcept(null);
@@ -462,6 +465,7 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
         {selectedEntry && <p>{t.cq1.subtitle(selectedEntry.label)}</p>}
       </header>
 
+      <div className="cq-sticky-zone" ref={stickyRef}>
       <div className="cq-analysis-controls">
         <label className="cq-control">
           <span>{t.cq1.entrySelectLabel}</span>
@@ -529,6 +533,7 @@ export function Cq1Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
             </select>
           </label>
         )}
+      </div>
       </div>
 
       {entriesLoading && <p className="cq-status">{t.cq1.entryLoading}</p>}

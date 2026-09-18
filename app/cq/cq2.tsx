@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { dictionaries, type Lang } from "../strings";
 import {
   type AgeBand,
@@ -32,6 +32,7 @@ import {
   rdfsCommentProperty,
   searchPageSize,
   textsEndpoint,
+  useStickyHeight,
 } from "./shared";
 
 type SortMode = "ageAsc" | "ageDesc" | "idAZ";
@@ -74,7 +75,9 @@ export function Cq2Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
   const t = dictionaries[lang];
   const numberLocale = lang === "en" ? "en-US" : "it-IT";
 
+  const stickyRef = useRef<HTMLDivElement>(null);
   const [entries, setEntries] = useState<CqEntry[]>([]);
+  useStickyHeight(stickyRef);
   const [entriesLoading, setEntriesLoading] = useState(true);
   const [entriesError, setEntriesError] = useState("");
   const [selectedEntry, setSelectedEntry] = useState<CqEntry | null>(null);
@@ -282,6 +285,7 @@ export function Cq2Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
         <p className="cq2-hint">{t.cq2.expandHint}</p>
       </header>
 
+      <div className="cq-sticky-zone" ref={stickyRef}>
       <div className="cq2-phrase-card">
         <p className="cq2-phrase">
           {t.cq2.phraseBefore}
@@ -345,6 +349,7 @@ export function Cq2Panel({ lang, onBack }: { lang: Lang; onBack: () => void }) {
             <option value="idAZ">{t.cq2.sortIdAZ}</option>
           </select>
         </label>
+      </div>
       </div>
 
       {entriesLoading && <p className="cq-status">{t.cq2.loading}</p>}
