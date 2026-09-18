@@ -663,6 +663,8 @@ export function Cq1NetworkGraph({
     const svg = svgRef.current;
     if (!svg) return;
     const onWheel = (event: WheelEvent) => {
+      // Zoom solo con Shift: la rotella semplice deve poter scorrere la pagina.
+      if (!event.shiftKey) return;
       event.preventDefault();
       setView((current) => ({
         ...current,
@@ -1045,6 +1047,7 @@ export function Cq1NetworkGraph({
           <span className="cq-graph-legend-area" aria-hidden="true" />
           {t.cq1.graphLegendCluster}
         </span>
+        <span className="cq-graph-legend-item cq-graph-legend-hint">{t.cq1.graphZoomHint}</span>
       </div>
 
       {pinnedTooltip && (

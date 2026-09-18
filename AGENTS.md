@@ -336,6 +336,13 @@ delete, reload.
   denominatore = popolazione del gruppo nel corpus (decisione (a), nota in
   pagina). Drill-down = tabella passaggi del gruppo (KWIC + metadati, CSV).
   Rendering progressivo (config sempre visibile, risultati con stato inline).
+- **Scorrimento e zoom del grafo (v0.25.2)**: `.cq-page` è lo scrollport e copre
+  **tutta la larghezza** della finestra (contenuto centrato a 1180px via
+  `padding: 46px max(20px, calc((100% - 1180px) / 2)) 54px`), così la rotella
+  scorre anche nei margini laterali (prima lo scrollport era largo 1180px e
+  centrato: nei margini non c'era alcun antenato scorrevole). Nel grafo lo **zoom
+  è solo con Shift + rotella** (indicazione `.cq-graph-legend-hint` in legenda),
+  così la rotella semplice scorre la pagina anche sopra il canvas.
 - **Pannello iniziale (v0.21.5)**: click su tutta la card CQ apre direttamente
   il pannello (il pulsante «Apri pannello di analisi» della specifica 00 è
   stato rimosso su richiesta; resta «Visualizza query» con stopPropagation;

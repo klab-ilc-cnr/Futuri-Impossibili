@@ -501,3 +501,38 @@ solo dopo ci si allontana radialmente (max 8 righe). Ostacoli: altre etichette *
 i cerchi degli altri nodi**. Verificato: linee guida da **36 / 32 / 32 / 14** unità
 (femmina, criminale, infame), contro 122 di prima; 35/35 etichette, 0 collisioni,
 0 nodi fuori dall'alone, scala ~1,0.
+
+
+## Scrolling della pagina e rotella nel grafo (v0.25.2)
+
+**Perché la rotella non funzionava ai lati.** `main` ha altezza fissa
+(`calc(100vh - 176px)`) e nessun `overflow`: il documento non scorre mai (header
+112 + nav 64 + main = 100vh esatti). L'unico scrollport era `.cq-page`, **largo
+1180px e centrato**: nei margini laterali non esisteva alcun antenato scorrevole.
+Misurato su 1400px: ~110px morti per lato.
+
+**Soluzione (1a)**: lo scrollport copre tutta la larghezza, la centratura a
+1180px è affidata al padding:
+`padding: 46px max(20px, calc((100% - 1180px) / 2)) 54px`. La larghezza utile del
+contenuto resta identica (min(1180, 100% − 40)), le colonne sticky continuano a
+funzionare e la barra di scorrimento finisce al bordo finestra. Verificato con
+rotella reale via CDP su CQ1/CQ2/CQ3: `scrollTop` 400 sia nel margine sinistro sia
+in quello destro, contenuto 1170px e padding simmetrico su tutte e tre.
+
+**Zoom del grafo (Shift + rotella)**: l'handler `wheel` dell'SVG faceva
+`preventDefault()` e zoomava su qualunque rotella, quindi il grafo — l'area
+*centrale*, dove la rotella funzionava — intrappolava lo scroll. Ora `if
+(!event.shiftKey) return;`: la rotella semplice scorre la pagina anche sopra il
+canvas, Shift+rotella zooma (verificato: rotella semplice → scrollTop varia e
+`transform` invariato; Shift → `scale(1.12)` e scrollTop invariato). Indicazione
+`Shift + rotella per zoomare` in fondo alla legenda (`.cq-graph-legend-hint`),
+necessaria perché lo zoom non è più scopribile per caso.
+
+**Nota di metodo**: la sostituzione della regola CSS ha inizialmente colpito
+`.publications-page`, che iniziava con le stesse due righe identiche a `.cq-page`
+(`width: min(1180px...); padding: 46px 0 54px`): ripristinata byte per byte. Per
+questo tipo di edit conviene ancorare una riga distintiva (es. il selettore).
+
+**Resta possibile (1b)**: far scorrere il documento per la pagina 3 (`main` senza
+altezza fissa + nav sticky), per avere scrollbar nativa e PageUp/Spazio. Non
+implementato.
