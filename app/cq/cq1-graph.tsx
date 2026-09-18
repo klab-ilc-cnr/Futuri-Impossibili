@@ -430,48 +430,53 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
     if (!placed) node.labelVisible = false;
   }
 
-  // Fallback: chi non trova posto accanto al nodo riceve l'etichetta in una
-  // banda esterna al grappolo, collegata al nodo da una linea guida.
-  const bandBase = new Map<string, number>();
-  for (const sector of sectors) {
-    let extent = 0;
-    for (const node of nodes) {
-      if (sectorKeyOf(node.polarity) !== sector.key) continue;
-      extent = Math.max(extent, Math.hypot(node.x, node.y) + node.radius);
-    }
-    bandBase.set(sector.key, extent + 26);
-  }
+  // Fallback: chi non trova posto accanto al nodo riceve l'etichetta lungo la
+  // propria direzione radiale, il piu' vicino possibile al nodo, allontanandosi a
+  // piccoli passi solo se serve (cosi' la linea guida resta corta). Ostacoli:
+  // altre etichette e i cerchi degli altri nodi.
+  const nodeObstacles = nodes.map((node) => ({
+    key: node.concept,
+    x1: node.x - node.radius,
+    y1: node.y - node.radius,
+    x2: node.x + node.radius,
+    y2: node.y + node.radius,
+  }));
   const unlabeled = nodes
     .filter((node) => !node.labelVisible)
     .sort((left, right) => right.occurrences - left.occurrences || left.label.localeCompare(right.label, "it"));
   for (const node of unlabeled) {
-    const base = bandBase.get(sectorKeyOf(node.polarity)) ?? 0;
     const text = truncateLabel(node.label);
     const width = text.length * labelCharWidth * labelFontSize;
     const height = labelFontSize * 1.3;
-    const nodeAngle = Math.atan2(node.y, node.x);
-    for (let attempt = 0; attempt < 36; attempt += 1) {
-      const row = attempt % 3;
-      const step = Math.floor(attempt / 3);
-      const direction = step % 2 === 0 ? 1 : -1;
-      const delta = direction * Math.ceil(step / 2) * 0.05;
-      const angle = nodeAngle + delta;
-      const radius = base + row * (height + 2);
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
-      const rect = { x1: x - width / 2, y1: y - height / 2, x2: x + width / 2, y2: y + height / 2 };
-      const collides = occupied.some((other) => (
-        rect.x1 < other.x2 + 1 && rect.x2 > other.x1 - 1
-        && rect.y1 < other.y2 + 1 && rect.y2 > other.y1 - 1
-      ));
-      if (collides) continue;
-      node.labelVisible = true;
-      node.labelAnchor = "middle";
-      node.labelX = x;
-      node.labelY = y;
-      node.leader = true;
-      occupied.push(rect);
-      break;
+    const nodeRadius = Math.hypot(node.x, node.y);
+    const drifts = [0, 0.03, -0.03, 0.06, -0.06, 0.09, -0.09];
+    // Prima si prova la posizione piu' vicina al nodo (tutti gli scostamenti
+    // angolari minimi), poi ci si allontana radialmente: la linea guida resta corta.
+    for (let row = 0; row < 8 && !node.labelVisible; row += 1) {
+      for (const drift of drifts) {
+        if (node.labelVisible) break;
+        const angle = Math.atan2(node.y, node.x) + drift;
+        const radius = nodeRadius + node.radius + 8 + row * (height + 2);
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        const rect = { x1: x - width / 2, y1: y - height / 2, x2: x + width / 2, y2: y + height / 2 };
+        const hitsLabel = occupied.some((other) => (
+          rect.x1 < other.x2 + 1 && rect.x2 > other.x1 - 1
+          && rect.y1 < other.y2 + 1 && rect.y2 > other.y1 - 1
+        ));
+        const hitsNode = nodeObstacles.some((other) => (
+          other.key !== node.concept
+          && rect.x1 < other.x2 + 2 && rect.x2 > other.x1 - 2
+          && rect.y1 < other.y2 + 2 && rect.y2 > other.y1 - 2
+        ));
+        if (hitsLabel || hitsNode) continue;
+        node.labelVisible = true;
+        node.labelAnchor = "middle";
+        node.labelX = x;
+        node.labelY = y;
+        node.leader = true;
+        occupied.push(rect);
+      }
     }
   }
 

@@ -365,8 +365,10 @@ delete, reload.
   sui **raggi reali** dei nodi (diametro + `ringGap`), non su una spaziatura fissa:
   niente cerchi sovrapposti; i nodi mostrati sono quelli che entrano in
   `graphMaxRings` (4) anelli. Le etichette che non trovano posto accanto al nodo
-  finiscono in una **banda esterna con linea guida** (`.cq-graph-leader`), così
-  tutti i nodi visibili sono etichettati.
+  finiscono in una **banda con linea guida** (`.cq-graph-leader`) che parte subito
+  fuori dal nodo e si allontana solo se serve (prima piccoli scostamenti angolari,
+  poi righe radiali; ostacoli: etichette e cerchi degli altri nodi), così tutti i
+  nodi visibili sono etichettati con linee guida corte (v0.25.1).
   **Rifiniture (v0.24.1–v0.24.2)**: aloni calcolati sul raggio euclideo reale del
   grappolo (prima la proiezione lasciava nodi fuori); etichette con fallback
   interno quando l'esterno collide (2 etichette perse su 36) e in un **layer

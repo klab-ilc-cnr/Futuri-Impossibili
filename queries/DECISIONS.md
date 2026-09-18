@@ -486,3 +486,18 @@ linea guida: le altre etichette restano accanto al nodo.
 corretta). È il prezzo per avere nodi non sovrapposti ed etichette complete; il
 budget resta regolabile con `graphNodeBudget`/`graphSectorFullBelow` e la
 profondità con `graphMaxRings`.
+
+
+## Linee guida corte (v0.25.1)
+
+Le etichette di fallback finivano lontane: la banda era a un **raggio fisso per
+settore** (quindi un nodo interno aveva l'etichetta oltre gli anelli esterni) e la
+ricerca provava 10 righe radiali **prima** di scostarsi in angolo, con derive fino
+a ~50°. Misurato: una linea guida da **122 unità** su «inabilità» (femmina).
+
+Ora l'etichetta parte **subito fuori dal nodo** (raggio del nodo + 8) e, a parità di
+distanza, si provano **prima i piccoli scostamenti angolari** (±1,7°, ±3,4°, ±5,1°),
+solo dopo ci si allontana radialmente (max 8 righe). Ostacoli: altre etichette **e
+i cerchi degli altri nodi**. Verificato: linee guida da **36 / 32 / 32 / 14** unità
+(femmina, criminale, infame), contro 122 di prima; 35/35 etichette, 0 collisioni,
+0 nodi fuori dall'alone, scala ~1,0.
