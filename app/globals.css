@@ -1213,3 +1213,24 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
   font: inherit; font-size: 15px; line-height: 1; color: #6d7b75; cursor: pointer;
 }
 .cq-graph-tooltip-close:hover { color: #1f2b26; }
+
+.cq-graph-halo { stroke: none; }
+.cq-graph-halo-positive { fill: rgba(78, 163, 106, .10); }
+.cq-graph-halo-neutral { fill: rgba(230, 195, 60, .16); }
+.cq-graph-halo-negative { fill: rgba(161, 47, 37, .09); }
+.cq-graph-halo-paradigmatic { fill: rgba(141, 154, 148, .10); }
+.cq-graph-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
+  padding: 2px 2px 0; color: #3c4a44; font-size: 11.5px;
+}
+.cq-graph-legend-title { font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: #2d3a34; font-size: 10.5px; }
+.cq-graph-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.cq-graph-legend-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; }
+.cq-graph-legend-dot-positive { background: var(--pos-fill); }
+.cq-graph-legend-dot-neutral { background: var(--neu-fill); }
+.cq-graph-legend-dot-negative { background: #a12f25; }
+.cq-graph-legend-dot-paradigmatic { background: #8d9a94; border: 1.5px dashed #fff; }
+.cq-graph-legend-svg { width: 34px; height: 15px; overflow: visible; }
+.cq-graph-legend-svg circle { fill: #6f7974; }
+.cq-graph-legend-svg line { stroke: #6f7974; stroke-linecap: round; }
+.cq-graph-legend-area { display: inline-block; width: 14px; height: 11px; border-radius: 3px; background: rgba(78, 163, 106, .14); border: 1px solid rgba(78, 163, 106, .25); }

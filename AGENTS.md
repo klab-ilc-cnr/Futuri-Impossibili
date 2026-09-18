@@ -361,6 +361,12 @@ delete, reload.
   (v0.22.6: mostrato solo in vista Lista, ponte lista→grafo; in grafo è
   ridondante col click sul nodo);
   zoom/pan/Adatta; «Torna alla lista»; sort nascosto nel grafo (v0.22.1–v0.22.2).
+  **Limite nodi, legenda, aloni (v0.24.0)**: limite nodi **adattivo** — settori con
+  ≤12 concetti mostrati per intero, gli altri si dividono un budget di 36 nodi in
+  proporzione (parametri `graphNodeBudget`/`graphSectorFullBelow`, non esposti);
+  **legenda** sotto il canvas (polarità, dimensione = occorrenze, spessore =
+  co-occorrenze, area del cluster) come da §10; titoli di settore rimossi dal
+  canvas e sostituiti da **aloni/settori colorati tenui** per cluster.
   **Resa visiva (v0.23.0)**: `viewBox` adattivo (bbox reale del contenuto esteso
   all'aspect del pannello, misurato con `ResizeObserver`; SVG `height:
   clamp(460px,66vh,700px)`), anelli compatti (base 84/passo 80), titoli di

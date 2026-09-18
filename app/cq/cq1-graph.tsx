@@ -18,7 +18,8 @@ import {
   textsEndpoint,
 } from "./shared";
 
-const graphSectorTop = 8;
+const graphNodeBudget = 36;
+const graphSectorFullBelow = 12;
 const graphNeighborTop = 5;
 const graphMinWeight = 1;
 const graphMinZoom = 0.4;
@@ -31,7 +32,7 @@ const ringSpacing = 34;
 const labelMaxChars = 18;
 const labelFontSize = 11.5;
 const labelCharWidth = 0.56;
-const sectorLabelMargin = 36;
+const graphHaloMargin = 14;
 const graphPadding = 28;
 
 export interface Cq1GraphSelection {
@@ -83,8 +84,10 @@ interface GraphSector {
   key: string;
   polarity: CqPolarity | null;
   angle: number;
+  half: number;
   hidden: number;
-  labelRadius: number;
+  outerRadius: number;
+  halo: string;
   label: string;
 }
 
@@ -113,6 +116,50 @@ interface GraphEmphasis {
   nodes: Set<string>;
   edges: Set<string>;
   accent: boolean;
+}
+
+function allocateQuotas(
+  groups: Array<{ key: string; count: number }>,
+  budget: number,
+  fullBelow: number,
+): Map<string, number> {
+  const quotas = new Map<string, number>();
+  const small = groups.filter((group) => group.count <= fullBelow);
+  let remaining = budget;
+  for (const group of small) {
+    quotas.set(group.key, group.count);
+    remaining -= group.count;
+  }
+  const rest = groups.filter((group) => !small.includes(group));
+  const totalRest = rest.reduce((sum, group) => sum + group.count, 0);
+  if (totalRest === 0) return quotas;
+  const target = Math.max(0, Math.min(remaining, totalRest));
+  const share = rest.map((group) => ({
+    key: group.key,
+    size: group.count,
+    exact: (target * group.count) / totalRest,
+  }));
+  let assigned = 0;
+  for (const item of share) {
+    const base = Math.min(item.size, Math.floor(item.exact));
+    quotas.set(item.key, base);
+    assigned += base;
+  }
+  const order = [...share].sort((left, right) => (right.exact - Math.floor(right.exact)) - (left.exact - Math.floor(left.exact)));
+  let leftover = target - assigned;
+  while (leftover > 0) {
+    let progressed = false;
+    for (const item of order) {
+      if (leftover === 0) break;
+      const current = quotas.get(item.key) ?? 0;
+      if (current >= item.size) continue;
+      quotas.set(item.key, current + 1);
+      leftover -= 1;
+      progressed = true;
+    }
+    if (!progressed) break;
+  }
+  return quotas;
 }
 
 function edgeKeyOf(edge: GraphEdge): string {
@@ -247,12 +294,23 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
   const sectors: GraphSector[] = [];
   let hiddenCount = 0;
 
-  sectorKeys.forEach((key, sectorIndex) => {
-    const group = allNodes
+  const groups = sectorKeys.map((key) => ({
+    key,
+    nodes: allNodes
       .filter((node) => sectorKeyOf(node.polarity) === key)
-      .sort((left, right) => right.occurrences - left.occurrences || left.label.localeCompare(right.label, "it"));
-    const visible = group.slice(0, graphSectorTop);
-    hiddenCount += group.length - visible.length;
+      .sort((left, right) => right.occurrences - left.occurrences || left.label.localeCompare(right.label, "it")),
+  }));
+  const quotas = allocateQuotas(
+    groups.map((group) => ({ key: group.key, count: group.nodes.length })),
+    graphNodeBudget,
+    graphSectorFullBelow,
+  );
+
+  groups.forEach((group, sectorIndex) => {
+    const key = group.key;
+    const total = group.nodes.length;
+    const visible = group.nodes.slice(0, Math.min(total, quotas.get(key) ?? total));
+    hiddenCount += total - visible.length;
     const angle = -Math.PI / 2 + sectorIndex * span;
     const half = (span / 2) * 0.88;
     let index = 0;
@@ -279,8 +337,10 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
       key,
       polarity: key === "paradigmatic" ? null : (key as CqPolarity),
       angle,
-      hidden: group.length - visible.length,
-      labelRadius: sectorMaxRadius,
+      half,
+      hidden: total - visible.length,
+      outerRadius: sectorMaxRadius,
+      halo: "",
       label: sectorLabels[key] ?? key,
     });
   });
@@ -317,8 +377,8 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
     if (!collides) occupied.push(rect);
   }
 
-  // Il titolo di settore va subito oltre il proprio grappolo, misurato lungo
-  // l'asse del settore (proiezione), non in distanza euclidea.
+  // Estensione reale del grappolo lungo l'asse del settore (proiezione): usata
+  // per l'alone di cluster. Non serve piu' per i titoli (ora nella legenda).
   for (const sector of sectors) {
     const axisX = Math.cos(sector.angle);
     const axisY = Math.sin(sector.angle);
@@ -336,7 +396,24 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
         outerX * axisX + node.labelY * axisY,
       );
     }
-    sector.labelRadius = projection + sectorLabelMargin;
+    sector.outerRadius = projection + graphHaloMargin;
+  }
+
+  // Alone di cluster: spicchio colorato tenue, riempie lo spazio tra i settori.
+  for (const sector of sectors) {
+    const inner = Math.max(44, ringBaseRadius - 46);
+    const outer = sector.outerRadius;
+    const from = sector.angle - sector.half * 1.03;
+    const to = sector.angle + sector.half * 1.03;
+    const point = (radius: number, angle: number) => `${(Math.cos(angle) * radius).toFixed(1)} ${(Math.sin(angle) * radius).toFixed(1)}`;
+    sector.halo = [
+      `M ${point(inner, from)}`,
+      `L ${point(outer, from)}`,
+      `A ${outer} ${outer} 0 0 1 ${point(outer, to)}`,
+      `L ${point(inner, to)}`,
+      `A ${inner} ${inner} 0 0 0 ${point(inner, from)}`,
+      "Z",
+    ].join(" ");
   }
 
   const visibleConcept = new Set(nodes.map((node) => node.concept));
@@ -386,11 +463,11 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
     extend(left, node.labelY - height / 2, left + width, node.labelY + height / 2);
   }
   for (const sector of sectors) {
-    const width = sector.label.length * 0.62 * 12;
-    const x = Math.cos(sector.angle) * sector.labelRadius;
-    const y = Math.sin(sector.angle) * sector.labelRadius;
-    const left = Math.cos(sector.angle) > 0.35 ? x : Math.cos(sector.angle) < -0.35 ? x - width : x - width / 2;
-    extend(left, y - 12, left + width, y + 12);
+    for (const angle of [sector.angle - sector.half, sector.angle + sector.half]) {
+      const x = Math.cos(angle) * sector.outerRadius;
+      const y = Math.sin(angle) * sector.outerRadius;
+      extend(x - 4, y - 4, x + 4, y + 4);
+    }
   }
 
   return { nodes, edges, hiddenCount, sectors, bbox };
@@ -676,21 +753,13 @@ export function Cq1NetworkGraph({
         }}
       >
         <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
-          {payload.sectors.map((sector) => {
-            const cosine = Math.cos(sector.angle);
-            const anchor = cosine > 0.35 ? "start" : cosine < -0.35 ? "end" : "middle";
-            return (
-            <text
-              key={`sector-${sector.key}`}
-              className={`cq-graph-sector cq-graph-sector-${sector.polarity ?? "paradigmatic"}`}
-              x={cosine * sector.labelRadius}
-              y={Math.sin(sector.angle) * sector.labelRadius}
-              textAnchor={anchor}
-            >
-              {sector.label}
-            </text>
-            );
-          })}
+          {payload.sectors.map((sector) => (
+            <path
+              key={`halo-${sector.key}`}
+              className={`cq-graph-halo cq-graph-halo-${sector.polarity ?? "paradigmatic"}`}
+              d={sector.halo}
+            />
+          ))}
 
           {payload.edges.map((edge) => {
             const from = nodeByConcept.get(edge.a);
@@ -787,6 +856,34 @@ export function Cq1NetworkGraph({
       </svg>
 
       {payload.edges.length === 0 && <p className="cq-panel-empty">{t.cq1.graphNoEdges}</p>}
+
+      <div className="cq-graph-legend">
+        <span className="cq-graph-legend-title">{t.cq1.graphLegendTitle}</span>
+        {payload.sectors.map((sector) => (
+          <span key={`legend-${sector.key}`} className="cq-graph-legend-item">
+            <span className={`cq-graph-legend-dot cq-graph-legend-dot-${sector.polarity ?? "paradigmatic"}`} aria-hidden="true" />
+            {sector.label}
+          </span>
+        ))}
+        <span className="cq-graph-legend-item">
+          <svg className="cq-graph-legend-svg" viewBox="0 0 36 16" aria-hidden="true">
+            <circle cx="7" cy="8" r="3" />
+            <circle cx="22" cy="8" r="6.5" />
+          </svg>
+          {t.cq1.graphLegendSize}
+        </span>
+        <span className="cq-graph-legend-item">
+          <svg className="cq-graph-legend-svg" viewBox="0 0 36 16" aria-hidden="true">
+            <line x1="1" y1="5" x2="35" y2="5" strokeWidth="1.4" />
+            <line x1="1" y1="11" x2="35" y2="11" strokeWidth="3.6" />
+          </svg>
+          {t.cq1.graphLegendEdge}
+        </span>
+        <span className="cq-graph-legend-item">
+          <span className="cq-graph-legend-area" aria-hidden="true" />
+          {t.cq1.graphLegendCluster}
+        </span>
+      </div>
 
       {pinnedTooltip && (
         <div className={`cq-graph-tooltip pinned cq-graph-tooltip-${pinnedTooltip.tone}`} role="tooltip">

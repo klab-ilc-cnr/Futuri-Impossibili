@@ -404,3 +404,35 @@ di settore usava il raggio massimo **globale** (dettato dal settore negativo).
 più piccole. Con Top-8 per settore la scala ~1,18; con Top-16 scende a ~1,0;
 con "tutti i concetti" servirebbero ~5 anelli (scala ~0,6), quindi per il "tutti"
 andrebbe cambiato il packing (es. fillotassi) o ci si affida allo zoom.
+
+
+## Limite nodi adattivo, legenda e aloni di cluster (v0.24.0)
+
+**Limite nodi (opzione 2, budget adattivo).** Il Top-8 fisso per settore era
+troppo poco per settori grandi (40 concetti negativi per «criminale») e non
+necessariamente sensato per quelli piccoli. Ora:
+- settori con **≤ 12 concetti** sono mostrati **per intero**;
+- gli altri si dividono il resto di un **budget totale di 36 nodi** in proporzione
+  alla numerosità (metodo del resto maggiore, con ridistribuzione dei resti).
+Per «criminale»: positivo 10 (tutti), neutro 3 (tutti), paradigmatici 3 (tutti),
+negativo 20 su 40 → 36 nodi con scala ~1,16 (contro 1,22 con 32 nodi): il
+settore grande guadagna molto con una perdita di scala minima. La nota
+«N concetti non mostrati» resta. Parametri in `graphNodeBudget` (36) e
+`graphSectorFullBelow` (12), interni e non esposti.
+
+**Legenda (§10 della specifica).** Box sotto l'area di disegno con: pallini di
+polarità dei settori visibili, campione di **dimensione = occorrenze**, campione
+di **spessore = co-occorrenze**, campione di **area del cluster**.
+
+**Titoli di settore → aloni di cluster.** I titoli dentro il canvas sono stati
+**rimossi** (ora i nomi stanno nella legenda) e sostituiti da **aloni/settori
+colorati tenui** per cluster (la "cluster area" della legenda): riempiono lo
+spazio tra i settori invece di lasciarlo vuoto e danno il raggruppamento senza
+occupare il bordo esterno. Guadagno di scala misurato: modesto (~+5%), ma la
+leggibilità dei raggruppamenti e la spiegazione degli encoding sono il vero
+vantaggio. Le etichette dei nodi restano il canale testuale della polarità
+(insieme alla legenda), quindi l'accessibilità §16 è preservata.
+
+**Non implementato (da valutare).** Pulsanti zoom +/−/Fit nel toolbar (oggi solo
+rotella + «Adatta»); descrizione degli encoding in testata (nella nostra UI la
+spiega la legenda + il box «Informazioni su queste query»).
