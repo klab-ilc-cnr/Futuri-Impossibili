@@ -1,0 +1,140 @@
+#    Parametro	Valori ammessi	Significato
+#    ---------------------------------------------------
+#    ?term	"femmina"@it o altro termine con tag linguistico	Termine da cercare
+#    ?sexFilter	"Maschio", "Femmina", "Tutti"	"Tutti" disattiva il filtro sesso
+#    ?ageMode	"maggiore di", "minore di", "compreso tra", "età esatta", "qualunque"	Modalità del filtro età
+#    ?age1	Intero non negativo, ad esempio 18	Soglia, età esatta o limite inferiore
+#    ?age2	Intero non negativo, ad esempio 25	Limite superiore per "compreso tra"; altrimenti ignorato
+#    ?residenceFilter
+
+# Per disattivare tutti i filtri demografici:
+# ("Tutti" "qualunque" 0 0 "")
+
+PREFIX lexo:    <https://lexo.ilc.cnr.it#>
+PREFIX ontolex: <http://www.w3.org/ns/lemon/ontolex#>
+PREFIX skos:    <http://www.w3.org/2004/02/skos/core#>
+PREFIX frac:    <http://www.w3.org/ns/lemon/frac#>
+PREFIX dct:     <http://purl.org/dc/terms/>
+PREFIX xsd:     <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+    ?concept
+    (MIN(STR(?conceptLabel)) AS ?label)
+    (COUNT(DISTINCT ?attestation) AS ?numberOfAttestations)
+    (COUNT(DISTINCT ?interview) AS ?numberOfTexts)
+WHERE {
+    # Lista completa dei lexical concept
+    GRAPH <https://lexo.ilc.cnr.it/graphs/lexical/lexicalConcept> {
+        ?concept a ontolex:LexicalConcept .
+        OPTIONAL { ?concept skos:prefLabel ?conceptLabel }
+    }
+
+    VALUES ?term { "femmina"@it }
+
+    # Parametri demografici
+    VALUES (?sexFilter ?ageMode ?age1 ?age2 ?residenceFilter) {
+        ("Tutti" "qualunque" 0 0 "")
+    }
+
+    OPTIONAL {
+        # Sensi appartenenti all'entry del termine richiesto
+        GRAPH <https://lexo.ilc.cnr.it/graphs/lexical/lexica/it> {
+            ?entry
+                ontolex:canonicalForm/ontolex:writtenRep ?term ;
+                ontolex:sense ?sense .
+
+            ?sense a ontolex:LexicalSense .
+        }
+
+        GRAPH ?attGraph {
+            # L'observable dell'attestazione è il senso
+            ?sense frac:attestation ?attestation .
+
+            # Il concept è indicato sulla singola attestazione
+            ?attestation
+                lexo:referringConcept ?concept ;
+                frac:observedIn ?interview .
+        }
+
+        FILTER(STRSTARTS(
+            STR(?attGraph),
+            "https://lexo.ilc.cnr.it/graphs/lexical/attestations/documents/"
+        ))
+
+        SERVICE <repository:LexOTexts> {
+            GRAPH ?textGraph {
+                ?interview dct:description ?description .
+            }
+
+            FILTER(STRSTARTS(
+                STR(?textGraph),
+                "https://lexo.ilc.cnr.it/graphs/nif/documents/"
+            ))
+        }
+
+        BIND(STR(?description) AS ?demographics)
+
+        BIND(
+            "(^|.*,)\\s*Sesso\\s*:\\s*([^,]+)(,.*|$)"
+            AS ?sexPattern
+        )
+        BIND(
+            "(^|.*,)\\s*Et[àa]\\s*:\\s*([0-9]+)\\s*(,.*|$)"
+            AS ?agePattern
+        )
+        BIND(
+            "(^|.*,)\\s*Residenza\\s*:\\s*([^,]+)(,.*|$)"
+            AS ?residencePattern
+        )
+
+        BIND(
+            REPLACE(
+                REPLACE(?demographics, ?sexPattern, "$2", "is"),
+                "^\\s+|\\s+$", ""
+            ) AS ?sex
+        )
+        BIND(
+            xsd:integer(
+                REPLACE(?demographics, ?agePattern, "$2", "is")
+            ) AS ?age
+        )
+        BIND(
+            REPLACE(
+                REPLACE(?demographics, ?residencePattern, "$2", "is"),
+                "^\\s+|\\s+$", ""
+            ) AS ?residence
+        )
+
+        FILTER(
+            LCASE(?sexFilter) = "tutti" ||
+            (
+                REGEX(?demographics, ?sexPattern, "is") &&
+                LCASE(?sex) = LCASE(?sexFilter)
+            )
+        )
+
+        FILTER(
+            ?ageMode = "qualunque" ||
+            (
+                REGEX(?demographics, ?agePattern, "is") &&
+                (
+                    (?ageMode = "maggiore di" && ?age > ?age1) ||
+                    (?ageMode = "minore di" && ?age < ?age1) ||
+                    (?ageMode = "compreso tra" &&
+                        ?age >= ?age1 && ?age <= ?age2) ||
+                    (?ageMode = "età esatta" && ?age = ?age1)
+                )
+            )
+        )
+
+        FILTER(
+            ?residenceFilter = "" ||
+            (
+                REGEX(?demographics, ?residencePattern, "is") &&
+                LCASE(?residence) = LCASE(?residenceFilter)
+            )
+        )
+    }
+}
+GROUP BY ?concept
+ORDER BY DESC(?numberOfAttestations) ?label ?concept

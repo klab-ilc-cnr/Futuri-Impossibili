@@ -53,3 +53,6 @@ next-env.d.ts
 
 # script locale di deploy con indirizzi di rete (mai nel repo)
 /create-deploy.sh
+
+# archivi locali (mai nel repo)
+*.tgz

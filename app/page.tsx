@@ -2,6 +2,8 @@
 
 import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { dictionaries, type Lang } from "./strings";
+import { CqPanel } from "./cq/panel";
+import { basePath } from "./base-path";
 
 type SelectionInfo = {
   start: number;
@@ -85,6 +87,7 @@ type ConceptAnnotationOptions = {
   pragmaticUsage: string;
   note: string;
   lexicalEntry: string;
+  term: string;
 };
 
 type ConceptSelection = ConceptAnnotationOptions & {
@@ -210,9 +213,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.16.10";
-
-const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
+const appVersion = "0.26.0";
 
 const textsEndpoint = `${basePath}/api/lexo/texts`;
 const textBulkUploadEndpoint = `${basePath}/api/lexo/texts/bulk`;
@@ -308,6 +309,12 @@ function narrativeMetadata(options: ConceptAnnotationOptions, includeEmptyOption
         ? [{ value: options.note.trim(), type: "literal", language: "it" }]
         : [],
     }] : []),
+    ...(includeEmptyOptional || options.term ? [{
+      property: rdfsCommentProperty,
+      values: options.term
+        ? [{ value: options.term, type: "literal", language: "it" }]
+        : [],
+    }] : []),
   ];
 }
 
@@ -315,6 +322,7 @@ function emptyConceptSelection(lexicalConcept: string): ConceptSelection {
   return {
     lexicalConcept,
     lexicalEntry: "",
+    term: "",
     narrativeSense: "",
     paradigmaticSense: "",
     relationType: "",
@@ -801,6 +809,7 @@ async function parseAttestations(payload: unknown, lexicalConcepts: LexicalConce
             pragmaticUsage,
             note,
             lexicalEntry: annotationLexicalEntry,
+            term,
           },
         });
       }
@@ -1997,6 +2006,7 @@ export default function Home() {
         ? {
             ...emptyConceptSelection(lexicalConcept),
             lexicalEntry: lexicalEntry.entry,
+            term: lexicalEntry.label,
             sensesLoading: true,
           }
         : emptyConceptSelection(lexicalConcept),
@@ -2030,6 +2040,7 @@ export default function Home() {
         [lexicalConcept]: {
           ...(current[lexicalConcept] ?? emptyConceptSelection(lexicalConcept)),
           lexicalEntry: lexicalEntry.entry,
+          term: lexicalEntry.label,
           narrativeSense,
           paradigmaticSense,
           sensesLoading: false,
@@ -2045,6 +2056,7 @@ export default function Home() {
         [lexicalConcept]: {
           ...(current[lexicalConcept] ?? emptyConceptSelection(lexicalConcept)),
           lexicalEntry: lexicalEntry.entry,
+          term: lexicalEntry.label,
           sensesLoading: false,
           sensesReady: false,
           sensesError: message,
@@ -3795,7 +3807,7 @@ export default function Home() {
         }
         return {
           observable: concept.lexicalConcept,
-          metadata: narrativeMetadata(options),
+          metadata: narrativeMetadata({ ...options, term: options.term || concept.defaultLabel }),
         };
       });
       const response = await fetch(
@@ -4105,7 +4117,7 @@ export default function Home() {
               }
             : {
                 observable: concept.lexicalConcept,
-                metadata: narrativeMetadata(options),
+                metadata: narrativeMetadata({ ...options, term: options.term || concept.defaultLabel }),
               };
         });
         const response = await fetch(`${attestationsEndpoint}/by-locus?${parameters.toString()}`, {
@@ -4382,6 +4394,8 @@ export default function Home() {
       <main>
         {activePage === 1 ? (
           <section className="statistics-page" aria-label="Statistiche" />
+        ) : activePage === 3 ? (
+          <CqPanel lang={lang} />
         ) : activePage === 4 ? (
           <section className="workspace" aria-label={t.workspace.sectionAria}>
             <div className="interview-layout">

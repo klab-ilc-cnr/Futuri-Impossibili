@@ -1,0 +1,93 @@
+PREFIX frac: <http://www.w3.org/ns/lemon/frac#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX marl: <http://purl.org/marl/ns#>
+PREFIX dct:  <http://purl.org/dc/terms/>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?id ?attestation ?age ?sex ?residence
+WHERE {
+    # Parametri di input
+    VALUES (?term ?concept ?polarity) {
+        (
+            "criminale"@it
+            <https://lexo.ilc.cnr.it#LexO_2026-08-21T13_00_00_099+02_00>
+            marl:Negative
+        )
+    }
+
+    GRAPH ?attGraph {
+        ?concept frac:attestation ?attestation .
+
+        ?attestation
+            rdfs:comment ?term ;
+            marl:hasPolarity ?polarity .
+    }
+
+    FILTER(STRSTARTS(
+        STR(?attGraph),
+        "https://lexo.ilc.cnr.it/graphs/lexical/attestations/documents/"
+    ))
+
+    OPTIONAL {
+        GRAPH ?attGraph {
+            ?attestation frac:observedIn ?interview .
+        }
+
+        SERVICE <repository:LexOTexts> {
+            GRAPH ?textGraph {
+                ?interview dct:description ?description ;
+                           dct:identifier ?id .
+            }
+
+            FILTER(STRSTARTS(
+                STR(?textGraph),
+                "https://lexo.ilc.cnr.it/graphs/nif/documents/"
+            ))
+        }
+
+        BIND(STR(?description) AS ?demographics)
+
+        BIND(
+            "(^|.*,)\\s*Et[àa]\\s*:\\s*([0-9]+)\\s*(,.*|$)"
+            AS ?agePattern
+        )
+        BIND(
+            "(^|.*,)\\s*Sesso\\s*:\\s*([^,]+)(,.*|$)"
+            AS ?sexPattern
+        )
+        BIND(
+            "(^|.*,)\\s*Residenza\\s*:\\s*([^,]+)(,.*|$)"
+            AS ?residencePattern
+        )
+
+        OPTIONAL {
+            FILTER(REGEX(?demographics, ?agePattern, "is"))
+            BIND(
+                xsd:integer(
+                    REPLACE(?demographics, ?agePattern, "$2", "is")
+                ) AS ?age
+            )
+        }
+
+        OPTIONAL {
+            FILTER(REGEX(?demographics, ?sexPattern, "is"))
+            BIND(
+                REPLACE(
+                    REPLACE(?demographics, ?sexPattern, "$2", "is"),
+                    "^\\s+|\\s+$", ""
+                ) AS ?sex
+            )
+        }
+
+        OPTIONAL {
+            FILTER(REGEX(?demographics, ?residencePattern, "is"))
+            BIND(
+                REPLACE(
+                    REPLACE(?demographics, ?residencePattern, "$2", "is"),
+                    "^\\s+|\\s+$", ""
+                ) AS ?residence
+            )
+        }
+    }
+}
+ORDER BY ?attestation

@@ -1,0 +1,148 @@
+# Per configurare i filtri:
+#      Parametro	Valori
+#      -----------------------------------------------------------
+#      ?sexFilter	"Maschio", "Femmina", "Tutti"
+#      ?ageMode	"maggiore di", "minore di", "compreso tra", "età esatta", "qualunque"
+#      ?age1	Età di riferimento o limite inferiore
+#      ?age2	Limite superiore, usato soltanto con "compreso tra"
+#      ?residenceFilter	Residenza esatta, senza distinzione maiuscole/minuscole; "" per tutte
+
+# Per disattivare tutti i filtri demografici:
+# ("Tutti" "qualunque" 0 0 "")
+PREFIX ontolex: <http://www.w3.org/ns/lemon/ontolex#>
+PREFIX skos:    <http://www.w3.org/2004/02/skos/core#>
+PREFIX frac:    <http://www.w3.org/ns/lemon/frac#>
+PREFIX rdfs:    <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX dct:     <http://purl.org/dc/terms/>
+PREFIX xsd:     <http://www.w3.org/2001/XMLSchema#>
+PREFIX marl:    <http://purl.org/marl/ns#>
+
+SELECT
+    ?polarity
+    ?concept
+    (MIN(STR(?conceptLabel)) AS ?label)
+    (COUNT(DISTINCT ?attestation) AS ?numberOfAttestations)
+    (COUNT(DISTINCT ?interview) AS ?numberOfTexts)
+WHERE {
+    # Lista completa dei lexical concept
+    {
+        SELECT DISTINCT ?concept
+        WHERE {
+            GRAPH <https://lexo.ilc.cnr.it/graphs/lexical/lexicalConcept> {
+                ?concept a ontolex:LexicalConcept .
+            }
+        }
+    }
+
+    OPTIONAL {
+        GRAPH <https://lexo.ilc.cnr.it/graphs/lexical/lexicalConcept> {
+            ?concept skos:prefLabel ?conceptLabel .
+        }
+    }
+
+    VALUES ?term { "criminale"@it }
+
+    # Tre righe per ogni concept
+    VALUES (?polarity ?polarityOrder) {
+        (marl:Positive 1)
+        (marl:Neutral  2)
+        (marl:Negative 3)
+    }
+
+    # Filtri demografici
+    VALUES (?sexFilter ?ageMode ?age1 ?age2 ?residenceFilter) {
+        ("Tutti" "qualunque" 0 0 "")
+    }
+
+    OPTIONAL {
+        GRAPH ?attGraph {
+            ?concept frac:attestation ?attestation .
+
+            ?attestation
+                rdfs:comment ?term ;
+                marl:hasPolarity ?polarity ;
+                frac:observedIn ?interview .
+        }
+
+        FILTER(STRSTARTS(
+            STR(?attGraph),
+            "https://lexo.ilc.cnr.it/graphs/lexical/attestations/documents/"
+        ))
+
+        SERVICE <repository:LexOTexts> {
+            GRAPH ?textGraph {
+                ?interview dct:description ?description .
+            }
+
+            FILTER(STRSTARTS(
+                STR(?textGraph),
+                "https://lexo.ilc.cnr.it/graphs/nif/documents/"
+            ))
+        }
+
+        BIND(STR(?description) AS ?demographics)
+
+        BIND(
+            "(^|.*,)\\s*Sesso\\s*:\\s*([^,]+)(,.*|$)"
+            AS ?sexPattern
+        )
+        BIND(
+            "(^|.*,)\\s*Et[àa]\\s*:\\s*([0-9]+)\\s*(,.*|$)"
+            AS ?agePattern
+        )
+        BIND(
+            "(^|.*,)\\s*Residenza\\s*:\\s*([^,]+)(,.*|$)"
+            AS ?residencePattern
+        )
+
+        BIND(
+            REPLACE(
+                REPLACE(?demographics, ?sexPattern, "$2", "is"),
+                "^\\s+|\\s+$", ""
+            ) AS ?sex
+        )
+        BIND(
+            xsd:integer(
+                REPLACE(?demographics, ?agePattern, "$2", "is")
+            ) AS ?age
+        )
+        BIND(
+            REPLACE(
+                REPLACE(?demographics, ?residencePattern, "$2", "is"),
+                "^\\s+|\\s+$", ""
+            ) AS ?residence
+        )
+
+        FILTER(
+            LCASE(?sexFilter) = "tutti" ||
+            (
+                REGEX(?demographics, ?sexPattern, "is") &&
+                LCASE(?sex) = LCASE(?sexFilter)
+            )
+        )
+
+        FILTER(
+            ?ageMode = "qualunque" ||
+            (
+                REGEX(?demographics, ?agePattern, "is") &&
+                (
+                    (?ageMode = "maggiore di" && ?age > ?age1) ||
+                    (?ageMode = "minore di" && ?age < ?age1) ||
+                    (?ageMode = "compreso tra" &&
+                        ?age >= ?age1 && ?age <= ?age2) ||
+                    (?ageMode = "età esatta" && ?age = ?age1)
+                )
+            )
+        )
+
+        FILTER(
+            ?residenceFilter = "" ||
+            (
+                REGEX(?demographics, ?residencePattern, "is") &&
+                LCASE(?residence) = LCASE(?residenceFilter)
+            )
+        )
+    }
+}
+GROUP BY ?polarity ?polarityOrder ?concept
+ORDER BY ?polarityOrder ?label ?concept
