@@ -1122,7 +1122,7 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .cq-graph-note { color: var(--muted); font-size: 11.5px; font-style: italic; }
 .cq-graph-svg {
   width: 100%;
-  height: auto;
+  height: clamp(460px, 66vh, 700px);
   border-radius: 12px;
   background: radial-gradient(circle at 50% 50%, #fbfdfb 0%, #f4f8f5 72%, #eef4ef 100%);
   cursor: grab;
@@ -1130,7 +1130,7 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
   user-select: none;
 }
 .cq-graph-svg:active { cursor: grabbing; }
-.cq-graph-sector { font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.cq-graph-sector { font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .cq-graph-sector-positive { fill: var(--pos-ink); }
 .cq-graph-sector-neutral { fill: var(--neu-ink); }
 .cq-graph-sector-negative { fill: #a12f25; }
@@ -1146,7 +1146,14 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 }
 .cq-graph-edge.dimmed { opacity: .08 !important; }
 .cq-graph-node { cursor: pointer; }
-.cq-graph-node text { font-size: 9.5px; fill: #2d3a34; }
+.cq-graph-node text {
+  font-size: 11.5px;
+  fill: #23302a;
+  paint-order: stroke;
+  stroke: #f7faf8;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
 .cq-graph-node circle { stroke: #fff; stroke-width: 1.5; transition: opacity .15s ease; }
 .cq-graph-node-positive circle { fill: var(--pos-fill); }
 .cq-graph-node-neutral circle { fill: var(--neu-fill); }

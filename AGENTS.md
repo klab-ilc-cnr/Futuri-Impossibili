@@ -361,6 +361,13 @@ delete, reload.
   (v0.22.6: mostrato solo in vista Lista, ponte lista→grafo; in grafo è
   ridondante col click sul nodo);
   zoom/pan/Adatta; «Torna alla lista»; sort nascosto nel grafo (v0.22.1–v0.22.2).
+  **Resa visiva (v0.23.0)**: `viewBox` adattivo (bbox reale del contenuto esteso
+  all'aspect del pannello, misurato con `ResizeObserver`; SVG `height:
+  clamp(460px,66vh,700px)`), anelli compatti (base 84/passo 80), titoli di
+  settore proiettati sull'asse del settore e ancorati verso l'esterno, marche più
+  grandi (nodo 7–18, font 11,5 con alone, archi 1,4–3,6) ed etichette dei nodi con
+  evitamento deterministico delle collisioni (prima le occorrenze più alte).
+  Scala a schermo da 0,85 a ~1,18. Dettagli in `queries/DECISIONS.md`.
   **Colori (v0.22.7)**: la polarità nei dati usa token dedicati `--pos-fill`
   `#4ea36a` / `--pos-ink` `#2f7a4c` / `--neu-fill` `#e6c33c` / `--neu-ink`
   `#756414`, separati dal verde UI (`--green`, per menu/toggle/bottoni) e

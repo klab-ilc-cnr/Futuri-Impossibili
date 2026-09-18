@@ -23,11 +23,16 @@ const graphNeighborTop = 5;
 const graphMinWeight = 1;
 const graphMinZoom = 0.4;
 const graphMaxZoom = 4;
-const nodeRadiusMin = 6;
-const nodeRadiusSpan = 9;
-const ringBaseRadius = 132;
-const ringStep = 92;
-const labelMaxChars = 24;
+const nodeRadiusMin = 7;
+const nodeRadiusSpan = 11;
+const ringBaseRadius = 84;
+const ringStep = 80;
+const ringSpacing = 34;
+const labelMaxChars = 18;
+const labelFontSize = 11.5;
+const labelCharWidth = 0.56;
+const sectorLabelMargin = 36;
+const graphPadding = 28;
 
 export interface Cq1GraphSelection {
   concept: string;
@@ -60,6 +65,10 @@ interface GraphNode {
   x: number;
   y: number;
   radius: number;
+  labelVisible: boolean;
+  labelX: number;
+  labelY: number;
+  labelAnchor: "start" | "end";
 }
 
 interface GraphEdge {
@@ -75,6 +84,15 @@ interface GraphSector {
   polarity: CqPolarity | null;
   angle: number;
   hidden: number;
+  labelRadius: number;
+  label: string;
+}
+
+interface GraphBBox {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
 }
 
 interface GraphPayload {
@@ -82,6 +100,7 @@ interface GraphPayload {
   edges: GraphEdge[];
   hiddenCount: number;
   sectors: GraphSector[];
+  bbox: GraphBBox;
 }
 
 interface GraphTooltip {
@@ -134,9 +153,10 @@ interface BuildGraphParams {
   polarities: Set<CqPolarity>;
   corpus: Map<string, Record<string, unknown>[]>;
   texts: Map<string, string>;
+  sectorLabels: Record<string, string>;
 }
 
-function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts }: BuildGraphParams): GraphPayload {
+function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts, sectorLabels }: BuildGraphParams): GraphPayload {
   const conceptMeta = new Map<string, { label: string; kind: "narrative" | "paradigmatic"; polarity?: CqPolarity }>();
   for (const item of paradigmatic) {
     if (!conceptMeta.has(item.concept)) {
@@ -213,6 +233,10 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts 
       x: 0,
       y: 0,
       radius: nodeRadiusMin,
+      labelVisible: false,
+      labelX: 0,
+      labelY: 0,
+      labelAnchor: "start",
     });
   }
 
@@ -230,26 +254,90 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts 
     const visible = group.slice(0, graphSectorTop);
     hiddenCount += group.length - visible.length;
     const angle = -Math.PI / 2 + sectorIndex * span;
-    const half = (span / 2) * 0.86;
+    const half = (span / 2) * 0.88;
     let index = 0;
     let ring = 0;
-    while (index < visible.length && ring < 8) {
+    let sectorMaxRadius = 0;
+    while (index < visible.length && ring < 10) {
       const radius = ringBaseRadius + ring * ringStep;
-      const capacity = Math.max(1, Math.floor((2 * half * radius) / 60));
+      const capacity = Math.max(1, Math.floor((2 * half * radius) / ringSpacing));
       for (let slot = 0; slot < capacity && index < visible.length; slot += 1, index += 1) {
         const slotAngle = angle + 2 * half * ((slot + 0.5) / capacity - 0.5);
         const node = visible[index];
+        const nodeRadius = nodeRadiusMin + nodeRadiusSpan * Math.sqrt(node.occurrences / maxOccurrences);
         nodes.push({
           ...node,
           x: Math.cos(slotAngle) * radius,
           y: Math.sin(slotAngle) * radius,
-          radius: nodeRadiusMin + nodeRadiusSpan * Math.sqrt(node.occurrences / maxOccurrences),
+          radius: nodeRadius,
         });
+        sectorMaxRadius = Math.max(sectorMaxRadius, radius + nodeRadius);
       }
       ring += 1;
     }
-    sectors.push({ key, polarity: key === "paradigmatic" ? null : (key as CqPolarity), angle, hidden: group.length - visible.length });
+    sectors.push({
+      key,
+      polarity: key === "paradigmatic" ? null : (key as CqPolarity),
+      angle,
+      hidden: group.length - visible.length,
+      labelRadius: sectorMaxRadius,
+      label: sectorLabels[key] ?? key,
+    });
   });
+
+  // Etichette dei nodi con evitamento deterministico delle collisioni:
+  // si etichettano prima i concetti con più occorrenze, si salta chi si sovrappone.
+  const occupied: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+  const labelOrder = [...nodes].sort(
+    (left, right) => right.occurrences - left.occurrences
+      || right.radius - left.radius
+      || left.label.localeCompare(right.label, "it"),
+  );
+  for (const node of labelOrder) {
+    const direction = Math.atan2(node.y, node.x);
+    const cos = Math.cos(direction);
+    const sin = Math.sin(direction);
+    const anchor: "start" | "end" = cos >= 0 ? "start" : "end";
+    const x = node.x + (node.radius + 5) * cos;
+    const y = node.y + (node.radius + 5) * sin;
+    const text = truncateLabel(node.label);
+    const width = text.length * labelCharWidth * labelFontSize;
+    const height = labelFontSize * 1.2;
+    const rect = anchor === "start"
+      ? { x1: x, y1: y - height / 2, x2: x + width, y2: y + height / 2 }
+      : { x1: x - width, y1: y - height / 2, x2: x, y2: y + height / 2 };
+    const collides = occupied.some((other) => (
+      rect.x1 < other.x2 + 3 && rect.x2 > other.x1 - 3
+      && rect.y1 < other.y2 + 2 && rect.y2 > other.y1 - 2
+    ));
+    node.labelVisible = !collides;
+    node.labelAnchor = anchor;
+    node.labelX = x;
+    node.labelY = y;
+    if (!collides) occupied.push(rect);
+  }
+
+  // Il titolo di settore va subito oltre il proprio grappolo, misurato lungo
+  // l'asse del settore (proiezione), non in distanza euclidea.
+  for (const sector of sectors) {
+    const axisX = Math.cos(sector.angle);
+    const axisY = Math.sin(sector.angle);
+    let projection = 0;
+    for (const node of nodes) {
+      if (sectorKeyOf(node.polarity) !== sector.key) continue;
+      projection = Math.max(projection, node.x * axisX + node.y * axisY + node.radius);
+      if (!node.labelVisible) continue;
+      const text = truncateLabel(node.label);
+      const width = text.length * labelCharWidth * labelFontSize;
+      const outerX = node.labelAnchor === "start" ? node.labelX + width : node.labelX - width;
+      projection = Math.max(
+        projection,
+        node.labelX * axisX + node.labelY * axisY,
+        outerX * axisX + node.labelY * axisY,
+      );
+    }
+    sector.labelRadius = projection + sectorLabelMargin;
+  }
 
   const visibleConcept = new Set(nodes.map((node) => node.concept));
   const candidateEdges: GraphEdge[] = [];
@@ -280,7 +368,32 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts 
   }
   const edges = candidateEdges.filter((edge) => kept.has(`${edge.a}|${edge.b}`));
 
-  return { nodes, edges, hiddenCount, sectors };
+  // bounding box del contenuto (nodi, etichette visibili, etichette di settore)
+  const bbox: GraphBBox = { minX: -34, minY: -34, maxX: 34, maxY: 34 };
+  const extend = (x1: number, y1: number, x2: number, y2: number) => {
+    bbox.minX = Math.min(bbox.minX, x1);
+    bbox.minY = Math.min(bbox.minY, y1);
+    bbox.maxX = Math.max(bbox.maxX, x2);
+    bbox.maxY = Math.max(bbox.maxY, y2);
+  };
+  for (const node of nodes) {
+    extend(node.x - node.radius, node.y - node.radius, node.x + node.radius, node.y + node.radius);
+    if (!node.labelVisible) continue;
+    const text = truncateLabel(node.label);
+    const width = text.length * labelCharWidth * labelFontSize;
+    const height = labelFontSize * 1.2;
+    const left = node.labelAnchor === "start" ? node.labelX : node.labelX - width;
+    extend(left, node.labelY - height / 2, left + width, node.labelY + height / 2);
+  }
+  for (const sector of sectors) {
+    const width = sector.label.length * 0.62 * 12;
+    const x = Math.cos(sector.angle) * sector.labelRadius;
+    const y = Math.sin(sector.angle) * sector.labelRadius;
+    const left = Math.cos(sector.angle) > 0.35 ? x : Math.cos(sector.angle) < -0.35 ? x - width : x - width / 2;
+    extend(left, y - 12, left + width, y + 12);
+  }
+
+  return { nodes, edges, hiddenCount, sectors, bbox };
 }
 
 function truncateLabel(label: string): string {
@@ -309,7 +422,15 @@ export function Cq1NetworkGraph({
   const [pinnedTooltip, setPinnedTooltip] = useState<GraphTooltip | null>(null);
   const [hoverTarget, setHoverTarget] = useState<{ kind: "edge" | "node"; key: string } | null>(null);
   const [pinnedTarget, setPinnedTarget] = useState<{ kind: "edge" | "node"; key: string } | null>(null);
+
+  const sectorLabels = useMemo(() => ({
+    positive: polarityNames.positive(t),
+    neutral: polarityNames.neutral(t),
+    negative: polarityNames.negative(t),
+    paradigmatic: t.cq1.graphSectorParadigmatic,
+  }), [t]);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
+  const [box, setBox] = useState({ width: 0, height: 0 });
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef({ active: false, moved: false, startX: 0, startY: 0, originX: 0, originY: 0 });
@@ -331,7 +452,7 @@ export function Cq1NetworkGraph({
           if (typeof value === "string") texts.set(fileId, value);
         }
         if (cancelled) return;
-        setPayload(buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts }));
+        setPayload(buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts, sectorLabels }));
         setPinnedTarget(null);
         setPinnedTooltip(null);
         setHoverTarget(null);
@@ -343,7 +464,7 @@ export function Cq1NetworkGraph({
     };
     void build();
     return () => { cancelled = true; };
-  }, [entry, narrative, paradigmatic, polarities, ensureCaches, t]);
+  }, [entry, narrative, paradigmatic, polarities, ensureCaches, sectorLabels, t]);
 
   useEffect(() => {
     const svg = svgRef.current;
@@ -358,6 +479,29 @@ export function Cq1NetworkGraph({
     svg.addEventListener("wheel", onWheel, { passive: false });
     return () => svg.removeEventListener("wheel", onWheel);
   }, [loading]);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const update = () => setBox({ width: svg.clientWidth, height: svg.clientHeight });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, [loading]);
+
+  const viewBox = useMemo(() => {
+    if (!payload) return "-460 -400 920 800";
+    const { minX, minY, maxX, maxY } = payload.bbox;
+    let halfWidth = (maxX - minX) / 2 + graphPadding;
+    let halfHeight = (maxY - minY) / 2 + graphPadding;
+    const aspect = box.width > 0 && box.height > 0 ? box.width / box.height : 1.35;
+    if (halfWidth / halfHeight < aspect) halfWidth = halfHeight * aspect;
+    else halfHeight = halfWidth / aspect;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    return `${centerX - halfWidth} ${centerY - halfHeight} ${2 * halfWidth} ${2 * halfHeight}`;
+  }, [payload, box]);
 
   const nodeByConcept = useMemo(
     () => new Map((payload?.nodes ?? []).map((node) => [node.concept, node])),
@@ -475,8 +619,6 @@ export function Cq1NetworkGraph({
   if (error) return <p className="cq-status cq-status-error">{t.cq1.errorPrefix}{error}</p>;
   if (!payload || payload.nodes.length === 0) return <p className="cq-panel-empty">{t.cq1.graphEmpty}</p>;
 
-  const maxRadius = payload.nodes.reduce((max, node) => Math.max(max, Math.hypot(node.x, node.y)), ringBaseRadius);
-  const labelRadius = maxRadius + 46;
 
   return (
     <div className="cq-graph" ref={wrapperRef}>
@@ -499,7 +641,7 @@ export function Cq1NetworkGraph({
 
       <svg
         ref={svgRef}
-        viewBox="-460 -400 920 800"
+        viewBox={viewBox}
         className="cq-graph-svg"
         role="img"
         aria-label={t.cq1.graphTitle}
@@ -534,17 +676,21 @@ export function Cq1NetworkGraph({
         }}
       >
         <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
-          {payload.sectors.map((sector) => (
+          {payload.sectors.map((sector) => {
+            const cosine = Math.cos(sector.angle);
+            const anchor = cosine > 0.35 ? "start" : cosine < -0.35 ? "end" : "middle";
+            return (
             <text
               key={`sector-${sector.key}`}
               className={`cq-graph-sector cq-graph-sector-${sector.polarity ?? "paradigmatic"}`}
-              x={Math.cos(sector.angle) * labelRadius}
-              y={Math.sin(sector.angle) * labelRadius}
-              textAnchor="middle"
+              x={cosine * sector.labelRadius}
+              y={Math.sin(sector.angle) * sector.labelRadius}
+              textAnchor={anchor}
             >
-              {sector.polarity ? polarityNames[sector.polarity](t) : t.cq1.graphSectorParadigmatic}
+              {sector.label}
             </text>
-          ))}
+            );
+          })}
 
           {payload.edges.map((edge) => {
             const from = nodeByConcept.get(edge.a);
@@ -576,7 +722,7 @@ export function Cq1NetworkGraph({
               <g key={`edge-${key}`}>
                 <path
                   className={["cq-graph-edge", dimmed ? "dimmed" : "", active ? "active" : ""].filter(Boolean).join(" ")}
-                  style={{ strokeWidth: 1 + (edge.weight - 1) * 0.9, opacity: Math.min(0.85, 0.4 + edge.weight * 0.15) }}
+                  style={{ strokeWidth: 1.4 + (edge.weight - 1) * 1.1, opacity: Math.min(0.9, 0.45 + edge.weight * 0.15) }}
                   d={path}
                 />
                 <path
@@ -599,9 +745,6 @@ export function Cq1NetworkGraph({
           </g>
 
           {payload.nodes.map((node) => {
-            const labelX = node.x + (node.radius + 5) * Math.cos(Math.atan2(node.y, node.x));
-            const labelY = node.y + (node.radius + 5) * Math.sin(Math.atan2(node.y, node.x));
-            const anchor = Math.cos(Math.atan2(node.y, node.x)) >= 0 ? "start" : "end";
             const selected = selectedConcept?.concept === node.concept;
             const dimmed = emphasis ? !emphasis.nodes.has(node.concept) : false;
             const lit = Boolean(emphasis?.nodes.has(node.concept));
@@ -632,9 +775,11 @@ export function Cq1NetworkGraph({
                 }}
               >
                 <circle cx={node.x} cy={node.y} r={node.radius} />
-                <text x={labelX} y={labelY} textAnchor={anchor} dominantBaseline="middle">
-                  {truncateLabel(node.label)}
-                </text>
+                {node.labelVisible && (
+                  <text x={node.labelX} y={node.labelY} textAnchor={node.labelAnchor} dominantBaseline="middle">
+                    {truncateLabel(node.label)}
+                  </text>
+                )}
               </g>
             );
           })}

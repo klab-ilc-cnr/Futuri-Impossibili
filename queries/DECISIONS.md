@@ -368,3 +368,39 @@ chiaro (`#ffe066`, testo `#5d4f10` intatto a 6.22:1); si scurisce solo il giallo
 
 **Bonus (v0.22.7)**: le etichette di settore `Positive`/`Negative` uscivano dal
 `viewBox` del grafo e venivano tagliate; `viewBox` portato a `-460 -400 920 800`.
+
+
+## Resa visiva del grafo: inquadratura, densità e marche (v0.23.0)
+
+Problema segnalato dal team: molto spazio inutilizzato, nodi/etichette piccoli,
+archi troppo sottili, titoli di settore lontani dai rispettivi grappoli.
+
+**Diagnosi (misurata)**: il grafo era disegnato in un `viewBox` fisso 920×800
+mentre il contenuto reale occupava ~571×570 unità → il contenuto veniva scalato
+a 0,85 e il pannello (712×544) aggiungeva ~31% di spazio orizzontale inutile.
+Inoltre il primo anello partiva a 132 unità (corona vuota al centro) e il titolo
+di settore usava il raggio massimo **globale** (dettato dal settore negativo).
+
+**Interventi (A+B+C+D)**:
+- **A — `viewBox` adattivo**: si calcola il bounding box reale del contenuto
+  (nodi, etichette visibili, titoli di settore) e lo si espande fino all'**aspect
+  del pannello** misurato con `ResizeObserver`; l'SVG ha ora un'altezza dedicata
+  (`clamp(460px, 66vh, 700px)`) per avvicinare l'aspetto del pannello a quello
+  del contenuto. Scala risultante da 0,85 a **1,18** (+39%) con riempimento
+  orizzontale 0,95.
+- **B — anelli più compatti**: base 132→84, passo 92→80, spaziatura 60→34.
+- **C — titoli di settore per-settore**, posizionati proiettando i nodi (e le
+  loro etichette) **sull'asse del settore**, non in distanza euclidea: il titolo
+  sta subito fuori dal proprio grappolo. Ancoraggio verso l'esterno
+  (`start`/`end`/`middle` secondo il coseno) per non invadere i nodi.
+- **D — marche più grandi**: raggio nodo 6–15 → 7–18, font etichette 9,5 → 11,5
+  con alone chiaro (`paint-order: stroke`), archi 1,0–2,8 → 1,4–3,6, titoli 12.
+- **Etichette con evitamento deterministico delle collisioni**: si etichettano
+  prima i concetti con più occorrenze; chi si sovrappone a un'etichetta già
+  disposta resta senza label (pallino + tooltip/click). Serve a sostenere
+  l'aumento del numero di nodi senza un muro di testo.
+
+**Trade-off documentato**: area del pannello fissa → più nodi mostrati = marche
+più piccole. Con Top-8 per settore la scala ~1,18; con Top-16 scende a ~1,0;
+con "tutti i concetti" servirebbero ~5 anelli (scala ~0,6), quindi per il "tutti"
+andrebbe cambiato il packing (es. fillotassi) o ci si affida allo zoom.
