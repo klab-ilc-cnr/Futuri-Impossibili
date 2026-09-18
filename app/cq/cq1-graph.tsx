@@ -28,7 +28,8 @@ const nodeRadiusMin = 7;
 const nodeRadiusSpan = 11;
 const ringBaseRadius = 84;
 const ringStep = 80;
-const ringSpacing = 34;
+const ringGap = 26;
+const graphMaxRings = 4;
 const labelMaxChars = 18;
 const labelFontSize = 11.5;
 const labelCharWidth = 0.56;
@@ -69,7 +70,8 @@ interface GraphNode {
   labelVisible: boolean;
   labelX: number;
   labelY: number;
-  labelAnchor: "start" | "end";
+  labelAnchor: "start" | "end" | "middle";
+  leader: boolean;
 }
 
 interface GraphEdge {
@@ -296,6 +298,7 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
       labelX: 0,
       labelY: 0,
       labelAnchor: "start",
+      leader: false,
     });
   }
 
@@ -318,23 +321,45 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
     graphSectorFullBelow,
   );
 
+  const radiusOf = (occurrences: number) => (
+    nodeRadiusMin + nodeRadiusSpan * Math.sqrt(occurrences / maxOccurrences)
+  );
+
   groups.forEach((group, sectorIndex) => {
     const key = group.key;
     const total = group.nodes.length;
-    const visible = group.nodes.slice(0, Math.min(total, quotas.get(key) ?? total));
-    hiddenCount += total - visible.length;
+    const quota = Math.min(total, quotas.get(key) ?? total);
     const angle = -Math.PI / 2 + sectorIndex * span;
     const half = (span / 2) * 0.88;
     let index = 0;
     let ring = 0;
+    let placed = 0;
     let sectorMaxRadius = 0;
-    while (index < visible.length && ring < 10) {
+    // La capienza di ogni anello nasce dai raggi reali dei nodi (diametro + gap):
+    // i cerchi non si sovrappongono e il numero di nodi mostrati dipende dalla
+    // geometria disponibile, non da una costante fissa.
+    while (index < quota && ring < graphMaxRings) {
       const radius = ringBaseRadius + ring * ringStep;
-      const capacity = Math.max(1, Math.floor((2 * half * radius) / ringSpacing));
-      for (let slot = 0; slot < capacity && index < visible.length; slot += 1, index += 1) {
-        const slotAngle = angle + 2 * half * ((slot + 0.5) / capacity - 0.5);
-        const node = visible[index];
-        const nodeRadius = nodeRadiusMin + nodeRadiusSpan * Math.sqrt(node.occurrences / maxOccurrences);
+      const arcLength = 2 * half * radius;
+      let count = 0;
+      let needed = ringGap;
+      while (index + count < quota) {
+        const candidate = group.nodes[index + count];
+        const size = radiusOf(candidate.occurrences) * 2 + ringGap;
+        if (count > 0 && needed + size > arcLength) break;
+        needed += size;
+        count += 1;
+      }
+      if (count === 0) break;
+      let cursor = -needed / 2;
+      for (let slot = 0; slot < count; slot += 1) {
+        const node = group.nodes[index];
+        index += 1;
+        placed += 1;
+        const nodeRadius = radiusOf(node.occurrences);
+        const span = nodeRadius * 2 + ringGap;
+        const slotAngle = angle + (cursor + span / 2) / radius;
+        cursor += span;
         nodes.push({
           ...node,
           x: Math.cos(slotAngle) * radius,
@@ -345,12 +370,13 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
       }
       ring += 1;
     }
+    hiddenCount += total - placed;
     sectors.push({
       key,
       polarity: key === "paradigmatic" ? null : (key as CqPolarity),
       angle,
       half,
-      hidden: total - visible.length,
+      hidden: total - placed,
       outerRadius: sectorMaxRadius,
       halo: "",
       label: sectorLabels[key] ?? key,
@@ -404,6 +430,51 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
     if (!placed) node.labelVisible = false;
   }
 
+  // Fallback: chi non trova posto accanto al nodo riceve l'etichetta in una
+  // banda esterna al grappolo, collegata al nodo da una linea guida.
+  const bandBase = new Map<string, number>();
+  for (const sector of sectors) {
+    let extent = 0;
+    for (const node of nodes) {
+      if (sectorKeyOf(node.polarity) !== sector.key) continue;
+      extent = Math.max(extent, Math.hypot(node.x, node.y) + node.radius);
+    }
+    bandBase.set(sector.key, extent + 26);
+  }
+  const unlabeled = nodes
+    .filter((node) => !node.labelVisible)
+    .sort((left, right) => right.occurrences - left.occurrences || left.label.localeCompare(right.label, "it"));
+  for (const node of unlabeled) {
+    const base = bandBase.get(sectorKeyOf(node.polarity)) ?? 0;
+    const text = truncateLabel(node.label);
+    const width = text.length * labelCharWidth * labelFontSize;
+    const height = labelFontSize * 1.3;
+    const nodeAngle = Math.atan2(node.y, node.x);
+    for (let attempt = 0; attempt < 36; attempt += 1) {
+      const row = attempt % 3;
+      const step = Math.floor(attempt / 3);
+      const direction = step % 2 === 0 ? 1 : -1;
+      const delta = direction * Math.ceil(step / 2) * 0.05;
+      const angle = nodeAngle + delta;
+      const radius = base + row * (height + 2);
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      const rect = { x1: x - width / 2, y1: y - height / 2, x2: x + width / 2, y2: y + height / 2 };
+      const collides = occupied.some((other) => (
+        rect.x1 < other.x2 + 1 && rect.x2 > other.x1 - 1
+        && rect.y1 < other.y2 + 1 && rect.y2 > other.y1 - 1
+      ));
+      if (collides) continue;
+      node.labelVisible = true;
+      node.labelAnchor = "middle";
+      node.labelX = x;
+      node.labelY = y;
+      node.leader = true;
+      occupied.push(rect);
+      break;
+    }
+  }
+
   // Estensione reale del grappolo lungo l'asse del settore (proiezione): usata
   // per l'alone di cluster. Non serve piu' per i titoli (ora nella legenda).
   for (const sector of sectors) {
@@ -427,7 +498,7 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
     for (const node of nodes) {
       if (sectorKeyOf(node.polarity) !== sector.key) continue;
       extent = Math.max(extent, Math.hypot(node.x, node.y) + node.radius);
-      if (!node.labelVisible) continue;
+      if (!node.labelVisible || node.leader) continue;
       const text = truncateLabel(node.label);
       const width = text.length * labelCharWidth * labelFontSize;
       extent = Math.max(extent, Math.hypot(node.labelX, node.labelY) + width * 0.35);
@@ -495,7 +566,11 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
     const text = truncateLabel(node.label);
     const width = text.length * labelCharWidth * labelFontSize;
     const height = labelFontSize * 1.2;
-    const left = node.labelAnchor === "start" ? node.labelX : node.labelX - width;
+    const left = node.labelAnchor === "start"
+      ? node.labelX
+      : node.labelAnchor === "end"
+        ? node.labelX - width
+        : node.labelX - width / 2;
     extend(left, node.labelY - height / 2, left + width, node.labelY + height / 2);
   }
   for (const sector of sectors) {
@@ -893,6 +968,21 @@ export function Cq1NetworkGraph({
           })}
 
           {/* Etichette in un layer sopra i nodi: cosi' nessun cerchio le copre. */}
+          {payload.nodes.filter((node) => node.labelVisible && node.leader).map((node) => {
+            const dx = node.labelX - node.x;
+            const dy = node.labelY - node.y;
+            const distance = Math.hypot(dx, dy) || 1;
+            return (
+              <line
+                key={`leader-${node.concept}`}
+                className="cq-graph-leader"
+                x1={node.x + (dx / distance) * node.radius}
+                y1={node.y + (dy / distance) * node.radius}
+                x2={node.labelX}
+                y2={node.labelY}
+              />
+            );
+          })}
           {payload.nodes.filter((node) => node.labelVisible).map((node) => {
             const selected = selectedConcept?.concept === node.concept;
             const dimmed = emphasis ? !emphasis.nodes.has(node.concept) : false;

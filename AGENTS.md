@@ -361,6 +361,12 @@ delete, reload.
   (v0.22.6: mostrato solo in vista Lista, ponte lista→grafo; in grafo è
   ridondante col click sul nodo);
   zoom/pan/Adatta; «Torna alla lista»; sort nascosto nel grafo (v0.22.1–v0.22.2).
+  **Capienza anelli ed etichette (v0.25.0)**: la capienza degli anelli si calcola
+  sui **raggi reali** dei nodi (diametro + `ringGap`), non su una spaziatura fissa:
+  niente cerchi sovrapposti; i nodi mostrati sono quelli che entrano in
+  `graphMaxRings` (4) anelli. Le etichette che non trovano posto accanto al nodo
+  finiscono in una **banda esterna con linea guida** (`.cq-graph-leader`), così
+  tutti i nodi visibili sono etichettati.
   **Rifiniture (v0.24.1–v0.24.2)**: aloni calcolati sul raggio euclideo reale del
   grappolo (prima la proiezione lasciava nodi fuori); etichette con fallback
   interno quando l'esterno collide (2 etichette perse su 36) e in un **layer

@@ -459,3 +459,30 @@ spiega la legenda + il box «Informazioni su queste query»).
   opacità (0,59 → 0,93) al crescere del peso: peso 1 = sottile e chiaro,
   peso 3 = spesso e scuro. L'arco "attivo" (hover/click) resta forzato al verde
   scuro via `!important`.
+
+
+## Capienza degli anelli sui raggi reali + banda etichette (v0.25.0)
+
+**Distanza tra i nodi.** La capienza di un anello usava una **spaziatura costante**
+(34 unità) mentre i nodi hanno raggio fino a 18 (diametro 36): i cerchi si
+sovrapponevano (visibile su «violenza»/«scorrettezza»/«illegalità»). Ora la
+capienza nasce dai **raggi reali**: in ogni anello si collocano nodi finché la
+somma dei diametri + gap (`ringGap` 26) sta nell'arco disponibile; i nodi sono
+ordinati per occorrenze decrescenti (prima i più grandi). Il numero di nodi
+mostrati è quindi **derivato dalla geometria** (max `graphMaxRings` 4 anelli) e
+non solo da un budget: le eccedenze finiscono in «N concetti non mostrati».
+Esito: **0 coppie di cerchi sovrapposti** (verificato sul DOM).
+
+**Etichette: fallback a banda esterna con linea guida.** Dopo il tentativo
+radiale (esterno, poi verso il centro), le etichette ancora senza posto vengono
+collocate in una **banda fuori dal grappolo** (3 righe, ricerca deterministica
+per angolo crescente), collegate al nodo da una **linea guida** sottile
+(`.cq-graph-leader`). Così **tutti i nodi mostrati hanno l'etichetta** (verificato:
+35/35) senza etichette sovrapposte (0 collisioni) e senza allargare l'alone
+(escluse dal calcolo dell'estensione). Nel caso «criminale» è servita **una sola**
+linea guida: le altre etichette restano accanto al nodo.
+
+**Costo**: la scala è scesa da ~1,16 a ~0,96 (il grafo usa 4 anelli con spaziatura
+corretta). È il prezzo per avere nodi non sovrapposti ed etichette complete; il
+budget resta regolabile con `graphNodeBudget`/`graphSectorFullBelow` e la
+profondità con `graphMaxRings`.

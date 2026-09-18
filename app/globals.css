@@ -1238,3 +1238,5 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 .cq-graph-legend-svg circle { fill: #6f7974; }
 .cq-graph-legend-svg line { stroke: #6f7974; stroke-linecap: round; }
 .cq-graph-legend-area { display: inline-block; width: 14px; height: 11px; border-radius: 3px; background: rgba(78, 163, 106, .14); border: 1px solid rgba(78, 163, 106, .25); }
+
+.cq-graph-leader { stroke: #b6c4bc; stroke-width: .9; }
