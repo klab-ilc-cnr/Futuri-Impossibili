@@ -436,3 +436,26 @@ vantaggio. Le etichette dei nodi restano il canale testuale della polarità
 **Non implementato (da valutare).** Pulsanti zoom +/−/Fit nel toolbar (oggi solo
 rotella + «Adatta»); descrizione degli encoding in testata (nella nostra UI la
 spiega la legenda + il box «Informazioni su queste query»).
+
+
+## Correzioni e darkening degli archi (v0.24.1–v0.24.2)
+
+- **Aloni che non contenevano i nodi (v0.24.1)**: il raggio dell'alone era la
+  *proiezione* dei nodi sull'asse del settore (scelta comoda per i titoli, che
+  ora non ci sono più) invece della distanza reale: i nodi ai bordi del settore
+  cadevano fuori. Ora l'alone usa il **massimo raggio euclideo** del grappolo
+  (nodi + etichette) + margine. Verificato con `isPointInFill`: 0 nodi fuori.
+- **Etichette mancanti (v0.24.1)**: l'evitamento collisioni scartava l'etichetta.
+  Ora si prova prima **verso l'esterno** e, se collide, **verso il centro** (dove
+  spesso c'è spazio), con padding ridotto e il nodo centrale come ostacolo.
+  Risultato su 36 nodi: da ~6 etichette perse nel solo settore negativo a **2 su 36**.
+- **Etichette coperte dai nodi (v0.24.2)**: le etichette erano dentro il gruppo
+  del nodo, quindi un nodo disegnato dopo copriva l'etichetta di un altro
+  (testo "spezzato"). Ora le etichette vivono in un **layer separato sopra i
+  nodi** (`.cq-graph-node-label`) con gli stessi handler (hover/click), così
+  restano leggibili e cliccabili.
+- **Archi: spessore *e* scurezza (v0.24.1)**: `edgeAppearance(weight)` interpola
+  il colore dal chiaro `rgb(168,189,177)` allo scuro `rgb(58,84,71)` e sale di
+  opacità (0,59 → 0,93) al crescere del peso: peso 1 = sottile e chiaro,
+  peso 3 = spesso e scuro. L'arco "attivo" (hover/click) resta forzato al verde
+  scuro via `!important`.

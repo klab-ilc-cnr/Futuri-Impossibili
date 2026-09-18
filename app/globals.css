@@ -1146,14 +1146,18 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
 }
 .cq-graph-edge.dimmed { opacity: .08 !important; }
 .cq-graph-node { cursor: pointer; }
-.cq-graph-node text {
+.cq-graph-node-label {
   font-size: 11.5px;
   fill: #23302a;
   paint-order: stroke;
   stroke: #f7faf8;
   stroke-width: 3px;
   stroke-linejoin: round;
+  pointer-events: auto;
+  cursor: pointer;
 }
+.cq-graph-node-label.lit, .cq-graph-node-label.active { font-weight: 800; }
+.cq-graph-node-label.dimmed { opacity: .22; }
 .cq-graph-node circle { stroke: #fff; stroke-width: 1.5; transition: opacity .15s ease; }
 .cq-graph-node-positive circle { fill: var(--pos-fill); }
 .cq-graph-node-neutral circle { fill: var(--neu-fill); }
@@ -1198,7 +1202,7 @@ kbd { background: #f1f3ef; border: 1px solid #dfe3dc; border-radius: 4px; paddin
   pointer-events: stroke;
   cursor: pointer;
 }
-.cq-graph-edge.active { stroke: #35543f; }
+.cq-graph-edge.active { stroke: #35543f !important; }
 .cq-graph-edge.active.dimmed { opacity: .5 !important; }
 .cq-graph-node.lit circle { stroke: #35543f; stroke-width: 2.5; }
 .cq-graph-node.lit text { font-weight: 800; }

@@ -361,6 +361,12 @@ delete, reload.
   (v0.22.6: mostrato solo in vista Lista, ponte lista→grafo; in grafo è
   ridondante col click sul nodo);
   zoom/pan/Adatta; «Torna alla lista»; sort nascosto nel grafo (v0.22.1–v0.22.2).
+  **Rifiniture (v0.24.1–v0.24.2)**: aloni calcolati sul raggio euclideo reale del
+  grappolo (prima la proiezione lasciava nodi fuori); etichette con fallback
+  interno quando l'esterno collide (2 etichette perse su 36) e in un **layer
+  separato sopra i nodi** (prima un nodo copriva l'etichetta di un altro);
+  `edgeAppearance` fa crescere **spessore e scurezza** dell'arco col peso
+  (chiaro 1,2 px → scuro 3,3 px).
   **Limite nodi, legenda, aloni (v0.24.0)**: limite nodi **adattivo** — settori con
   ≤12 concetti mostrati per intero, gli altri si dividono un budget di 36 nodi in
   proporzione (parametri `graphNodeBudget`/`graphSectorFullBelow`, non esposti);

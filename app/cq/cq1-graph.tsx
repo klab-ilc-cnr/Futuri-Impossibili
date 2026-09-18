@@ -162,6 +162,18 @@ function allocateQuotas(
   return quotas;
 }
 
+function edgeAppearance(weight: number): { width: number; stroke: string; opacity: number } {
+  const t = Math.min(1, Math.max(0, (weight - 1) / 2));
+  const light = [168, 189, 177];
+  const dark = [58, 84, 71];
+  const channel = light.map((value, index) => Math.round(value + (dark[index] - value) * t));
+  return {
+    width: 1.2 + (weight - 1) * 1.05,
+    stroke: `rgb(${channel[0]}, ${channel[1]}, ${channel[2]})`,
+    opacity: Math.min(0.95, 0.42 + weight * 0.17),
+  };
+}
+
 function edgeKeyOf(edge: GraphEdge): string {
   return `${edge.a}|${edge.b}`;
 }
@@ -347,7 +359,9 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
 
   // Etichette dei nodi con evitamento deterministico delle collisioni:
   // si etichettano prima i concetti con più occorrenze, si salta chi si sovrappone.
-  const occupied: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+  const occupied: Array<{ x1: number; y1: number; x2: number; y2: number }> = [
+    { x1: -32, y1: -32, x2: 32, y2: 32 }, // nodo centrale dell'entrata
+  ];
   const labelOrder = [...nodes].sort(
     (left, right) => right.occurrences - left.occurrences
       || right.radius - left.radius
@@ -357,24 +371,37 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
     const direction = Math.atan2(node.y, node.x);
     const cos = Math.cos(direction);
     const sin = Math.sin(direction);
-    const anchor: "start" | "end" = cos >= 0 ? "start" : "end";
-    const x = node.x + (node.radius + 5) * cos;
-    const y = node.y + (node.radius + 5) * sin;
     const text = truncateLabel(node.label);
     const width = text.length * labelCharWidth * labelFontSize;
     const height = labelFontSize * 1.2;
-    const rect = anchor === "start"
-      ? { x1: x, y1: y - height / 2, x2: x + width, y2: y + height / 2 }
-      : { x1: x - width, y1: y - height / 2, x2: x, y2: y + height / 2 };
-    const collides = occupied.some((other) => (
-      rect.x1 < other.x2 + 3 && rect.x2 > other.x1 - 3
-      && rect.y1 < other.y2 + 2 && rect.y2 > other.y1 - 2
-    ));
-    node.labelVisible = !collides;
-    node.labelAnchor = anchor;
-    node.labelX = x;
-    node.labelY = y;
-    if (!collides) occupied.push(rect);
+    const offset = node.radius + 5;
+    // Si prova prima verso l'esterno, poi verso il centro (dove spesso c'e' spazio
+    // libero), cosi' molte meno etichette vengono scartate.
+    const candidates: Array<{ sign: 1 | -1 }> = [{ sign: 1 }, { sign: -1 }];
+    let placed = false;
+    for (const candidate of candidates) {
+      const x = node.x + candidate.sign * offset * cos;
+      const y = node.y + candidate.sign * offset * sin;
+      const anchor: "start" | "end" = candidate.sign > 0
+        ? (cos >= 0 ? "start" : "end")
+        : (cos >= 0 ? "end" : "start");
+      const rect = anchor === "start"
+        ? { x1: x, y1: y - height / 2, x2: x + width, y2: y + height / 2 }
+        : { x1: x - width, y1: y - height / 2, x2: x, y2: y + height / 2 };
+      const collides = occupied.some((other) => (
+        rect.x1 < other.x2 + 1 && rect.x2 > other.x1 - 1
+        && rect.y1 < other.y2 + 1 && rect.y2 > other.y1 - 1
+      ));
+      if (collides) continue;
+      node.labelVisible = true;
+      node.labelAnchor = anchor;
+      node.labelX = x;
+      node.labelY = y;
+      occupied.push(rect);
+      placed = true;
+      break;
+    }
+    if (!placed) node.labelVisible = false;
   }
 
   // Estensione reale del grappolo lungo l'asse del settore (proiezione): usata
@@ -396,7 +423,16 @@ function buildGraph({ entry, narrative, paradigmatic, polarities, corpus, texts,
         outerX * axisX + node.labelY * axisY,
       );
     }
-    sector.outerRadius = projection + graphHaloMargin;
+    let extent = projection;
+    for (const node of nodes) {
+      if (sectorKeyOf(node.polarity) !== sector.key) continue;
+      extent = Math.max(extent, Math.hypot(node.x, node.y) + node.radius);
+      if (!node.labelVisible) continue;
+      const text = truncateLabel(node.label);
+      const width = text.length * labelCharWidth * labelFontSize;
+      extent = Math.max(extent, Math.hypot(node.labelX, node.labelY) + width * 0.35);
+    }
+    sector.outerRadius = extent + graphHaloMargin;
   }
 
   // Alone di cluster: spicchio colorato tenue, riempie lo spazio tra i settori.
@@ -667,6 +703,22 @@ export function Cq1NetworkGraph({
     setHoverTarget(null);
   };
 
+  const hoverNode = (node: GraphNode) => {
+    if (pinnedTarget) return;
+    setHoverTarget({ kind: "node", key: node.concept });
+  };
+
+  const clickNode = (node: GraphNode) => {
+    if (dragRef.current.moved) return;
+    onSelectConcept({
+      concept: node.concept,
+      label: node.label,
+      kind: node.kind,
+      polarity: node.polarity,
+    });
+    togglePin("node", node.concept, node.label, nodeLines(node), node.polarity ?? "paradigmatic");
+  };
+
   const togglePin = (kind: "edge" | "node", key: string, title: string, lines: string[], tone: string) => {
     if (dragRef.current.moved) return;
     if (pinnedTarget?.kind === kind && pinnedTarget.key === key) {
@@ -791,7 +843,11 @@ export function Cq1NetworkGraph({
               <g key={`edge-${key}`}>
                 <path
                   className={["cq-graph-edge", dimmed ? "dimmed" : "", active ? "active" : ""].filter(Boolean).join(" ")}
-                  style={{ strokeWidth: 1.4 + (edge.weight - 1) * 1.1, opacity: Math.min(0.9, 0.45 + edge.weight * 0.15) }}
+                  style={{
+                    strokeWidth: edgeAppearance(edge.weight).width,
+                    stroke: edgeAppearance(edge.weight).stroke,
+                    opacity: edgeAppearance(edge.weight).opacity,
+                  }}
                   d={path}
                 />
                 <path
@@ -827,29 +883,40 @@ export function Cq1NetworkGraph({
                   lit ? "lit" : "",
                   dimmed ? "dimmed" : "",
                 ].filter(Boolean).join(" ")}
-                onMouseEnter={() => {
-                  if (pinnedTarget) return;
-                  setHoverTarget({ kind: "node", key: node.concept });
-                }}
+                onMouseEnter={() => hoverNode(node)}
                 onMouseLeave={clearHover}
-                onClick={() => {
-                  if (dragRef.current.moved) return;
-                  onSelectConcept({
-                    concept: node.concept,
-                    label: node.label,
-                    kind: node.kind,
-                    polarity: node.polarity,
-                  });
-                  togglePin("node", node.concept, node.label, nodeLines(node), node.polarity ?? "paradigmatic");
-                }}
+                onClick={() => clickNode(node)}
               >
                 <circle cx={node.x} cy={node.y} r={node.radius} />
-                {node.labelVisible && (
-                  <text x={node.labelX} y={node.labelY} textAnchor={node.labelAnchor} dominantBaseline="middle">
-                    {truncateLabel(node.label)}
-                  </text>
-                )}
               </g>
+            );
+          })}
+
+          {/* Etichette in un layer sopra i nodi: cosi' nessun cerchio le copre. */}
+          {payload.nodes.filter((node) => node.labelVisible).map((node) => {
+            const selected = selectedConcept?.concept === node.concept;
+            const dimmed = emphasis ? !emphasis.nodes.has(node.concept) : false;
+            const active = (hoverTarget?.kind === "node" && hoverTarget.key === node.concept)
+              || (pinnedTarget?.kind === "node" && pinnedTarget.key === node.concept);
+            return (
+              <text
+                key={`label-${node.concept}`}
+                className={[
+                  "cq-graph-node-label",
+                  selected ? "selected" : "",
+                  active ? "active" : "",
+                  dimmed ? "dimmed" : "",
+                ].filter(Boolean).join(" ")}
+                x={node.labelX}
+                y={node.labelY}
+                textAnchor={node.labelAnchor}
+                dominantBaseline="middle"
+                onMouseEnter={() => hoverNode(node)}
+                onMouseLeave={clearHover}
+                onClick={() => clickNode(node)}
+              >
+                {truncateLabel(node.label)}
+              </text>
             );
           })}
         </g>
