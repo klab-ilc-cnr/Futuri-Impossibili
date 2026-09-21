@@ -290,6 +290,10 @@ delete, reload.
 
 ## Menu in alto (v0.27.0)
 
+Il pannello dell'area (indice 3) è intitolato **NarraLex** in entrambe le lingue
+(`t.cq.title`, unica occorrenza: prima era "Interrogazioni"/"Queries"); kicker
+"COMPETENCY QUESTIONS" invariato.
+
 `visibleMenuIndexes = [0, 3, 4, 5, 6]` in `app/page.tsx` decide le voci mostrate, per
 indice di pagina: **Il Progetto** (0), **Esplora Dizionario** (3 = area interrogazioni,
 etichetta rinominata), **Costruisci Dizionario** (4, area riservata con password),

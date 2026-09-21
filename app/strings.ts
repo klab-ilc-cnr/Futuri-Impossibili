@@ -281,7 +281,7 @@ const it = {
   },
   cq: {
     kicker: "COMPETENCY QUESTIONS",
-    title: "Interrogazioni",
+    title: "NarraLex",
     intro: "Esplora il dizionario narrativo attraverso le competency questions: collegano entrate lessicali, concetti narrativi, evidenza del corpus e variazione tra i parlanti.",
     viewQuery: "Visualizza query",
     comingSoon: "In preparazione",
@@ -746,7 +746,7 @@ const en: Dict = {
   },
   cq: {
     kicker: "COMPETENCY QUESTIONS",
-    title: "Queries",
+    title: "NarraLex",
     intro: "Explore the narrative dictionary through competency questions: they connect lexical entries, narrative concepts, corpus evidence and speaker variation.",
     viewQuery: "View query",
     comingSoon: "Coming soon",
