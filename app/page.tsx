@@ -186,6 +186,12 @@ const menuItemIds = [
   "contatti",
 ];
 
+/* Voci mostrate nel menu, per indice di pagina. L'area interrogazioni (3) compare
+   come "Esplora Dizionario"; l'area riservata resta la 4. "statistiche" (1) e il
+   vecchio segnaposto "dizionario" (2) restano nel codice ma non sono più
+   raggiungibili dal menu. */
+const visibleMenuIndexes = [0, 3, 4, 5, 6];
+
 const workspacePasswordHash = "e2b3e011fbaf01d90acec9c3f3e3b23509b52f5d4500f9500f2770449bda4b91";
 const workspaceUnlockedKey = "fi-workspace-unlocked";
 
@@ -213,7 +219,7 @@ function getServerLangSnapshot(): Lang {
   return "it";
 }
 
-const appVersion = "0.26.0";
+const appVersion = "0.27.0";
 
 const textsEndpoint = `${basePath}/api/lexo/texts`;
 const textBulkUploadEndpoint = `${basePath}/api/lexo/texts/bulk`;
@@ -4355,9 +4361,9 @@ export default function Home() {
       </header>
 
       <nav className="main-nav" aria-label={t.nav.mainAria}>
-        {menuItemIds.map((itemId, index) => (
+        {visibleMenuIndexes.map((index) => (
           <button
-            key={itemId}
+            key={menuItemIds[index]}
             className={activePage === index ? "active" : ""}
             onClick={() => {
               if (index === reservedMenuItemIndex && !workspaceUnlocked) {

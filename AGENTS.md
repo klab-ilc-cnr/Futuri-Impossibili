@@ -288,6 +288,16 @@ delete, reload.
   Known cosmetic leftovers: data-complete left contexts clipped by CSS show no dots;
   single-context rows ellipsize ~1em early. `title` always carries the full row text.
 
+## Menu in alto (v0.27.0)
+
+`visibleMenuIndexes = [0, 3, 4, 5, 6]` in `app/page.tsx` decide le voci mostrate, per
+indice di pagina: **Il Progetto** (0), **Esplora Dizionario** (3 = area interrogazioni,
+etichetta rinominata), **Costruisci Dizionario** (4, area riservata con password),
+**Risultati Scientifici** (5), **Contatti** (6). "Statistiche" (1) e il vecchio
+segnaposto "dizionario" (2) restano nel codice ma non sono più raggiungibili dal menu.
+Gli indici di pagina non cambiano (3 = CQ, 4 = workspace): il menu deriva da
+`menuItemIds` filtrato, non da un secondo elenco.
+
 ## Competency Questions — Area «Interrogazioni» (v0.18.0 – v0.22.0)
 
 - Nav item esistente «Interrogazioni/Queries» (index 3): `activePage === 3` renderizza
