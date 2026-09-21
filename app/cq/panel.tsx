@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { dictionaries, type Dict, type Lang } from "../strings";
 import { Cq1Panel } from "./cq1";
 import { Cq2Panel } from "./cq2";
@@ -42,6 +42,14 @@ export function CqPanel({ lang }: { lang: Lang }) {
   const t = dictionaries[lang];
   const [selectedCq, setSelectedCq] = useState<CqCardId | null>(null);
   const [openCq, setOpenCq] = useState<CqCardId | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  /* "Vedi query" seleziona la card e porta in vista l'anteprima (sta sotto le
+     card: senza lo scorrimento il click sembrerebbe senza effetto). */
+  const showQuery = (id: CqCardId) => {
+    setSelectedCq(id);
+    requestAnimationFrame(() => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+  };
 
   const selectedCard = cqCards.find((card) => card.id === selectedCq) ?? null;
   const previewSparql = selectedCard
@@ -92,22 +100,8 @@ export function CqPanel({ lang }: { lang: Lang }) {
         {cqCards.map((card) => (
           <article
             key={card.id}
-            role="button"
-            tabIndex={card.available ? 0 : -1}
-            onKeyDown={(event) => {
-              if (card.available && (event.key === "Enter" || event.key === " ")) {
-                event.preventDefault();
-                setSelectedCq(card.id);
-                setOpenCq(card.id);
-              }
-            }}
-            onClick={() => {
-              setSelectedCq(card.id);
-              if (card.available) setOpenCq(card.id);
-            }}
             className={[
               "cq-card",
-              "clickable",
               selectedCq === card.id ? "selected" : "",
               card.available ? "" : "unavailable",
             ].filter(Boolean).join(" ")}
@@ -119,13 +113,20 @@ export function CqPanel({ lang }: { lang: Lang }) {
               <div className="cq-card-actions">
                 <button
                   type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSelectedCq(card.id);
-                  }}
                   aria-pressed={selectedCq === card.id}
+                  onClick={() => showQuery(card.id)}
                 >
                   {t.cq.viewQuery}
+                </button>
+                <button
+                  type="button"
+                  className="cq-card-results"
+                  onClick={() => {
+                    setSelectedCq(card.id);
+                    setOpenCq(card.id);
+                  }}
+                >
+                  {t.cq.viewResults}
                 </button>
               </div>
             ) : (
@@ -136,7 +137,7 @@ export function CqPanel({ lang }: { lang: Lang }) {
       </div>
 
       <div className="cq-lower">
-        <div className="cq-preview" aria-live="polite">
+        <div className="cq-preview" ref={previewRef} aria-live="polite">
           <h3>{t.cq.queryPreview}</h3>
           {selectedCard ? (
             <>

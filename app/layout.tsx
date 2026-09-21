@@ -15,8 +15,15 @@ const geistMono = Geist_Mono({
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/futuri-impossibili").replace(/\/$/, "");
 
 export const metadata: Metadata = {
-  title: "LexO · Textual Insights",
-  description: "Interfaccia di analisi e annotazione testuale per LexO-server.",
+  title: "NarraLex — Futuri (im)Possibili",
+  description:
+    "NarraLex: esplora, annota e interroga il dizionario narrativo del progetto Futuri (im)Possibili.",
+  openGraph: {
+    type: "website",
+    title: "NarraLex — Futuri (im)Possibili",
+    description:
+      "NarraLex: esplora, annota e interroga il dizionario narrativo del progetto Futuri (im)Possibili.",
+  },
   icons: {
     icon: `${basePath}/favicon.svg`,
     shortcut: `${basePath}/favicon.svg`,

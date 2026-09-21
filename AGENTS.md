@@ -375,10 +375,24 @@ Gli indici di pagina non cambiano (3 = CQ, 4 = workspace): il menu deriva da
   centrato: nei margini non c'era alcun antenato scorrevole). Nel grafo lo **zoom
   è solo con Shift + rotella** (indicazione `.cq-graph-legend-hint` in legenda),
   così la rotella semplice scorre la pagina anche sopra il canvas.
-- **Pannello iniziale (v0.21.5)**: click su tutta la card CQ apre direttamente
-  il pannello (il pulsante «Apri pannello di analisi» della specifica 00 è
-  stato rimosso su richiesta; resta «Visualizza query» con stopPropagation;
-  card role=button, Enter/Spazio).
+- **Accesso ai risultati dalle card (v0.21.5 → v0.28.0)**: le card CQ **non sono
+  più cliccabili** (niente `role="button"`/`tabIndex`/`onClick`: era un pulsante
+  che ne conteneva un altro, con due fermate di tabulazione e Invio/Spazio che
+  facevano cosa diversa dal pulsante interno). Ogni card ha due azioni esplicite
+  in `.cq-card-actions` (`justify-content: space-between`): **«Vedi query»**
+  (secondario; `aria-pressed` verde quando la card è selezionata → mostra la
+  competency question e la SPARQL nell'anteprima e la porta in vista con
+  `scrollIntoView`, altrimenti il click sembra senza effetto) e **«Vedi
+  risultati»** (primario, pieno verde → apre il pannello CQ1/CQ2/CQ3). Il riquadro
+  «Informazioni su queste query» cita i pulsanti correnti (`aboutViewQuery`,
+  `aboutOpenPanel`): va aggiornato se cambiano le etichette.
+- **Nomi e testi localizzati (v0.27.x – v0.28.0)**: `t.cqN.panelTitle` (usato da
+  card, intestazione del pannello e ramo «in preparazione») è tradotto in
+  italiano: «CQ1 – Concetti per polarità», «CQ2 – Evidenze basate sul corpus»,
+  «CQ3 – Variazione tra i parlanti»; `t.cqN.question` è la spiegazione localizzata
+  (IT/EN, usata anche nell'anteprima). Il titolo della scheda del browser è
+  **NarraLex — Futuri (im)Possibili**, con description e `openGraph` in
+  `app/layout.tsx` (unico per le due lingue: «NarraLex» non si traduce).
 - **Network graph CQ1 (v0.22.0)**: `app/cq/cq1-graph.tsx` — vista `Lista | Grafo`
   alternativa nella CQ1 (nessun routing, nessuna query nuova: co-occorrenze
   calcolate client-side). Attestazione→concetto diretta (narrativa `observable`

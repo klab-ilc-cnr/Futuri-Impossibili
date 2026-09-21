@@ -569,3 +569,24 @@ wrapper con `ResizeObserver` e scrive `--cq-sticky-h` sul `.cq-page`; la usano l
 colonna laterale e i `th` sticky delle tabelle passaggi. Verificato: CQ1 barra
 0–104 e colonna a 104; CQ2 barra 0–195 e `th` a 195 (tabella lunga, 20 righe);
 CQ3 invariata (colonna a 30px, nessun wrapper).
+
+
+## Card CQ: pulsanti espliciti e titolo della scheda (v0.28.0)
+
+**Accesso ai risultati.** Il click sull'intera card (v0.21.5) non era
+scopribile — i test mostravano che il solo «Visualizza query» non faceva capire
+come arrivare ai risultati — e la card era un `role="button"` con dentro un
+`<button>`: due tab stop, Invio/Spazio che facevano cosa diversa dal pulsante
+interno, "pulsante dentro pulsante" per i lettori di schermo. Ora le card **non
+sono cliccabili** e hanno due azioni: **«Vedi query»** (secondario, a sinistra →
+seleziona la card, aggiorna l'anteprima e la scorre in vista) e **«Vedi
+risultati»** (primario, pieno verde, a destra → apre il pannello). Rimosse le
+classi `.cq-card.clickable` e l'uso di `stopPropagation`.
+
+**Titoli e testi.** I titoli delle card sono tradotti in italiano («CQ1 – Concetti
+per polarità», «CQ2 – Evidenze basate sul corpus», «CQ3 – Variazione tra i
+parlanti»): essendo `t.cqN.panelTitle`, la traduzione copre card, intestazione del
+pannello e ramo "in preparazione". La description di `layout.tsx` non è un secondo
+campo: è quella già presente, non visibile nell'app, usata da motori di ricerca e
+anteprime dei link — aggiornata insieme al titolo (`NarraLex — Futuri
+(im)Possibili` + `openGraph`).
