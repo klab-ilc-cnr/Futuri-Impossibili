@@ -301,6 +301,7 @@ const it = {
   },
   cq1: {
     panelTitle: "CQ1 – Concepts by polarity",
+    question: "Quali concetti sono associati al livello narrativo di una data entrata lessicale, per polarità?",
     entrySelectLabel: "Entrata lessicale",
     entryLoading: "Caricamento delle entrate lessicali…",
     entryEmpty: "Nessuna entrata lessicale disponibile",
@@ -376,6 +377,7 @@ const it = {
   },
   cq2: {
     panelTitle: "CQ2 – Corpus evidence",
+    question: "Recupera tutti i passaggi del corpus in cui una data entrata lessicale è associata a un concetto di una polarità specificata.",
     phraseBefore: "Tutti i passaggi in cui un narrative sense di",
     phraseMiddle: "è associato a un concetto di polarità",
     phraseAfter: ".",
@@ -419,6 +421,7 @@ const it = {
   },
   cq3: {
     panelTitle: "CQ3 – Speaker variation",
+    question: "Come varia la distribuzione di uno o più concetti narrativi associati a una data entrata lessicale in base all'età e al genere dei parlanti?",
     entrySelectLabel: "Entrata lessicale",
     conceptSelectLabel: "Concetti",
     conceptAll: "Tutti i concetti",
@@ -766,6 +769,7 @@ const en: Dict = {
   },
   cq1: {
     panelTitle: "CQ1 – Concepts by polarity",
+    question: "What concepts are associated with the narrative layer of a given lexical entry, by polarity?",
     entrySelectLabel: "Lexical entry",
     entryLoading: "Loading lexical entries…",
     entryEmpty: "No lexical entry available",
@@ -841,6 +845,7 @@ const en: Dict = {
   },
   cq2: {
     panelTitle: "CQ2 – Corpus evidence",
+    question: "Retrieve all corpus passages in which a given lexical entry is associated with a concept of a specified polarity.",
     phraseBefore: "All passages in which a narrative sense of",
     phraseMiddle: "is associated with a concept of",
     phraseAfter: " polarity.",
@@ -884,6 +889,7 @@ const en: Dict = {
   },
   cq3: {
     panelTitle: "CQ3 – Speaker variation",
+    question: "How does the distribution of one or more narrative concepts associated with a given lexical entry vary across speakers' age and gender?",
     entrySelectLabel: "Lexical entry",
     conceptSelectLabel: "Concepts",
     conceptAll: "All concepts",

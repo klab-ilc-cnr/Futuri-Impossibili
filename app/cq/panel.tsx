@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { dictionaries, type Lang } from "../strings";
+import { dictionaries, type Dict, type Lang } from "../strings";
 import { Cq1Panel } from "./cq1";
 import { Cq2Panel } from "./cq2";
 import { Cq3Panel } from "./cq3";
@@ -15,8 +15,6 @@ type CqCardId = "cq1" | "cq2" | "cq3";
 
 interface CqCard {
   id: CqCardId;
-  title: string;
-  query: string;
   sparqlId: CqQueryId;
   available: boolean;
 }
@@ -26,28 +24,19 @@ const cardNotes: Partial<Record<CqCardId, (t: (typeof dictionaries)["it"]) => st
 };
 
 const cqCards: Array<CqCard> = [
-  {
-    id: "cq1",
-    title: "CQ1 – Concepts by polarity",
-    query: "Which concepts are associated with the narrative senses of a given lexical entry, by polarity?",
-    sparqlId: "cq1-narrative-concepts-by-polarity",
-    available: true,
-  },
-  {
-    id: "cq2",
-    title: "CQ2 – Corpus evidence",
-    query: "Retrieve all corpus passages in which a narrative sense of a given lexical entry is associated with a concept of a specified polarity.",
-    sparqlId: "cq1-concept-detail",
-    available: true,
-  },
-  {
-    id: "cq3",
-    title: "CQ3 – Speaker variation",
-    query: "How does the distribution of one or more narrative concepts associated with a given lexical entry vary across speakers' age and gender?",
-    sparqlId: "cq1-concept-detail",
-    available: true,
-  },
+  { id: "cq1", sparqlId: "cq1-narrative-concepts-by-polarity", available: true },
+  { id: "cq2", sparqlId: "cq1-concept-detail", available: true },
+  { id: "cq3", sparqlId: "cq1-concept-detail", available: true },
 ];
+
+/* Titolo e spiegazione della competency question vengono dal dizionario della
+   lingua attiva: prima erano stringhe hardcoded in inglese a livello di modulo,
+   quindi restavano in inglese anche con l'interfaccia in italiano. */
+const cardText: Record<CqCardId, (t: Dict) => { title: string; query: string }> = {
+  cq1: (t) => ({ title: t.cq1.panelTitle, query: t.cq1.question }),
+  cq2: (t) => ({ title: t.cq2.panelTitle, query: t.cq2.question }),
+  cq3: (t) => ({ title: t.cq3.panelTitle, query: t.cq3.question }),
+};
 
 export function CqPanel({ lang }: { lang: Lang }) {
   const t = dictionaries[lang];
@@ -84,7 +73,7 @@ export function CqPanel({ lang }: { lang: Lang }) {
         </button>
         <p className="section-kicker">{t.cq.kicker}</p>
         <h2 id="cq-in-progress-title">
-          {openedCard?.title} — {t.cq.panelInProgressTitle}
+          {openedCard ? cardText[openedCard.id](t).title : ""} — {t.cq.panelInProgressTitle}
         </h2>
         <p>{t.cq.panelInProgressBody}</p>
       </section>
@@ -124,8 +113,8 @@ export function CqPanel({ lang }: { lang: Lang }) {
             ].filter(Boolean).join(" ")}
           >
             <p className="cq-card-kicker">{card.id.toUpperCase()}</p>
-            <h3>{card.title}</h3>
-            <p className="cq-card-query">{card.query}</p>
+            <h3>{cardText[card.id](t).title}</h3>
+            <p className="cq-card-query">{cardText[card.id](t).query}</p>
             {card.available ? (
               <div className="cq-card-actions">
                 <button
@@ -153,7 +142,7 @@ export function CqPanel({ lang }: { lang: Lang }) {
             <>
               <p className="cq-preview-question">
                 <span className="cq-preview-label">{t.cq.naturalLanguage}</span>
-                {selectedCard.query}
+                {cardText[selectedCard.id](t).query}
               </p>
               <p className="cq-preview-label">{t.cq.sparqlLabel}</p>
               {cardNotes[selectedCard.id]?.(t) && (

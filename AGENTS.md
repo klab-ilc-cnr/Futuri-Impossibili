@@ -290,6 +290,11 @@ delete, reload.
 
 ## Menu in alto (v0.27.0)
 
+Titolo e spiegazione delle card CQ vengono dal dizionario della lingua attiva
+(`t.cqN.panelTitle` / `t.cqN.question`, sezione `cq1`/`cq2`/`cq3` di `strings.ts`,
+usati anche nell'anteprima): in `panel.tsx` non ci sono più stringhe hardcoded, che
+restavano in inglese anche con l'interfaccia italiana.
+
 Il pannello dell'area (indice 3) è intitolato **NarraLex** in entrambe le lingue
 (`t.cq.title`, unica occorrenza: prima era "Interrogazioni"/"Queries"); kicker
 "COMPETENCY QUESTIONS" invariato.
